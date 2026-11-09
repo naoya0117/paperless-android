@@ -1,10 +1,12 @@
 package com.naoya0117.paperless.core.network.internal.api
 
 import com.naoya0117.paperless.core.model.ApiVersion
+import com.naoya0117.paperless.core.model.SavedViewVisibility
 import com.naoya0117.paperless.core.model.ServerInfo
 import com.naoya0117.paperless.core.network.PaperlessException
 import com.naoya0117.paperless.core.network.ServerApi
 import com.naoya0117.paperless.core.network.internal.dto.toModel
+import com.naoya0117.paperless.core.network.internal.dto.toSavedViewVisibility
 import com.naoya0117.paperless.core.network.internal.service.UiSettingsService
 
 /** @param apiVersion the version this client sends; the server accepted it if the request succeeds. */
@@ -33,4 +35,11 @@ internal class ServerApiImpl(
             user = body.user.toModel(),
         )
     }
+
+    override suspend fun fetchSavedViewVisibility(): SavedViewVisibility =
+        service
+            .uiSettings()
+            .body()
+            ?.settings
+            .toSavedViewVisibility()
 }

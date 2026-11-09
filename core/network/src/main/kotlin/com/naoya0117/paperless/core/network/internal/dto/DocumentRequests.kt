@@ -44,7 +44,10 @@ internal fun DocumentQuery.toQueryMap(): Map<String, String> =
         inInbox?.let { put("is_in_inbox", it.toString()) }
         customFieldQuery?.let { put("custom_field_query", it) }
         ordering?.let { putOrdering(it.field.apiName, it.descending) }
+        extraParams.forEach { (key, value) -> if (key !in RESERVED_PARAMS && key !in this) put(key, value) }
     }
+
+private val RESERVED_PARAMS = setOf("page", "page_size")
 
 private fun MutableMap<String, String>.putIdFilter(
     name: String,

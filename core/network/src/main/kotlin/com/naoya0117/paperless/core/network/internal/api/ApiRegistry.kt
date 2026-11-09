@@ -6,6 +6,8 @@ import com.naoya0117.paperless.core.model.CustomField
 import com.naoya0117.paperless.core.model.CustomFieldDraft
 import com.naoya0117.paperless.core.model.DocumentType
 import com.naoya0117.paperless.core.model.DocumentTypeDraft
+import com.naoya0117.paperless.core.model.SavedView
+import com.naoya0117.paperless.core.model.SavedViewDraft
 import com.naoya0117.paperless.core.model.StoragePath
 import com.naoya0117.paperless.core.model.StoragePathDraft
 import com.naoya0117.paperless.core.model.Tag
@@ -20,6 +22,7 @@ import com.naoya0117.paperless.core.network.internal.dto.CorrespondentDto
 import com.naoya0117.paperless.core.network.internal.dto.CustomFieldDto
 import com.naoya0117.paperless.core.network.internal.dto.DocumentTypeDto
 import com.naoya0117.paperless.core.network.internal.dto.PageDto
+import com.naoya0117.paperless.core.network.internal.dto.SavedViewDto
 import com.naoya0117.paperless.core.network.internal.dto.StoragePathDto
 import com.naoya0117.paperless.core.network.internal.dto.TagDto
 import com.naoya0117.paperless.core.network.internal.dto.toCreateBody
@@ -31,6 +34,7 @@ import com.naoya0117.paperless.core.network.internal.http.PaperlessJson
 import com.naoya0117.paperless.core.network.internal.service.CorrespondentService
 import com.naoya0117.paperless.core.network.internal.service.CustomFieldService
 import com.naoya0117.paperless.core.network.internal.service.DocumentTypeService
+import com.naoya0117.paperless.core.network.internal.service.SavedViewService
 import com.naoya0117.paperless.core.network.internal.service.StoragePathService
 import com.naoya0117.paperless.core.network.internal.service.TagService
 import kotlinx.serialization.json.JsonObject
@@ -124,6 +128,20 @@ internal class ApiRegistry(
             StoragePath::id,
             StoragePathDraft::toCreateBody,
             StoragePathDraft::toPatchBody,
+        )
+    }
+    val savedViews: LabelApi<SavedView, SavedViewDraft> by lazy {
+        val s = retrofit.create<SavedViewService>()
+        crud(
+            s::list,
+            s::get,
+            s::create,
+            s::update,
+            s::delete,
+            SavedViewDto::toModel,
+            SavedView::id,
+            SavedViewDraft::toCreateBody,
+            SavedViewDraft::toPatchBody,
         )
     }
     val customFields: LabelApi<CustomField, CustomFieldDraft> by lazy {

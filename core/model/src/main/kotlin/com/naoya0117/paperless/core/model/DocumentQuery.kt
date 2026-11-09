@@ -26,6 +26,11 @@ data class DocumentQuery(
     val ordering: DocumentOrdering? = null,
     /** Shorten [Document.content] in the results, as lists rarely need the full text. */
     val truncateContent: Boolean = true,
+    /**
+     * Additional raw query parameters for conditions the typed properties cannot express (e.g. from a
+     * saved view's filter rules). Combined with the typed ones; `page` and `page_size` cannot be set here.
+     */
+    val extraParams: Map<String, String> = emptyMap(),
 ) {
     init {
         require(page >= 1) { "page starts at 1: $page" }

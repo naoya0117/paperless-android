@@ -1,5 +1,6 @@
 package com.naoya0117.paperless.core.network
 
+import com.naoya0117.paperless.core.model.SavedViewVisibility
 import com.naoya0117.paperless.core.model.ServerInfo
 
 public interface ServerApi {
@@ -10,4 +11,7 @@ public interface ServerApi {
      * @throws PaperlessException.UnsupportedServerVersion if the server is too old for this client.
      */
     public suspend fun fetchServerInfo(): ServerInfo
+
+    /** Which saved views the user shows on the dashboard and in the sidebar (from `GET /api/ui_settings/`). */
+    public suspend fun fetchSavedViewVisibility(): SavedViewVisibility
 }

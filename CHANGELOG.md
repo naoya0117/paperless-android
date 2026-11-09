@@ -28,3 +28,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Document files (thumbnail, preview, download, original) streamed with file name and type; notes;
   metadata, suggestions, history and the next archive serial number
 - Document upload with metadata and progress; task list, lookup by task ID, waiting for completion, acknowledging
+- Saved views: CRUD, conversion of their filter rules to a document query like the web UI, dashboard/sidebar visibility
