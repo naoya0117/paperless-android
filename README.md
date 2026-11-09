@@ -21,6 +21,25 @@ An Android client for [Paperless-ngx](https://github.com/paperless-ngx/paperless
   - Client certificate authentication (mTLS)
   - Multiple accounts
 
+## Building
+
+Requires JDK 17 or later and the Android SDK (`ANDROID_HOME` or `local.properties`).
+
+```bash
+./gradlew assembleDebug   # debug APK (application ID suffix: .debug)
+./gradlew build           # compile, unit tests, Android Lint, ktlint
+```
+
+The release APK is unsigned unless all of the following Gradle properties are set
+(e.g. in `~/.gradle/gradle.properties`):
+
+```properties
+paperless.signing.storeFile=/path/to/release.jks
+paperless.signing.storePassword=...
+paperless.signing.keyAlias=...
+paperless.signing.keyPassword=...
+```
+
 ## Acknowledgements
 
 This project is based on and inspired by the community app

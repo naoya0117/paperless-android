@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder: a sheet of paper with a folded corner. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,30h22l12,12v36h-34z" />
+    <path
+        android:fillColor="#B9D3BC"
+        android:pathData="M60,30v12h12z" />
+</vector>

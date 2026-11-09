@@ -21,6 +21,25 @@ Kotlin で実装した [Paperless-ngx](https://github.com/paperless-ngx/paperles
   - クライアント証明書認証（mTLS）
   - 複数アカウント
 
+## ビルド
+
+JDK 17 以降と Android SDK（`ANDROID_HOME` または `local.properties` で指定）が必要です。
+
+```bash
+./gradlew assembleDebug   # デバッグ APK（アプリケーション ID の末尾に .debug が付きます）
+./gradlew build           # コンパイル、ユニットテスト、Android Lint、ktlint
+```
+
+リリース APK は、次の Gradle プロパティがすべて設定されている場合のみ署名されます
+（例：`~/.gradle/gradle.properties` に記述）。
+
+```properties
+paperless.signing.storeFile=/path/to/release.jks
+paperless.signing.storePassword=...
+paperless.signing.keyAlias=...
+paperless.signing.keyPassword=...
+```
+
 ## 謝辞
 
 本プロジェクトは、Anton Stubenbord 氏およびコントリビューターによるコミュニティ製アプリ

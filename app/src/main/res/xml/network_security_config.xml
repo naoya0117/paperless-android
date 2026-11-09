@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Self-hosted servers:
+    - Cleartext HTTP is permitted (e.g. LAN access); the app warns the user when it is used.
+    - User-installed CA certificates are trusted so that servers using a private CA work.
+-->
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <!-- Both are intentional for self-hosted servers; see the comment above. -->
+    <base-config
+        cleartextTrafficPermitted="true"
+        tools:ignore="InsecureBaseConfiguration,AcceptsUserCertificates">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
