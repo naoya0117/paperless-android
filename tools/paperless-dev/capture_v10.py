@@ -67,6 +67,10 @@ FIXTURES = [
     "documents_search_text",
     "documents_more_like",
     "error_invalid_custom_field_query",
+    "note_added",
+    "document_metadata",
+    "document_suggestions",
+    "document_history",
 ]
 # Documents uploaded once (looked up by title): title -> (text lines, created, tag names, correspondent).
 DOCUMENTS = {
@@ -325,6 +329,8 @@ def write_fixtures(captured, fixtures):
     fixtures.mkdir(parents=True, exist_ok=True)
     for name in FIXTURES:
         body = json.loads((captured / f"{name}.json").read_text())["body"]
+        if name == "document_history":
+            body = body[:5]  # the log grows on every run; keep the fixture small
         text = json.dumps(body, indent=2, ensure_ascii=False).replace("<redacted>", FAKE_TOKEN)
         (fixtures / f"{name}.json").write_text(text + "\n")
         print(f"fixture  {name}.json")
@@ -404,6 +410,16 @@ def main():
     record(out, "documents_search_text", 200, request(base, "GET", "/api/documents/?text=invoice", token=admin_token))
     record(out, "documents_more_like", 200,
            request(base, "GET", f"/api/documents/?more_like_id={invoice}", token=admin_token))
+    # Notes are added and removed in the same run so that documents keep none between runs.
+    added = request(base, "POST", f"/api/documents/{invoice}/notes/", token=admin_token, body={"note": "Paid on 2026-11-05"})
+    record(out, "note_added", 200, added)
+    for note in json.loads(added[2]):
+        request(base, "DELETE", f"/api/documents/{invoice}/notes/?id={note['id']}", token=admin_token)
+    record(out, "document_metadata", 200, request(base, "GET", f"/api/documents/{invoice}/metadata/", token=admin_token))
+    record(out, "document_suggestions", 200,
+           request(base, "GET", f"/api/documents/{invoice}/suggestions/", token=admin_token))
+    record(out, "document_history", 200, request(base, "GET", f"/api/documents/{invoice}/history/", token=admin_token))
+    record(out, "next_asn", 200, request(base, "GET", "/api/documents/next_asn/", token=admin_token))
     record(out, "error_invalid_custom_field_query", 400,
            request(base, "GET", "/api/documents/?custom_field_query=%5B%22nope%22%5D", token=admin_token))
     # Last: exhaust the login throttle (it also counts the logins above).

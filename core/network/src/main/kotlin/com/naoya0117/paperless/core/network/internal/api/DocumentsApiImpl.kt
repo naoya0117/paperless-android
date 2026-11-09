@@ -2,12 +2,22 @@ package com.naoya0117.paperless.core.network.internal.api
 
 import com.naoya0117.paperless.core.model.Document
 import com.naoya0117.paperless.core.model.DocumentDraft
+import com.naoya0117.paperless.core.model.DocumentMetadata
 import com.naoya0117.paperless.core.model.DocumentQuery
+import com.naoya0117.paperless.core.model.DocumentSuggestions
+import com.naoya0117.paperless.core.model.HistoryEntry
+import com.naoya0117.paperless.core.model.Note
 import com.naoya0117.paperless.core.model.Page
+import com.naoya0117.paperless.core.network.DocumentFile
+import com.naoya0117.paperless.core.network.DocumentFileKind
 import com.naoya0117.paperless.core.network.DocumentsApi
+import com.naoya0117.paperless.core.network.PaperlessException
+import com.naoya0117.paperless.core.network.internal.dto.NoteDto
+import com.naoya0117.paperless.core.network.internal.dto.NoteRequestDto
 import com.naoya0117.paperless.core.network.internal.dto.toModel
 import com.naoya0117.paperless.core.network.internal.dto.toPatchBody
 import com.naoya0117.paperless.core.network.internal.dto.toQueryMap
+import com.naoya0117.paperless.core.network.internal.http.fileNameFromContentDisposition
 import com.naoya0117.paperless.core.network.internal.service.DocumentService
 
 internal class DocumentsApiImpl(
@@ -29,4 +39,54 @@ internal class DocumentsApiImpl(
     }
 
     override suspend fun delete(id: Long) = service.delete(id)
+
+    override suspend fun openFile(
+        id: Long,
+        kind: DocumentFileKind,
+    ): DocumentFile {
+        val (path, original) =
+            when (kind) {
+                DocumentFileKind.THUMBNAIL -> "thumb" to null
+                DocumentFileKind.PREVIEW -> "preview" to null
+                DocumentFileKind.DOWNLOAD -> "download" to null
+                DocumentFileKind.ORIGINAL -> "download" to true
+            }
+        val response = service.file(id, path, original)
+        val body = response.body() ?: throw PaperlessException.InvalidResponse("empty body")
+        try {
+            return DocumentFile(
+                contentType = body.contentType()?.toString(),
+                fileName = fileNameFromContentDisposition(response.headers()["Content-Disposition"]),
+                contentLength = body.contentLength().takeIf { it >= 0 },
+                stream = body.byteStream(),
+            )
+        } catch (e: Throwable) {
+            body.close() // release the connection; nobody else holds the body yet
+            throw e
+        }
+    }
+
+    override suspend fun addNote(
+        documentId: Long,
+        text: String,
+    ): List<Note> {
+        require(text.isNotBlank()) { "A note must not be blank" }
+        return parsing { service.addNote(documentId, NoteRequestDto(text)).toNotes() }
+    }
+
+    override suspend fun deleteNote(
+        documentId: Long,
+        noteId: Long,
+    ): List<Note> = parsing { service.deleteNote(documentId, noteId).toNotes() }
+
+    override suspend fun metadata(id: Long): DocumentMetadata = parsing { service.metadata(id).toModel() }
+
+    override suspend fun suggestions(id: Long): DocumentSuggestions = parsing { service.suggestions(id).toModel() }
+
+    override suspend fun history(id: Long): List<HistoryEntry> =
+        parsing { service.history(id).map { it.toModel() } }.sortedByDescending { it.timestamp }
+
+    override suspend fun nextArchiveSerialNumber(): Long = service.nextAsn()
+
+    private fun List<NoteDto>.toNotes(): List<Note> = map { it.toModel() }.sortedBy { it.created }
 }

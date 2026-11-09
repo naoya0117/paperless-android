@@ -1,0 +1,13 @@
+[
+  {
+    "id": 2,
+    "note": "Paid on 2026-11-05",
+    "created": "2026-11-09T17:19:16.997156Z",
+    "user": {
+      "id": 2,
+      "username": "admin",
+      "first_name": "",
+      "last_name": ""
+    }
+  }
+]

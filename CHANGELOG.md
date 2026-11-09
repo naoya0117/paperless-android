@@ -25,3 +25,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - List (paged or all), get, create, update and delete
 - Documents API: list with filters (tags, correspondent, document type, storage path, dates, ASN, inbox,
   custom field query), full-text search (text, title, advanced query, similar documents), get, update, delete
+- Document files (thumbnail, preview, download, original) streamed with file name and type; notes;
+  metadata, suggestions, history and the next archive serial number

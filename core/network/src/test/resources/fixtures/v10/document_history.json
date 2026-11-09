@@ -1,0 +1,68 @@
+[
+  {
+    "id": 190,
+    "timestamp": "2026-11-09T17:19:17.048043Z",
+    "action": "update",
+    "changes": {
+      "Note Deleted": [
+        2,
+        "None"
+      ]
+    },
+    "actor": null
+  },
+  {
+    "id": 189,
+    "timestamp": "2026-11-09T17:19:17.000348Z",
+    "action": "update",
+    "changes": {
+      "Note Added": [
+        "None",
+        2
+      ]
+    },
+    "actor": null
+  },
+  {
+    "id": 187,
+    "timestamp": "2026-11-09T17:19:16.898851Z",
+    "action": "update",
+    "changes": {
+      "title": [
+        "Invoice 2026-001 (paid)",
+        "Invoice 2026-001"
+      ]
+    },
+    "actor": {
+      "id": 2,
+      "username": "admin"
+    }
+  },
+  {
+    "id": 186,
+    "timestamp": "2026-11-09T17:19:16.833759Z",
+    "action": "update",
+    "changes": {
+      "title": [
+        "Invoice 2026-001",
+        "Invoice 2026-001 (paid)"
+      ]
+    },
+    "actor": {
+      "id": 2,
+      "username": "admin"
+    }
+  },
+  {
+    "id": 179,
+    "timestamp": "2026-11-09T17:12:45.253903Z",
+    "action": "update",
+    "changes": {
+      "Note Deleted": [
+        1,
+        "None"
+      ]
+    },
+    "actor": null
+  }
+]

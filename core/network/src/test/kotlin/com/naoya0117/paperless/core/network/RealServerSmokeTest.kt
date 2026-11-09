@@ -18,6 +18,7 @@ import com.naoya0117.paperless.core.model.toDraft
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
@@ -198,6 +199,56 @@ class RealServerSmokeTest {
                 admin.documents.update(changed, invoice.toDraft())
             }
             assertEquals(invoice.title, admin.documents.get(invoice.id).title)
+        }
+
+    @Test
+    fun `document files notes and details`() =
+        runTest {
+            val admin = client().signIn("admin", "admin-password").client
+            val invoice =
+                admin.documents
+                    .list(
+                        DocumentQuery(search = DocumentSearch.Title("Invoice 2026-001")),
+                    ).items
+                    .single()
+
+            val thumbnail =
+                admin.documents.openFile(invoice.id, DocumentFileKind.THUMBNAIL).use {
+                    it.contentType to it.readBytes()
+                }
+            assertEquals("image/webp", thumbnail.first)
+            assertEquals("RIFF", String(thumbnail.second, 0, 4))
+            val preview = admin.documents.openFile(invoice.id, DocumentFileKind.PREVIEW).use { it.readBytes() }
+            assertEquals("%PDF", String(preview, 0, 4))
+            admin.documents.openFile(invoice.id, DocumentFileKind.ORIGINAL).use { original ->
+                assertEquals("Invoice 2026-001.pdf", original.fileName?.substringAfter("ACME Corp "))
+                assertTrue("the original is the small uploaded PDF", original.readBytes().size < preview.size)
+            }
+
+            val notes = admin.documents.addNote(invoice.id, "Smoke test note")
+            try {
+                assertEquals("admin", notes.last().user?.username)
+                assertEquals(
+                    notes.map { it.text },
+                    admin.documents
+                        .get(invoice.id)
+                        .notes!!
+                        .map { it.text },
+                )
+            } finally {
+                notes.filter { it.text == "Smoke test note" }.forEach { admin.documents.deleteNote(invoice.id, it.id) }
+            }
+            assertTrue(
+                admin.documents
+                    .get(invoice.id)
+                    .notes!!
+                    .none { it.text == "Smoke test note" },
+            )
+
+            assertTrue(admin.documents.metadata(invoice.id).hasArchiveVersion)
+            admin.documents.suggestions(invoice.id)
+            assertTrue(admin.documents.history(invoice.id).isNotEmpty())
+            assertTrue(admin.documents.nextArchiveSerialNumber() > (invoice.archiveSerialNumber ?: 0))
         }
 
     private companion object {

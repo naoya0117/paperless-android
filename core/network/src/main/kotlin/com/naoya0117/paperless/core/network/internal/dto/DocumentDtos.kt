@@ -38,6 +38,7 @@ internal data class DocumentDto(
     @SerialName("mime_type") val mimeType: String? = null,
     @SerialName("page_count") val pageCount: Int? = null,
     @SerialName("custom_fields") val customFields: List<CustomFieldValueDto> = emptyList(),
+    val notes: List<NoteDto>? = null,
     val owner: Long? = null,
     @SerialName("user_can_change") val userCanChange: Boolean? = null,
     @SerialName("deleted_at") val deletedAt: String? = null,
@@ -76,6 +77,7 @@ internal fun DocumentDto.toModel(): Document =
         mimeType = mimeType,
         pageCount = pageCount,
         customFields = customFields.map { CustomFieldValue(it.field, it.value.toFieldValue()) },
+        notes = notes?.map { it.toModel() }?.sortedBy { it.created },
         owner = owner,
         // Responses with full permissions (e.g. after an update) come from a user who could change it.
         userCanChange = userCanChange ?: false,
@@ -83,7 +85,7 @@ internal fun DocumentDto.toModel(): Document =
         searchHit = searchHit?.let { SearchHit(it.score, it.rank, it.highlights?.ifEmpty { null }) },
     )
 
-private fun parseInstant(value: String): Instant = OffsetDateTime.parse(value).toInstant()
+internal fun parseInstant(value: String): Instant = OffsetDateTime.parse(value).toInstant()
 
 internal fun JsonElement.toFieldValue(): FieldValue =
     when (this) {
