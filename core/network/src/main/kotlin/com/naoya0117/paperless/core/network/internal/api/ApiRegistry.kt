@@ -13,12 +13,14 @@ import com.naoya0117.paperless.core.model.StoragePathDraft
 import com.naoya0117.paperless.core.model.Tag
 import com.naoya0117.paperless.core.model.TagDraft
 import com.naoya0117.paperless.core.network.AuthApi
+import com.naoya0117.paperless.core.network.BulkApi
 import com.naoya0117.paperless.core.network.DocumentsApi
 import com.naoya0117.paperless.core.network.LabelApi
 import com.naoya0117.paperless.core.network.ListQuery
 import com.naoya0117.paperless.core.network.PaperlessClientConfig
 import com.naoya0117.paperless.core.network.ServerApi
 import com.naoya0117.paperless.core.network.TasksApi
+import com.naoya0117.paperless.core.network.TrashApi
 import com.naoya0117.paperless.core.network.internal.dto.CorrespondentDto
 import com.naoya0117.paperless.core.network.internal.dto.CustomFieldDto
 import com.naoya0117.paperless.core.network.internal.dto.DocumentTypeDto
@@ -72,6 +74,8 @@ internal class ApiRegistry(
 
     val documents: DocumentsApi by lazy { DocumentsApiImpl(retrofit.create()) }
     val tasks: TasksApi by lazy { TasksApiImpl(retrofit.create()) }
+    val bulk: BulkApi by lazy { BulkApiImpl(retrofit.create()) }
+    val trash: TrashApi by lazy { TrashApiImpl(retrofit.create()) }
 
     val tags: LabelApi<Tag, TagDraft> by lazy {
         val s = retrofit.create<TagService>()
