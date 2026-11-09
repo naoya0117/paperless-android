@@ -8,6 +8,7 @@ Kotlin で実装した [Paperless-ngx](https://github.com/paperless-ngx/paperles
 
 - **Android 10（API レベル 29）以降**
 - **Paperless-ngx 3.0.0 以降**（REST API バージョン 10）
+- Paperless-ngx のユーザーに **UI 設定の閲覧権限**（`view_uisettings`）が必要です（サインインの確認に使用します）
 - HTTPS で接続する場合、サーバー証明書が Android に信頼されている必要があります。
   プライベート CA で発行した証明書を使う場合は、端末に CA 証明書をインストールしてください。
 

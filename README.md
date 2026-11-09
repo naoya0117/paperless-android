@@ -8,6 +8,7 @@ An Android client for [Paperless-ngx](https://github.com/paperless-ngx/paperless
 
 - **Android 10 (API level 29) or later**
 - **Paperless-ngx 3.0.0 or later** (REST API version 10)
+- The Paperless-ngx user needs the **UI settings view permission** (`view_uisettings`), which the app uses to validate the sign-in
 - To connect over HTTPS, the server certificate must be trusted by Android.
   To use a certificate issued by a private CA, install the CA certificate on the device.
 
