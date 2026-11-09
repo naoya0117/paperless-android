@@ -4,6 +4,7 @@ import com.naoya0117.paperless.core.model.CustomFieldValue
 import com.naoya0117.paperless.core.model.Document
 import com.naoya0117.paperless.core.model.FieldValue
 import com.naoya0117.paperless.core.model.SearchHit
+import com.naoya0117.paperless.core.network.internal.http.PaperlessJson
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
@@ -18,7 +19,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
-/** `/api/documents/`; update responses carry `permissions` instead of `user_can_change`. */
+/** `/api/documents/`; update responses carry `permissions` instead of `user_can_change` (see DocumentsApiImpl). */
 @Serializable
 internal data class DocumentDto(
     val id: Long,
@@ -39,7 +40,6 @@ internal data class DocumentDto(
     @SerialName("custom_fields") val customFields: List<CustomFieldValueDto> = emptyList(),
     val owner: Long? = null,
     @SerialName("user_can_change") val userCanChange: Boolean? = null,
-    val permissions: JsonObject? = null,
     @SerialName("deleted_at") val deletedAt: String? = null,
     @SerialName("__search_hit__") val searchHit: SearchHitDto? = null,
 )
@@ -78,9 +78,9 @@ internal fun DocumentDto.toModel(): Document =
         customFields = customFields.map { CustomFieldValue(it.field, it.value.toFieldValue()) },
         owner = owner,
         // Responses with full permissions (e.g. after an update) come from a user who could change it.
-        userCanChange = userCanChange ?: (permissions != null),
+        userCanChange = userCanChange ?: false,
         deletedAt = deletedAt?.let(::parseInstant),
-        searchHit = searchHit?.let { SearchHit(it.score, it.rank, it.highlights) },
+        searchHit = searchHit?.let { SearchHit(it.score, it.rank, it.highlights?.ifEmpty { null }) },
     )
 
 private fun parseInstant(value: String): Instant = OffsetDateTime.parse(value).toInstant()
@@ -88,17 +88,26 @@ private fun parseInstant(value: String): Instant = OffsetDateTime.parse(value).t
 internal fun JsonElement.toFieldValue(): FieldValue =
     when (this) {
         is JsonNull -> FieldValue.Empty
-        is JsonArray -> FieldValue.DocumentLinks(mapNotNull { (it as? JsonPrimitive)?.longOrNull })
+        is JsonArray -> {
+            val ids = map { (it as? JsonPrimitive)?.takeUnless(JsonPrimitive::isString)?.longOrNull }
+            if (ids.all { it != null }) {
+                FieldValue.DocumentLinks(
+                    ids.filterNotNull(),
+                )
+            } else {
+                FieldValue.Unknown(toString())
+            }
+        }
         is JsonPrimitive ->
             if (isString) {
                 FieldValue.Text(content)
             } else {
                 booleanOrNull?.let(FieldValue::Bool)
                     ?: longOrNull?.let(FieldValue::Integer)
-                    ?: doubleOrNull?.let(FieldValue::Decimal)
+                    ?: doubleOrNull?.takeIf { it.isFinite() }?.let(FieldValue::Decimal)
                     ?: FieldValue.Text(content)
             }
-        is JsonObject -> FieldValue.Text(toString())
+        is JsonObject -> FieldValue.Unknown(toString())
     }
 
 internal fun FieldValue.toJson(): JsonElement =
@@ -109,4 +118,5 @@ internal fun FieldValue.toJson(): JsonElement =
         is FieldValue.Decimal -> JsonPrimitive(value)
         is FieldValue.Bool -> JsonPrimitive(value)
         is FieldValue.DocumentLinks -> JsonArray(documentIds.map(::JsonPrimitive))
+        is FieldValue.Unknown -> PaperlessJson.parseToJsonElement(json)
     }

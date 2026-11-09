@@ -263,4 +263,102 @@ class DocumentsApiTest {
             assertEquals("DELETE", request.method)
             assertEquals("/api/documents/3/", request.url.encodedPath)
         }
+
+    @Test
+    fun `values in unknown forms are written back unchanged`() =
+        runTest {
+            val body =
+                """{"id": 5, "created": "2026-01-01", "added": "2026-01-01T00:00:00Z", "modified": "2026-01-01T00:00:00Z",
+                "custom_fields": [{"field": 1, "value": {"lat": 1.5}}, {"field": 2, "value": [7, "x"]}]}"""
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(200)
+                    .body(body)
+                    .build(),
+            )
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(200)
+                    .body(body)
+                    .build(),
+            )
+            val client = client()
+            val document = client.documents.get(5)
+            server.takeRequest()
+
+            assertEquals(
+                listOf(FieldValue.Unknown("""{"lat":1.5}"""), FieldValue.Unknown("""[7,"x"]""")),
+                document.customFields.map { it.value },
+            )
+            client.documents.update(
+                document,
+                document.toDraft().copy(
+                    customFields =
+                        document.customFields + CustomFieldValue(3, FieldValue.Bool(true)),
+                ),
+            )
+            assertEquals(
+                """{"custom_fields":[{"field":1,"value":{"lat":1.5}},{"field":2,"value":[7,"x"]},{"field":3,"value":true}]}""",
+                server.takeRequest().body?.utf8(),
+            )
+        }
+
+    @Test
+    fun `reordered custom fields are not a change`() =
+        runTest {
+            server.enqueue(jsonResponse(200, "document.json"))
+            val client = client()
+            val current = client.documents.get(1)
+
+            client.documents.update(current, current.toDraft().copy(customFields = current.customFields.reversed()))
+
+            assertEquals(1, server.requestCount)
+        }
+
+    @Test
+    fun `an unparseable date is an invalid response`() =
+        runTest {
+            val body =
+                """{"id": 5, "created": "someday", "added": "2026-01-01T00:00:00Z",
+                "modified": "2026-01-01T00:00:00Z"}"""
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(200)
+                    .body(body)
+                    .build(),
+            )
+
+            assertFailsWith<PaperlessException.InvalidResponse> { client().documents.get(5) }
+        }
+
+    @Test
+    fun `a page beyond the end is empty`() =
+        runTest {
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(404)
+                    .body("""{"detail": "Invalid page."}""")
+                    .build(),
+            )
+            server.enqueue(jsonResponse(404, "error_not_found.json"))
+
+            val page = client().documents.list(DocumentQuery(page = 9))
+
+            assertEquals(emptyList<Any>(), page.items)
+            assertTrue(!page.hasNext)
+            assertFailsWith<PaperlessException.Http.NotFound> { client().documents.list(DocumentQuery(page = 1)) }
+        }
+
+    @Test
+    fun `filters and values are validated`() {
+        assertThrows(IllegalArgumentException::class.java) { IdFilter.AnyOf(emptySet()) }
+        assertThrows(IllegalArgumentException::class.java) { IdFilter.NoneOf(emptySet()) }
+        assertThrows(IllegalArgumentException::class.java) { FieldValue.Decimal(Double.NaN) }
+        // 4096 emoji are 8192 UTF-16 units but 4096 characters for the server.
+        DocumentSearch.Text("😀".repeat(DocumentSearch.MAX_LENGTH))
+    }
 }

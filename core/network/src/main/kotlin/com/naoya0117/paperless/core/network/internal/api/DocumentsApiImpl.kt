@@ -14,16 +14,18 @@ internal class DocumentsApiImpl(
     private val service: DocumentService,
 ) : DocumentsApi {
     override suspend fun list(query: DocumentQuery): Page<Document> =
-        service.list(query.toQueryMap()).toModel { it.toModel() }
+        pageOrEmptyBeyondEnd(query.page) { service.list(query.toQueryMap()) }.toModel { parsing { it.toModel() } }
 
-    override suspend fun get(id: Long): Document = service.get(id).toModel()
+    override suspend fun get(id: Long): Document = parsing { service.get(id).toModel() }
 
     override suspend fun update(
         current: Document,
         draft: DocumentDraft,
     ): Document {
         val body = draft.toPatchBody(current)
-        return if (body.isEmpty()) current else service.update(current.id, body).toModel()
+        if (body.isEmpty()) return current
+        // The response carries `permissions` instead of `user_can_change`; a successful PATCH proves the right.
+        return parsing { service.update(current.id, body).toModel() }.copy(userCanChange = true)
     }
 
     override suspend fun delete(id: Long) = service.delete(id)

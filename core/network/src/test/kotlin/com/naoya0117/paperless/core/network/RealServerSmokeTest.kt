@@ -139,32 +139,31 @@ class RealServerSmokeTest {
     fun `document filters and search work on the server`() =
         runTest {
             val admin = client().signIn("admin", "admin-password").client
-            val finance = admin.tags.listAll().single { it.name == "Finance" }
-            val tax = admin.tags.listAll().single { it.name == "Tax" }
+            val tags = admin.tags.listAll().associateBy { it.name }
 
-            fun titles(query: DocumentQuery) =
-                suspend {
-                    admin.documents
-                        .list(query)
-                        .items
-                        .map { it.title }
-                        .toSet()
-                }
+            suspend fun titles(query: DocumentQuery) =
+                admin.documents
+                    .list(query)
+                    .items
+                    .map { it.title }
+                    .toSet()
 
+            val financeAndTax = setOf(tags.getValue("Finance").id, tags.getValue("Tax").id)
             assertEquals(
                 setOf("Invoice 2026-002"),
-                titles(DocumentQuery(tags = TagFilter.Matching(all = setOf(finance.id, tax.id))))(),
+                titles(DocumentQuery(tags = TagFilter.Matching(all = financeAndTax))),
             )
-            assertEquals(setOf("Contract renewal"), titles(DocumentQuery(correspondent = IdFilter.NotAssigned))())
-            assertEquals(setOf("Contract renewal"), titles(DocumentQuery(search = DocumentSearch.Text("renewal")))())
+            assertEquals(setOf("Contract renewal"), titles(DocumentQuery(correspondent = IdFilter.NotAssigned)))
+            assertEquals(setOf("Contract renewal"), titles(DocumentQuery(search = DocumentSearch.Text("renewal"))))
             assertEquals(
                 setOf("Invoice 2026-001", "Invoice 2026-002"),
-                titles(DocumentQuery(created = DateRange(from = LocalDate.of(2026, 10, 1))))(),
+                titles(DocumentQuery(created = DateRange(from = LocalDate.of(2026, 10, 1)))),
             )
             assertEquals(
                 setOf("Invoice 2026-001"),
-                titles(DocumentQuery(customFieldQuery = """["Due date","exists",true]"""))(),
+                titles(DocumentQuery(customFieldQuery = """["Due date","exists",true]""")),
             )
+            assertEquals(emptyList<Any>(), admin.documents.list(DocumentQuery(page = 99)).items)
             val ordered =
                 admin.documents.list(
                     DocumentQuery(ordering = DocumentOrdering(DocumentOrdering.Field.CREATED, descending = false)),

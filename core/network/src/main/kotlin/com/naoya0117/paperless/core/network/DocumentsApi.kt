@@ -6,7 +6,10 @@ import com.naoya0117.paperless.core.model.DocumentQuery
 import com.naoya0117.paperless.core.model.Page
 
 public interface DocumentsApi {
-    /** @throws PaperlessException.Http.BadRequest e.g. for an invalid advanced query or custom field query */
+    /**
+     * A page beyond the last one (e.g. after deletions while scrolling) is returned empty.
+     * @throws PaperlessException.Http.BadRequest e.g. for an invalid advanced query or custom field query
+     */
     public suspend fun list(query: DocumentQuery = DocumentQuery()): Page<Document>
 
     /** The full document, including the complete content. */
@@ -14,7 +17,9 @@ public interface DocumentsApi {
 
     /**
      * Changes [current] to [draft], sending only what differs (see [LabelApi.update]). Returns [current]
-     * without a request if nothing differs.
+     * without a request if nothing differs. The server applies the tag hierarchy, so the result may have
+     * more or fewer tags than the draft (adding a child tag adds its parents; removing a parent removes
+     * its children).
      */
     public suspend fun update(
         current: Document,

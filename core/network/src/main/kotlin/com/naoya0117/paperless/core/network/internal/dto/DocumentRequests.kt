@@ -16,8 +16,7 @@ import kotlinx.serialization.json.putJsonArray
 
 internal fun DocumentQuery.toQueryMap(): Map<String, String> =
     buildMap {
-        put("page", page.toString())
-        put("page_size", pageSize.toString())
+        putPaging(page, pageSize)
         if (truncateContent) put("truncate_content", "true")
         when (val s = search) {
             null -> Unit
@@ -44,7 +43,7 @@ internal fun DocumentQuery.toQueryMap(): Map<String, String> =
         archiveSerialNumber?.let { put("archive_serial_number", it.toString()) }
         inInbox?.let { put("is_in_inbox", it.toString()) }
         customFieldQuery?.let { put("custom_field_query", it) }
-        ordering?.let { put("ordering", (if (it.descending) "-" else "") + it.field.apiName) }
+        ordering?.let { putOrdering(it.field.apiName, it.descending) }
     }
 
 private fun MutableMap<String, String>.putIdFilter(
@@ -77,8 +76,8 @@ internal fun DocumentDraft.toPatchBody(current: Document): JsonObject =
         if (storagePathId != current.storagePathId) put("storage_path", storagePathId)
         if (tagIds.toSet() != current.tagIds.toSet()) putJsonArray("tags") { tagIds.forEach { add(JsonPrimitive(it)) } }
         if (archiveSerialNumber != current.archiveSerialNumber) put("archive_serial_number", archiveSerialNumber)
-        // The server replaces the document's fields with the list it receives.
-        if (customFields != current.customFields) {
+        // The server replaces the document's fields with the list it receives; order does not matter.
+        if (customFields.associateBy { it.fieldId } != current.customFields.associateBy { it.fieldId }) {
             putJsonArray("custom_fields") {
                 customFields.forEach { field ->
                     addJsonObject {
@@ -89,3 +88,18 @@ internal fun DocumentDraft.toPatchBody(current: Document): JsonObject =
             }
         }
     }
+
+internal fun MutableMap<String, String>.putPaging(
+    page: Int,
+    pageSize: Int,
+) {
+    put("page", page.toString())
+    put("page_size", pageSize.toString())
+}
+
+internal fun MutableMap<String, String>.putOrdering(
+    apiName: String,
+    descending: Boolean,
+) {
+    put("ordering", (if (descending) "-" else "") + apiName)
+}

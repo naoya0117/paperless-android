@@ -54,6 +54,7 @@ data class CustomFieldValue(
  * - monetary: [Text] such as `EUR120.00` (currency code optional)
  * - integer: [Integer]; float: [Decimal]; boolean: [Bool]
  * - documentlink: [DocumentLinks]
+ * - anything else: [Unknown]
  */
 sealed interface FieldValue {
     data object Empty : FieldValue
@@ -68,7 +69,11 @@ sealed interface FieldValue {
 
     data class Decimal(
         val value: Double,
-    ) : FieldValue
+    ) : FieldValue {
+        init {
+            require(value.isFinite()) { "Not a finite number: $value" }
+        }
+    }
 
     data class Bool(
         val value: Boolean,
@@ -76,6 +81,11 @@ sealed interface FieldValue {
 
     data class DocumentLinks(
         val documentIds: List<Long>,
+    ) : FieldValue
+
+    /** A value in a form this client does not know, kept as JSON so that it is written back unchanged. */
+    data class Unknown(
+        val json: String,
     ) : FieldValue
 }
 
@@ -93,7 +103,11 @@ data class DocumentDraft(
     val archiveSerialNumber: Long?,
     /** The complete set of fields; fields left out are removed from the document. */
     val customFields: List<CustomFieldValue>,
-)
+) {
+    init {
+        require(customFields.map { it.fieldId }.toSet().size == customFields.size) { "Duplicate custom fields" }
+    }
+}
 
 fun Document.toDraft(): DocumentDraft =
     DocumentDraft(

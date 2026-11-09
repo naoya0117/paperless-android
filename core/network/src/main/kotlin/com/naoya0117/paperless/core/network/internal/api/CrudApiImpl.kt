@@ -5,6 +5,8 @@ import com.naoya0117.paperless.core.network.LabelApi
 import com.naoya0117.paperless.core.network.ListQuery
 import com.naoya0117.paperless.core.network.PaperlessException
 import com.naoya0117.paperless.core.network.internal.dto.PageDto
+import com.naoya0117.paperless.core.network.internal.dto.putOrdering
+import com.naoya0117.paperless.core.network.internal.dto.putPaging
 import com.naoya0117.paperless.core.network.internal.dto.toModel
 import kotlinx.serialization.json.JsonObject
 
@@ -27,7 +29,8 @@ internal class CrudApiImpl<Dto, T, D>(
     private val extraListParams: Map<String, String> = emptyMap(),
 ) : LabelApi<T, D> {
     override suspend fun list(query: ListQuery): Page<T> =
-        listPage(query.toQueryMap() + extraListParams).toModel(toModel)
+        pageOrEmptyBeyondEnd(query.page) { listPage(query.toQueryMap() + extraListParams) }
+            .toModel { parsing { toModel(it) } }
 
     override suspend fun listAll(): List<T> {
         // Label endpoints cannot be ordered by a unique key, so pages may shift when objects change between
@@ -44,7 +47,7 @@ internal class CrudApiImpl<Dto, T, D>(
                     if (page == 1) throw e
                     break
                 }
-            result.results.map(toModel).forEach { items.putIfAbsent(idOf(it), it) }
+            result.results.map { parsing { toModel(it) } }.forEach { items.putIfAbsent(idOf(it), it) }
             if (page == 1) maxPages = result.count / ListQuery.MAX_PAGE_SIZE + 2
             if (result.next == null || result.results.isEmpty()) break
             if (++page >
@@ -56,16 +59,16 @@ internal class CrudApiImpl<Dto, T, D>(
         return items.values.toList()
     }
 
-    override suspend fun get(id: Long): T = toModel(getOne(id))
+    override suspend fun get(id: Long): T = parsing { toModel(getOne(id)) }
 
-    override suspend fun create(draft: D): T = toModel(createOne(createBody(draft)))
+    override suspend fun create(draft: D): T = parsing { toModel(createOne(createBody(draft))) }
 
     override suspend fun update(
         current: T,
         draft: D,
     ): T {
         val body = patchBody(current, draft)
-        return if (body.isEmpty()) current else toModel(updateOne(idOf(current), body))
+        return if (body.isEmpty()) current else parsing { toModel(updateOne(idOf(current), body)) }
     }
 
     override suspend fun delete(id: Long) = deleteOne(id)
@@ -73,8 +76,7 @@ internal class CrudApiImpl<Dto, T, D>(
 
 internal fun ListQuery.toQueryMap(): Map<String, String> =
     buildMap {
-        put("page", page.toString())
-        put("page_size", pageSize.toString())
+        putPaging(page, pageSize)
         nameContains?.takeIf { it.isNotBlank() }?.let { put("name__icontains", it) }
-        ordering?.let { put("ordering", (if (it.descending) "-" else "") + it.field.apiName) }
+        ordering?.let { putOrdering(it.field.apiName, it.descending) }
     }

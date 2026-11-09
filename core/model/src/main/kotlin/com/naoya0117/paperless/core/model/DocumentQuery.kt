@@ -12,6 +12,7 @@ data class DocumentQuery(
     val documentType: IdFilter = IdFilter.Any,
     val storagePath: IdFilter = IdFilter.Any,
     val created: DateRange? = null,
+    /** Compared with the date the document was added, in the server's time zone (`PAPERLESS_TIME_ZONE`). */
     val added: DateRange? = null,
     val archiveSerialNumber: Long? = null,
     /** `true`: only documents with an inbox tag; `false`: only documents without. */
@@ -98,13 +99,22 @@ sealed interface IdFilter {
 
     data object NotAssigned : IdFilter
 
+    /** [ids] must not be empty: the server ignores an empty list, which would match every document. */
     data class AnyOf(
         val ids: Set<Long>,
-    ) : IdFilter
+    ) : IdFilter {
+        init {
+            require(ids.isNotEmpty()) { "AnyOf needs at least one ID; use Any for no restriction" }
+        }
+    }
 
     data class NoneOf(
         val ids: Set<Long>,
-    ) : IdFilter
+    ) : IdFilter {
+        init {
+            require(ids.isNotEmpty()) { "NoneOf needs at least one ID; use Any for no restriction" }
+        }
+    }
 }
 
 /** Inclusive date range; either end may be open. */
@@ -135,5 +145,8 @@ data class DocumentOrdering(
 
 private fun requireSearchText(text: String) {
     require(text.isNotBlank()) { "Search text must not be blank" }
-    require(text.length <= DocumentSearch.MAX_LENGTH) { "Search text longer than ${DocumentSearch.MAX_LENGTH}" }
+    // The server counts code points, not UTF-16 units.
+    require(text.codePointCount(0, text.length) <= DocumentSearch.MAX_LENGTH) {
+        "Search text longer than ${DocumentSearch.MAX_LENGTH} characters"
+    }
 }
