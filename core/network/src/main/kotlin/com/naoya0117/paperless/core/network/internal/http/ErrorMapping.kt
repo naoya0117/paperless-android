@@ -76,6 +76,7 @@ internal fun Throwable.toPaperlessException(): Throwable =
     when {
         this is PaperlessException -> this
         this is SerializationException -> PaperlessException.InvalidResponse(message ?: "malformed body", this)
+        this is UploadSourceException -> PaperlessException.LocalFile(cause ?: this)
         this !is IOException -> this
         // OkHttp tries every route (e.g. IPv4 and IPv6) and throws the last failure with the earlier
         // ones suppressed. A TLS failure on one route explains more than "connection refused" on another.

@@ -273,11 +273,12 @@ class RealServerSmokeTest {
                     UploadContent("smoke.pdf", "application/pdf", pdf.size.toLong()) { pdf.inputStream() },
                     DocumentUpload(title = "Smoke upload", tagIds = listOf(finance.id)),
                 ) { sent, _ -> progress += sent }
-            val task = admin.tasks.awaitCompletion(taskId, pollInterval = 500.milliseconds, timeout = 2.minutes)
+            val result = admin.tasks.awaitCompletion(taskId, pollInterval = 500.milliseconds, timeout = 2.minutes)
 
             assertEquals(pdf.size.toLong(), progress.last())
-            assertEquals(TaskStatus.SUCCESS, task?.status)
-            val documentId = task!!.documentId!!
+            val task = (result as TaskWaitResult.Finished).task
+            assertEquals(TaskStatus.SUCCESS, task.status)
+            val documentId = task.documentId!!
             try {
                 val document = admin.documents.get(documentId)
                 assertEquals("Smoke upload", document.title)

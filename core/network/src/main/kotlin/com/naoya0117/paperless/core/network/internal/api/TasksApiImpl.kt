@@ -3,6 +3,8 @@ package com.naoya0117.paperless.core.network.internal.api
 import com.naoya0117.paperless.core.model.Page
 import com.naoya0117.paperless.core.model.PaperlessTask
 import com.naoya0117.paperless.core.model.TaskQuery
+import com.naoya0117.paperless.core.network.PaperlessException
+import com.naoya0117.paperless.core.network.TaskWaitResult
 import com.naoya0117.paperless.core.network.TasksApi
 import com.naoya0117.paperless.core.network.internal.dto.AcknowledgeRequestDto
 import com.naoya0117.paperless.core.network.internal.dto.toModel
@@ -31,17 +33,35 @@ internal class TasksApiImpl(
         taskId: String,
         pollInterval: Duration,
         timeout: Duration,
-    ): PaperlessTask? {
+    ): TaskWaitResult {
         require(pollInterval.isPositive()) { "pollInterval must be positive" }
         var last: PaperlessTask? = null
-        withTimeoutOrNull(timeout) {
-            while (true) {
-                last = get(taskId)
-                if (last?.status?.isFinished == true) return@withTimeoutOrNull
-                delay(pollInterval)
+        val finished = withTimeoutOrNull(timeout) { pollUntilFinished(taskId, pollInterval) { last = it } }
+        return finished?.let(TaskWaitResult::Finished) ?: TaskWaitResult.TimedOut(last)
+    }
+
+    /** Polls until the task is finished; transient failures only delay the next poll. */
+    private suspend fun pollUntilFinished(
+        taskId: String,
+        pollInterval: Duration,
+        onSeen: (PaperlessTask) -> Unit,
+    ): PaperlessTask {
+        while (true) {
+            var wait = pollInterval
+            try {
+                val task = get(taskId)
+                if (task != null) {
+                    onSeen(task)
+                    if (task.status.isFinished) return task
+                }
+            } catch (e: PaperlessException.Http.RateLimited) {
+                wait = maxOf(pollInterval, e.retryAfter ?: pollInterval)
+            } catch (_: PaperlessException.Network) {
+                // The server keeps working on the task meanwhile.
+            } catch (_: PaperlessException.Http.ServerError) {
             }
+            delay(wait)
         }
-        return last
     }
 
     override suspend fun acknowledge(ids: Collection<Long>): Int =

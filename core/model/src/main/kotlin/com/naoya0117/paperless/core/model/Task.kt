@@ -15,11 +15,16 @@ data class PaperlessTask(
     val done: Instant?,
     /** For consume tasks: the uploaded file's name. */
     val fileName: String?,
-    /** For successful consume tasks: the created document. */
+    /** For successful consume tasks: the created document (`null` if consumption stopped without one). */
     val documentId: Long?,
+    /** For uploads rejected as duplicates: the existing document. */
+    val duplicateOfDocumentId: Long?,
     val relatedDocumentIds: List<Long>,
-    /** For failed tasks: what went wrong. */
-    val errorMessage: String?,
+    /**
+     * Why a task failed, or why a consume task stopped without creating a document (e.g. a barcode split
+     * the file into separate uploads).
+     */
+    val message: String?,
     /** Whether a user dismissed the task in a task list. */
     val acknowledged: Boolean,
 )
@@ -65,7 +70,11 @@ data class TaskQuery(
 ) {
     init {
         require(page >= 1) { "page starts at 1: $page" }
-        require(pageSize in 1..DocumentQuery.MAX_PAGE_SIZE) { "pageSize out of range: $pageSize" }
+        require(pageSize in 1..MAX_PAGE_SIZE) { "pageSize must be in 1..$MAX_PAGE_SIZE: $pageSize" }
+    }
+
+    companion object {
+        const val MAX_PAGE_SIZE: Int = 1000
     }
 }
 
@@ -79,4 +88,8 @@ data class DocumentUpload(
     val tagIds: List<Long> = emptyList(),
     val archiveSerialNumber: Long? = null,
     val customFields: List<CustomFieldValue> = emptyList(),
-)
+) {
+    init {
+        require(customFields.map { it.fieldId }.toSet().size == customFields.size) { "Duplicate custom fields" }
+    }
+}

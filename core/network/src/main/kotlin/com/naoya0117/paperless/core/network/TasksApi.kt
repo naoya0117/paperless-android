@@ -15,16 +15,27 @@ public interface TasksApi {
     public suspend fun get(taskId: String): PaperlessTask?
 
     /**
-     * Polls [get] until the task is finished or [timeout] elapses.
-     *
-     * @return the finished task, or the last state seen (possibly `null`) when the timeout elapsed
+     * Polls [get] until the task is finished or [timeout] elapses. Transient failures while polling
+     * (network errors, 5xx, throttling) do not end the wait; other failures (e.g. an invalid token) do.
+     * For long waits that must survive the app process, call [get] from a scheduled job instead.
      */
     public suspend fun awaitCompletion(
         taskId: String,
         pollInterval: Duration = 1.seconds,
         timeout: Duration = 10.minutes,
-    ): PaperlessTask?
+    ): TaskWaitResult
 
     /** Dismisses tasks (by [PaperlessTask.id]); returns how many were changed. */
     public suspend fun acknowledge(ids: Collection<Long>): Int
+}
+
+public sealed interface TaskWaitResult {
+    public data class Finished(
+        val task: PaperlessTask,
+    ) : TaskWaitResult
+
+    /** [lastSeen] is `null` if the server never reported the task (e.g. a wrong ID or a slow queue). */
+    public data class TimedOut(
+        val lastSeen: PaperlessTask?,
+    ) : TaskWaitResult
 }

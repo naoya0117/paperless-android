@@ -41,18 +41,23 @@ internal fun TaskDto.toModel(): PaperlessTask {
         started = dateStarted?.let(::parseInstant),
         done = dateDone?.let(::parseInstant),
         fileName = input?.string("filename"),
-        documentId = (result?.get("document_id") as? JsonPrimitive)?.longOrNull ?: relatedDocumentIds.firstOrNull(),
+        // Only result_data says which document a consume task created; related IDs may name a duplicate.
+        documentId = result?.long("document_id"),
+        duplicateOfDocumentId = result?.long("duplicate_of"),
         relatedDocumentIds = relatedDocumentIds,
-        errorMessage = result?.string("error_message"),
+        message = result?.string("error_message") ?: result?.string("reason"),
         acknowledged = acknowledged,
     )
 }
 
 private fun JsonObject.string(key: String): String? = (get(key) as? JsonPrimitive)?.contentOrNull?.ifEmpty { null }
 
+private fun JsonObject.long(key: String): Long? = (get(key) as? JsonPrimitive)?.longOrNull
+
 internal fun TaskQuery.toQueryMap(): Map<String, String> =
     buildMap {
         putPaging(page, pageSize)
+        putOrdering("date_created", descending = true)
         status?.let { put("status", it.value) }
         type?.let { put("task_type", it.value) }
         acknowledged?.let { put("acknowledged", it.toString()) }

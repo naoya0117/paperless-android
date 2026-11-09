@@ -15,6 +15,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -133,17 +134,19 @@ class UploadAndTasksApiTest {
             val listRequest = server.takeRequest().url
             assertEquals("success", listRequest.queryParameter("status"))
             assertEquals("consume_file", listRequest.queryParameter("task_type"))
+            assertEquals("-date_created", listRequest.queryParameter("ordering"))
             val task = succeeded.items.first()
             assertEquals(TaskStatus.SUCCESS, task.status)
             assertTrue(task.status.isFinished)
             assertEquals(TaskType.CONSUME_FILE, task.type)
             assertTrue(task.documentId != null && task.documentId in task.relatedDocumentIds)
             assertTrue(!task.fileName.isNullOrEmpty())
-            assertNull(task.errorMessage)
+            assertNull(task.message)
+            assertNull(task.duplicateOfDocumentId)
 
             assertEquals(TaskStatus.FAILURE, failed.status)
             assertNull(failed.documentId)
-            assertTrue(failed.errorMessage!!.contains("corrupt.pdf"))
+            assertTrue(failed.message!!.contains("corrupt.pdf"))
         }
 
     @Test
@@ -187,7 +190,7 @@ class UploadAndTasksApiTest {
 
             val done = client().tasks.awaitCompletion("t", pollInterval = 1.milliseconds)
 
-            assertEquals(TaskStatus.SUCCESS, done?.status)
+            assertEquals(TaskStatus.SUCCESS, (done as TaskWaitResult.Finished).task.status)
             assertEquals(4, server.requestCount)
             assertEquals("t", server.takeRequest().url.queryParameter("task_id"))
         }
@@ -206,10 +209,11 @@ class UploadAndTasksApiTest {
                 )
             }
 
-            val last = client().tasks.awaitCompletion("t", pollInterval = 10.milliseconds, timeout = 30.milliseconds)
+            val result = client().tasks.awaitCompletion("t", pollInterval = 10.milliseconds, timeout = 30.milliseconds)
 
-            assertEquals(TaskStatus.STARTED, last?.status)
-            assertFalse(last!!.status.isFinished)
+            val last = (result as TaskWaitResult.TimedOut).lastSeen!!
+            assertEquals(TaskStatus.STARTED, last.status)
+            assertFalse(last.status.isFinished)
         }
 
     @Test
@@ -226,4 +230,102 @@ class UploadAndTasksApiTest {
             assertEquals("""{"tasks":[18]}""", request.body?.utf8())
             assertEquals(1, server.requestCount)
         }
+
+    @Test
+    fun `awaitCompletion keeps polling through transient failures`() =
+        runBlocking {
+            server.enqueue(MockResponse.Builder().code(502).build())
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(429)
+                    .addHeader("Retry-After", "0")
+                    .build(),
+            )
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(200)
+                    .body(
+                        """{"count": 1, "next": null, "results": [{"id": 1, "task_id": "t", "status": "success",
+                        "result_data": {"document_id": 9}}]}""",
+                    ).build(),
+            )
+
+            val done = client().tasks.awaitCompletion("t", pollInterval = 1.milliseconds) as TaskWaitResult.Finished
+
+            assertEquals(9L, done.task.documentId)
+        }
+
+    @Test
+    fun `awaitCompletion stops on errors that polling cannot fix`() =
+        runBlocking<Unit> {
+            server.enqueue(jsonResponse(401, "error_invalid_token.json"))
+
+            assertFailsWith<PaperlessException.Http.Unauthorized> {
+                client().tasks.awaitCompletion("t", pollInterval = 1.milliseconds)
+            }
+        }
+
+    @Test
+    fun `duplicates and stopped consumption carry no document id`() =
+        runTest {
+            val body =
+                """{"count": 2, "next": null, "results": [
+                {"id": 1, "task_id": "a", "status": "failure", "result_data": {"duplicate_of": 3, "duplicate_in_trash": false},
+                 "related_document_ids": [3]},
+                {"id": 2, "task_id": "b", "status": "success", "result_data": {"reason": "Barcode splitting complete!"}}]}"""
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(200)
+                    .body(body)
+                    .build(),
+            )
+
+            val (duplicate, stopped) = client().tasks.list().items
+
+            assertNull(duplicate.documentId)
+            assertEquals(3L, duplicate.duplicateOfDocumentId)
+            assertNull(stopped.documentId)
+            assertEquals("Barcode splitting complete!", stopped.message)
+        }
+
+    @Test
+    fun `file and callback failures are local file errors`() =
+        runTest {
+            repeat(3) {
+                server.enqueue(
+                    MockResponse
+                        .Builder()
+                        .code(200)
+                        .body("\"t\"")
+                        .build(),
+                )
+            }
+            val client = client()
+
+            val unreadable = UploadContent("gone.pdf") { throw SecurityException("permission revoked") }
+            val wrongLength = UploadContent("short.pdf", contentLength = 100) { ByteArray(10).inputStream() }
+            val content = UploadContent("ok.pdf") { ByteArray(10).inputStream() }
+
+            assertFailsWith<PaperlessException.LocalFile> { client.documents.upload(unreadable) }
+            assertFailsWith<PaperlessException.LocalFile> { client.documents.upload(wrongLength) }
+            assertFailsWith<PaperlessException.LocalFile> {
+                client.documents.upload(content) { _, _ -> throw IllegalStateException("touched a view") }
+            }
+        }
+
+    @Test
+    fun `duplicate custom fields are rejected`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            DocumentUpload(
+                customFields =
+                    listOf(
+                        CustomFieldValue(1, FieldValue.Empty),
+                        CustomFieldValue(1, FieldValue.Bool(true)),
+                    ),
+            )
+        }
+    }
 }

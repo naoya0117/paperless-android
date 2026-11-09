@@ -20,7 +20,10 @@ public class UploadContent(
     }
 }
 
-/** Upload progress: [sent] bytes of [total] (`null` if unknown). */
+/**
+ * Upload progress: [sent] bytes of [total] (`null` if unknown). Called on a network thread; do not touch
+ * UI objects directly. Reaching [total] means the file was sent, not that the server has processed it.
+ */
 public fun interface UploadProgress {
     public fun onProgress(
         sent: Long,
