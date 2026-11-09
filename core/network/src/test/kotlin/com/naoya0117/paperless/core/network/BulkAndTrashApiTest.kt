@@ -80,12 +80,14 @@ class BulkAndTrashApiTest {
             val client = client()
 
             client.bulk.delete(listOf(2))
-            client.bulk.reprocess(listOf(3, 4))
+            client.bulk.reprocess(listOf(3, 4, 3))
 
             val delete = server.takeRequest()
             assertEquals("/api/documents/delete/", delete.url.encodedPath)
             assertEquals("""{"documents":[2]}""", delete.body?.utf8())
-            assertEquals("/api/documents/reprocess/", server.takeRequest().url.encodedPath)
+            val reprocess = server.takeRequest()
+            assertEquals("/api/documents/reprocess/", reprocess.url.encodedPath)
+            assertEquals("""{"documents":[3,4]}""", reprocess.body?.utf8())
         }
 
     @Test
@@ -95,8 +97,8 @@ class BulkAndTrashApiTest {
             client.bulk.edit(emptyList(), BulkEdit.SetCorrespondent(1))
             client.bulk.delete(emptyList())
             client.bulk.reprocess(emptyList())
-            client.trash.restore(emptyList())
-            client.trash.empty(emptyList())
+            assertEquals(emptyList<Long>(), client.trash.restore(emptyList()))
+            assertEquals(emptyList<Long>(), client.trash.empty(emptyList()))
 
             assertEquals(0, server.requestCount)
         }
@@ -111,13 +113,14 @@ class BulkAndTrashApiTest {
             val client = client()
 
             val trash = client.trash.list()
-            client.trash.restore(listOf(2))
+            val restored = client.trash.restore(listOf(2))
             client.trash.empty(listOf(2))
-            client.trash.empty(null)
+            client.trash.emptyAll()
 
             val document = trash.items.single()
             assertEquals("Contract renewal", document.title)
             assertNotNull(document.deletedAt)
+            assertEquals(listOf(2L), restored)
             assertEquals("/api/trash/", server.takeRequest().url.encodedPath)
             assertEquals("""{"action":"restore","documents":[2]}""", server.takeRequest().body?.utf8())
             assertEquals("""{"action":"empty","documents":[2]}""", server.takeRequest().body?.utf8())

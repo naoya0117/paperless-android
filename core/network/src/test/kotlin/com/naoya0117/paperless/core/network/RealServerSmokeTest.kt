@@ -287,13 +287,21 @@ class RealServerSmokeTest {
                     ).items
                     .single()
 
+            // The sample document has no Finance tag; do not touch it if that ever changes.
+            assumeTrue(finance.id !in renewal.tagIds)
             admin.bulk.edit(listOf(renewal.id), BulkEdit.ModifyTags(add = setOf(finance.id)))
             try {
                 assertTrue(finance.id in admin.documents.get(renewal.id).tagIds)
             } finally {
                 admin.bulk.edit(listOf(renewal.id), BulkEdit.ModifyTags(remove = setOf(finance.id)))
             }
-            assertTrue(finance.id !in admin.documents.get(renewal.id).tagIds)
+            assertEquals(
+                renewal.tagIds.toSet(),
+                admin.documents
+                    .get(renewal.id)
+                    .tagIds
+                    .toSet(),
+            )
 
             admin.bulk.delete(listOf(renewal.id))
             try {
@@ -306,7 +314,7 @@ class RealServerSmokeTest {
                 )
                 assertFailsWith<PaperlessException.Http.NotFound> { admin.documents.get(renewal.id) }
             } finally {
-                admin.trash.restore(listOf(renewal.id))
+                assertEquals(listOf(renewal.id), admin.trash.restore(listOf(renewal.id)))
             }
             assertEquals(renewal.title, admin.documents.get(renewal.id).title)
             assertTrue(

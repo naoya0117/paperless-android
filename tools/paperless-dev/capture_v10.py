@@ -508,9 +508,11 @@ def main():
     record(out, "bulk_edit_ok", 200, request(base, "POST", "/api/documents/bulk_edit/", token=admin_token, body={
         "documents": [renewal], "method": "modify_tags",
         "parameters": {"add_tags": [ids[("tags", "Finance")]], "remove_tags": []}}))
-    request(base, "POST", "/api/documents/bulk_edit/", token=admin_token, body={
+    undo = request(base, "POST", "/api/documents/bulk_edit/", token=admin_token, body={
         "documents": [renewal], "method": "modify_tags",
         "parameters": {"add_tags": [], "remove_tags": [ids[("tags", "Finance")]]}})
+    if undo[0] != 200:
+        raise SystemExit(f"undoing the bulk edit failed: HTTP {undo[0]} {undo[2][:200]!r}")
     record(out, "error_bulk_edit_documents", 400, request(base, "POST", "/api/documents/bulk_edit/", token=admin_token,
                                                           body={"documents": [999999], "method": "modify_tags",
                                                                 "parameters": {"add_tags": [], "remove_tags": []}}))
@@ -522,6 +524,8 @@ def main():
     finally:
         restored = request(base, "POST", "/api/trash/", token=admin_token,
                            body={"documents": [renewal], "action": "restore"})
+    if restored[0] != 200:
+        raise SystemExit(f"restoring {renewal} failed: HTTP {restored[0]} {restored[2][:200]!r}")
     record(out, "trash_restored", 200, restored)
     record(out, "error_invalid_custom_field_query", 400,
            request(base, "GET", "/api/documents/?custom_field_query=%5B%22nope%22%5D", token=admin_token))
