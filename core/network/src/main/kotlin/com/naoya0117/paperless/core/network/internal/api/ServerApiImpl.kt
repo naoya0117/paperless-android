@@ -36,10 +36,8 @@ internal class ServerApiImpl(
         )
     }
 
-    override suspend fun fetchSavedViewVisibility(): SavedViewVisibility =
-        service
-            .uiSettings()
-            .body()
-            ?.settings
-            .toSavedViewVisibility()
+    override suspend fun fetchSavedViewVisibility(): SavedViewVisibility {
+        val body = service.uiSettings().body() ?: throw PaperlessException.InvalidResponse("empty body")
+        return body.settings.toSavedViewVisibility()
+    }
 }

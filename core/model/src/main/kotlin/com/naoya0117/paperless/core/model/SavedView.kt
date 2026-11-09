@@ -13,9 +13,13 @@ data class SavedView(
     val sortReverse: Boolean,
     val filterRules: List<FilterRule>,
     val pageSize: Int?,
-    /** Web UI display mode, e.g. `table`, `smallCards`, `largeCards`. */
+    /** Web UI display mode: `table`, `smallCards` or `largeCards`. */
     val displayMode: String?,
-    val displayFields: List<String>,
+    /**
+     * Columns shown by the web UI, e.g. `title`, `created`, `tag`, `correspondent`, `custom_field_3`;
+     * `null` means the web UI's defaults.
+     */
+    val displayFields: List<String>?,
     val owner: Long?,
     val userCanChange: Boolean,
 )
@@ -37,7 +41,9 @@ data class SavedViewDraft(
     val sortReverse: Boolean = true,
     val pageSize: Int? = null,
     val displayMode: String? = null,
-    val displayFields: List<String> = emptyList(),
+    /** `null` for the web UI's default columns. */
+    val displayFields: List<String>? = null,
+    /** A web UI icon name; `null` keeps the current icon (the server's default `funnel` on create). */
     val icon: String? = null,
 )
 

@@ -52,7 +52,7 @@ internal fun SavedViewDto.toModel() =
         filterRules = filterRules.map { FilterRule(it.ruleType, (it.value as? JsonPrimitive)?.contentOrNull) },
         pageSize = pageSize,
         displayMode = displayMode,
-        displayFields = displayFields.orEmpty(),
+        displayFields = displayFields,
         owner = owner,
         userCanChange = userCanChange,
     )
@@ -65,7 +65,7 @@ internal fun SavedViewDraft.toCreateBody(): JsonObject =
         put("sort_reverse", sortReverse)
         put("page_size", pageSize)
         put("display_mode", displayMode)
-        putJsonArray("display_fields") { displayFields.forEach { add(JsonPrimitive(it)) } }
+        putDisplayFields(displayFields)
         icon?.let { put("icon", it) }
     }
 
@@ -78,13 +78,18 @@ internal fun SavedViewDraft.toPatchBody(current: SavedView): JsonObject =
         if (sortReverse != current.sortReverse) put("sort_reverse", sortReverse)
         if (pageSize != current.pageSize) put("page_size", pageSize)
         if (displayMode != current.displayMode) put("display_mode", displayMode)
-        if (displayFields !=
-            current.displayFields
-        ) {
-            putJsonArray("display_fields") { displayFields.forEach { add(JsonPrimitive(it)) } }
-        }
-        if (icon != current.icon && icon != null) put("icon", icon)
+        if (displayFields != current.displayFields) putDisplayFields(displayFields)
+        // The icon is required on the server (default "funnel"); null in a draft keeps the current one.
+        if (icon != null && icon != current.icon) put("icon", icon)
     }
+
+private fun JsonObjectBuilder.putDisplayFields(fields: List<String>?) {
+    if (fields == null) {
+        put("display_fields", JsonNull)
+    } else {
+        putJsonArray("display_fields") { fields.forEach { add(JsonPrimitive(it)) } }
+    }
+}
 
 private fun JsonObjectBuilder.putFilterRules(rules: List<FilterRule>) {
     putJsonArray("filter_rules") {

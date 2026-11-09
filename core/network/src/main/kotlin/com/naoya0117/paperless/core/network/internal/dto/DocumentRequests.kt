@@ -44,10 +44,33 @@ internal fun DocumentQuery.toQueryMap(): Map<String, String> =
         inInbox?.let { put("is_in_inbox", it.toString()) }
         customFieldQuery?.let { put("custom_field_query", it) }
         ordering?.let { putOrdering(it.field.apiName, it.descending) }
-        extraParams.forEach { (key, value) -> if (key !in RESERVED_PARAMS && key !in this) put(key, value) }
+        mergeExtraParams(extraParams)
     }
 
 private val RESERVED_PARAMS = setOf("page", "page_size")
+private val SEARCH_PARAMS = setOf("text", "title_search", "query", "more_like_id")
+
+/** ID list parameters where combining two lists by AND is again a list: "has all" and "has none". */
+private fun isMergeableList(key: String) = key.endsWith("__id__all") || key.endsWith("__id__none")
+
+private fun MutableMap<String, String>.mergeExtraParams(extra: Map<String, String>) {
+    val typedSearch = keys.firstOrNull { it in SEARCH_PARAMS }
+    for ((key, value) in extra) {
+        if (key in RESERVED_PARAMS) continue
+        if (key in SEARCH_PARAMS && typedSearch != null && typedSearch != key) {
+            throw IllegalArgumentException("Only one kind of search per request: $typedSearch and $key")
+        }
+        val typed = this[key]
+        this[key] =
+            when {
+                typed == null || typed == value -> value
+                isMergeableList(key) -> (typed.split(',') + value.split(',')).distinct().joinToString(",")
+                else -> throw IllegalArgumentException(
+                    "$key is set both as a typed filter ($typed) and in extraParams ($value)",
+                )
+            }
+    }
+}
 
 private fun MutableMap<String, String>.putIdFilter(
     name: String,

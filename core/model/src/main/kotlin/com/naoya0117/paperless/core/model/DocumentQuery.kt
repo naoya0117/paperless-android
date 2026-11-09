@@ -28,7 +28,9 @@ data class DocumentQuery(
     val truncateContent: Boolean = true,
     /**
      * Additional raw query parameters for conditions the typed properties cannot express (e.g. from a
-     * saved view's filter rules). Combined with the typed ones; `page` and `page_size` cannot be set here.
+     * saved view's filter rules), combined with the typed ones by AND: "all of" / "none of" lists with the
+     * same key are merged; any other key set both here and by a typed property, or a second kind of search,
+     * is rejected when the request is built. `page` and `page_size` cannot be set here.
      */
     val extraParams: Map<String, String> = emptyMap(),
 ) {

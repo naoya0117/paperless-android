@@ -15,6 +15,7 @@ import com.naoya0117.paperless.core.model.TagDraft
 import com.naoya0117.paperless.core.network.AuthApi
 import com.naoya0117.paperless.core.network.DocumentsApi
 import com.naoya0117.paperless.core.network.LabelApi
+import com.naoya0117.paperless.core.network.ListQuery
 import com.naoya0117.paperless.core.network.PaperlessClientConfig
 import com.naoya0117.paperless.core.network.ServerApi
 import com.naoya0117.paperless.core.network.TasksApi
@@ -142,6 +143,9 @@ internal class ApiRegistry(
             SavedView::id,
             SavedViewDraft::toCreateBody,
             SavedViewDraft::toPatchBody,
+            // The saved views endpoint has no filters and no document counts.
+            supportsNameFilter = false,
+            supportedOrderings = setOf(ListQuery.Ordering.Field.NAME),
         )
     }
     val customFields: LabelApi<CustomField, CustomFieldDraft> by lazy {
@@ -172,6 +176,10 @@ internal class ApiRegistry(
         createBody: (D) -> JsonObject,
         patchBody: (D, T) -> JsonObject,
         extraListParams: Map<String, String> = emptyMap(),
+        supportsNameFilter: Boolean = true,
+        supportedOrderings: Set<ListQuery.Ordering.Field> =
+            ListQuery.Ordering.Field.entries
+                .toSet(),
     ): LabelApi<T, D> =
         CrudApiImpl(
             list,
@@ -184,5 +192,7 @@ internal class ApiRegistry(
             createBody,
             { current, draft -> patchBody(draft, current) },
             extraListParams,
+            supportsNameFilter,
+            supportedOrderings,
         )
 }
