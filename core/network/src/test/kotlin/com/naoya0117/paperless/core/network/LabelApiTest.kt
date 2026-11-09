@@ -54,7 +54,7 @@ class LabelApiTest {
             val finance = page.items.single { it.name == "Finance" }
             assertEquals(Matching(MatchingAlgorithm.ANY, "invoice bill", isInsensitive = true), finance.matching)
             assertEquals("#a6cee3", finance.color)
-            assertEquals(0, finance.documentCount)
+            assertEquals("two sample documents carry the tag", 2, finance.documentCount)
             assertNull(finance.parentId)
             val tax = page.items.single { it.name == "Tax" }
             assertEquals(listOf(tax.id), finance.childIds)

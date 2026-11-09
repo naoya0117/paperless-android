@@ -11,6 +11,7 @@ import com.naoya0117.paperless.core.model.StoragePathDraft
 import com.naoya0117.paperless.core.model.Tag
 import com.naoya0117.paperless.core.model.TagDraft
 import com.naoya0117.paperless.core.network.AuthApi
+import com.naoya0117.paperless.core.network.DocumentsApi
 import com.naoya0117.paperless.core.network.LabelApi
 import com.naoya0117.paperless.core.network.PaperlessClientConfig
 import com.naoya0117.paperless.core.network.ServerApi
@@ -62,6 +63,8 @@ internal class ApiRegistry(
 
     val auth: AuthApi by lazy { AuthApiImpl(retrofit.create()) }
     val server: ServerApi by lazy { ServerApiImpl(retrofit.create(), config.apiVersion) }
+
+    val documents: DocumentsApi by lazy { DocumentsApiImpl(retrofit.create()) }
 
     val tags: LabelApi<Tag, TagDraft> by lazy {
         val s = retrofit.create<TagService>()

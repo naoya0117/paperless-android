@@ -4,10 +4,16 @@ import com.naoya0117.paperless.core.model.ApiVersion
 import com.naoya0117.paperless.core.model.AuthToken
 import com.naoya0117.paperless.core.model.CustomFieldDataType
 import com.naoya0117.paperless.core.model.CustomFieldDraft
+import com.naoya0117.paperless.core.model.DateRange
+import com.naoya0117.paperless.core.model.DocumentOrdering
+import com.naoya0117.paperless.core.model.DocumentQuery
+import com.naoya0117.paperless.core.model.DocumentSearch
+import com.naoya0117.paperless.core.model.IdFilter
 import com.naoya0117.paperless.core.model.Matching
 import com.naoya0117.paperless.core.model.MatchingAlgorithm
 import com.naoya0117.paperless.core.model.SelectOption
 import com.naoya0117.paperless.core.model.TagDraft
+import com.naoya0117.paperless.core.model.TagFilter
 import com.naoya0117.paperless.core.model.toDraft
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -15,6 +21,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.LocalDate
 
 /**
  * Runs against the local server from tools/paperless-dev after `capture_v10.py` created the test users.
@@ -126,6 +133,72 @@ class RealServerSmokeTest {
             } finally {
                 admin.customFields.delete(created.id)
             }
+        }
+
+    @Test
+    fun `document filters and search work on the server`() =
+        runTest {
+            val admin = client().signIn("admin", "admin-password").client
+            val finance = admin.tags.listAll().single { it.name == "Finance" }
+            val tax = admin.tags.listAll().single { it.name == "Tax" }
+
+            fun titles(query: DocumentQuery) =
+                suspend {
+                    admin.documents
+                        .list(query)
+                        .items
+                        .map { it.title }
+                        .toSet()
+                }
+
+            assertEquals(
+                setOf("Invoice 2026-002"),
+                titles(DocumentQuery(tags = TagFilter.Matching(all = setOf(finance.id, tax.id))))(),
+            )
+            assertEquals(setOf("Contract renewal"), titles(DocumentQuery(correspondent = IdFilter.NotAssigned))())
+            assertEquals(setOf("Contract renewal"), titles(DocumentQuery(search = DocumentSearch.Text("renewal")))())
+            assertEquals(
+                setOf("Invoice 2026-001", "Invoice 2026-002"),
+                titles(DocumentQuery(created = DateRange(from = LocalDate.of(2026, 10, 1))))(),
+            )
+            assertEquals(
+                setOf("Invoice 2026-001"),
+                titles(DocumentQuery(customFieldQuery = """["Due date","exists",true]"""))(),
+            )
+            val ordered =
+                admin.documents.list(
+                    DocumentQuery(ordering = DocumentOrdering(DocumentOrdering.Field.CREATED, descending = false)),
+                )
+            assertEquals(ordered.items.sortedBy { it.created }, ordered.items)
+        }
+
+    @Test
+    fun `document update round trip`() =
+        runTest {
+            val admin = client().signIn("admin", "admin-password").client
+            val invoice =
+                admin.documents
+                    .list(
+                        DocumentQuery(search = DocumentSearch.Title("Invoice 2026-001")),
+                    ).items
+                    .single()
+                    .let {
+                        admin.documents.get(it.id)
+                    }
+            val changed =
+                admin.documents.update(
+                    invoice,
+                    invoice.toDraft().copy(title = "Invoice 2026-001 (smoke)", archiveSerialNumber = null),
+                )
+            try {
+                assertEquals("Invoice 2026-001 (smoke)", changed.title)
+                assertNull(changed.archiveSerialNumber)
+                assertEquals(invoice.tagIds.toSet(), changed.tagIds.toSet())
+                assertEquals(invoice.customFields, changed.customFields)
+            } finally {
+                admin.documents.update(changed, invoice.toDraft())
+            }
+            assertEquals(invoice.title, admin.documents.get(invoice.id).title)
         }
 
     private companion object {

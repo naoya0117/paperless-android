@@ -61,7 +61,19 @@ FIXTURES = [
     "custom_fields",
     "custom_field_select_created",
     "error_not_found",
+    "documents",
+    "document",
+    "document_updated",
+    "documents_search_text",
+    "documents_more_like",
+    "error_invalid_custom_field_query",
 ]
+# Documents uploaded once (looked up by title): title -> (text lines, created, tag names, correspondent).
+DOCUMENTS = {
+    "Invoice 2026-001": (["ACME Corp", "Invoice 2026-001", "Total 120.00 EUR"], "2026-10-01", ["Finance"], "ACME Corp"),
+    "Contract renewal": (["Dear customer", "Your electricity contract renewal", "Kind regards"], "2026-09-15", [], None),
+    "Invoice 2026-002": (["ACME Corp", "Invoice 2026-002", "Total 80.00 EUR"], "2026-11-02", ["Finance", "Tax"], "ACME Corp"),
+}
 # Labels the capture script keeps on the server (created once, then patched back to these values).
 LABELS = {
     "tags": [
@@ -222,6 +234,73 @@ def ensure_labels(base, token):
     return ids
 
 
+def make_pdf(lines):
+    """A minimal one-page PDF with the given text lines (Helvetica), so Paperless can extract the text."""
+    text = " ".join(f"({line.replace('(', '').replace(')', '')}) Tj T*" for line in lines)
+    content = f"BT /F1 14 Tf 72 720 Td 18 TL {text} ET"
+    objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+        "/Resources << /Font << /F1 5 0 R >> >> >>",
+        f"<< /Length {len(content)} >>\nstream\n{content}\nendstream",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out, offsets = "%PDF-1.4\n", []
+    for number, obj in enumerate(objects, 1):
+        offsets.append(len(out.encode()))
+        out += f"{number} 0 obj\n{obj}\nendobj\n"
+    xref = len(out.encode())
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n" + "".join(f"{o:010d} 00000 n \n" for o in offsets)
+    out += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n"
+    return out.encode()
+
+
+def upload(base, token, title, pdf, fields):
+    """POST /api/documents/post_document/ (multipart) and wait for the consume task; returns the document ID."""
+    boundary = "----paperless-dev-capture"
+    parts = []
+    for name, value in [("title", title)] + fields:
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
+    parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="{title}.pdf"\r\n'
+                 "Content-Type: application/pdf\r\n\r\n".encode() + pdf + b"\r\n")
+    body = b"".join(parts) + f"--{boundary}--\r\n".encode()
+    req = urllib.request.Request(base + "/api/documents/post_document/", data=body, method="POST", headers={
+        "Accept": "application/json; version=10", "Authorization": f"Token {token}",
+        "Content-Type": f"multipart/form-data; boundary={boundary}"})
+    with _OPENER.open(req, timeout=60) as resp:
+        task_id = json.loads(resp.read())
+    for _ in range(120):
+        tasks = json_body(request(base, "GET", f"/api/tasks/?task_id={task_id}", token=token), "task status")
+        results = tasks.get("results", tasks) if isinstance(tasks, dict) else tasks
+        if results and results[0]["status"].lower() in ("success", "failure"):
+            if results[0]["status"].lower() != "success":
+                raise SystemExit(f"consuming {title} failed: {results[0]}")
+            return results[0]["result_data"]["document_id"]
+        time.sleep(1)
+    raise SystemExit(f"consuming {title} timed out")
+
+
+def ensure_documents(base, token, label_ids):
+    ids = {}
+    for title, (lines, created, tags, correspondent) in DOCUMENTS.items():
+        found = json_body(request(base, "GET", f"/api/documents/?title__iexact={urllib.parse.quote(title)}&fields=id",
+                                  token=token), "looking up documents")["results"]
+        if found:
+            ids[title] = found[0]["id"]
+            continue
+        fields = [("created", created)] + [("tags", label_ids[("tags", t)]) for t in tags]
+        if correspondent:
+            fields.append(("correspondent", label_ids[("correspondents", correspondent)]))
+        ids[title] = upload(base, token, title, make_pdf(lines), fields)
+    # Field values are (re)set every run so the captures stay stable.
+    request(base, "PATCH", f"/api/documents/{ids['Invoice 2026-001']}/", token=token, body={
+        "archive_serial_number": 1,
+        "custom_fields": [{"field": label_ids[("custom_fields", "Due date")], "value": "2026-11-30"},
+                          {"field": label_ids[("custom_fields", "Amount")], "value": "EUR120.00"}]})
+    return ids
+
+
 def redact(text):
     return re.sub(r'"token":\s*"[0-9a-f]{40}"', '"token": "<redacted>"', text)
 
@@ -312,6 +391,21 @@ def main():
         "extra_data": {"select_options": [{"label": "High"}, {"label": "Low"}]}})
     record(out, "custom_field_select_created", 201, select)
     request(base, "DELETE", f"/api/custom_fields/{json.loads(select[2])['id']}/", token=admin_token)
+
+    # Documents (as admin)
+    docs = ensure_documents(base, admin_token, ids)
+    invoice = docs["Invoice 2026-001"]
+    record(out, "documents", 200, request(base, "GET", "/api/documents/?page=1&page_size=25&truncate_content=true",
+                                          token=admin_token))
+    record(out, "document", 200, request(base, "GET", f"/api/documents/{invoice}/", token=admin_token))
+    record(out, "document_updated", 200, request(base, "PATCH", f"/api/documents/{invoice}/", token=admin_token,
+                                                 body={"title": "Invoice 2026-001 (paid)"}))
+    request(base, "PATCH", f"/api/documents/{invoice}/", token=admin_token, body={"title": "Invoice 2026-001"})
+    record(out, "documents_search_text", 200, request(base, "GET", "/api/documents/?text=invoice", token=admin_token))
+    record(out, "documents_more_like", 200,
+           request(base, "GET", f"/api/documents/?more_like_id={invoice}", token=admin_token))
+    record(out, "error_invalid_custom_field_query", 400,
+           request(base, "GET", "/api/documents/?custom_field_query=%5B%22nope%22%5D", token=admin_token))
     # Last: exhaust the login throttle (it also counts the logins above).
     for _ in range(60):
         response = attempt("alice", "wrong")

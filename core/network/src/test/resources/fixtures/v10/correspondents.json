@@ -10,8 +10,8 @@
       "match": "",
       "matching_algorithm": 6,
       "is_insensitive": true,
-      "document_count": 0,
-      "last_correspondence": null,
+      "document_count": 2,
+      "last_correspondence": "2026-11-02",
       "owner": 2,
       "user_can_change": true
     }
