@@ -10,6 +10,7 @@ kotlin {
 dependencies {
     api(projects.core.model)
     api(libs.okhttp)
+    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.retrofit)

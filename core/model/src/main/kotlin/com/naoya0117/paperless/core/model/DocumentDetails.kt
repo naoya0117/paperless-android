@@ -52,15 +52,28 @@ data class DocumentSuggestions(
  * One entry of a document's audit log (requires `PAPERLESS_AUDIT_LOG_ENABLED`, the default).
  *
  * @property action e.g. `create`, `update`
- * @property changes field name → [old, new] as shown by the server
+ * @property changes by field name (or a label such as `Note Added`)
  */
 data class HistoryEntry(
     val id: Long,
     val timestamp: Instant,
     val action: String,
-    val changes: Map<String, List<String?>>,
+    val changes: Map<String, HistoryChange>,
     val actor: HistoryActor?,
 )
+
+sealed interface HistoryChange {
+    /** A value change as shown by the server; `null` for no value. */
+    data class Values(
+        val old: String?,
+        val new: String?,
+    ) : HistoryChange
+
+    /** A structured change (e.g. custom fields, many-to-many operations), kept as JSON. */
+    data class Other(
+        val json: String,
+    ) : HistoryChange
+}
 
 data class HistoryActor(
     val id: Long,

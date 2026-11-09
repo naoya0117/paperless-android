@@ -27,4 +27,25 @@ class ContentDispositionTest {
             fileNameFromContentDisposition("inline; filename*=bogus; filename=\"fallback.pdf\""),
         )
     }
+
+    @Test
+    fun `honours quotes and escapes in the plain file name`() {
+        assertEquals("ACME; Inc.pdf", fileNameFromContentDisposition("attachment; filename=\"ACME; Inc.pdf\""))
+        assertEquals("say \"hi\".pdf", fileNameFromContentDisposition("attachment; filename=\"say \\\"hi\\\".pdf\""))
+    }
+
+    @Test
+    fun `falls back to the plain name when the extended one is malformed`() {
+        assertEquals(
+            "ok.pdf",
+            fileNameFromContentDisposition("attachment; filename*=utf-8''bad%zz.pdf; filename=\"ok.pdf\""),
+        )
+    }
+
+    @Test
+    fun `strips directories and hidden-file dots`() {
+        assertEquals("x.pdf", fileNameFromContentDisposition("attachment; filename*=utf-8''..%2F..%2Fx.pdf"))
+        assertEquals("evil.pdf", fileNameFromContentDisposition("attachment; filename=\"..\\\\evil.pdf\""))
+        assertNull(fileNameFromContentDisposition("attachment; filename=\"..\""))
+    }
 }

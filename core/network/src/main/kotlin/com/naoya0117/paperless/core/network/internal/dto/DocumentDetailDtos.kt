@@ -4,6 +4,7 @@ import com.naoya0117.paperless.core.model.DocumentMetadata
 import com.naoya0117.paperless.core.model.DocumentSuggestions
 import com.naoya0117.paperless.core.model.FileProperty
 import com.naoya0117.paperless.core.model.HistoryActor
+import com.naoya0117.paperless.core.model.HistoryChange
 import com.naoya0117.paperless.core.model.HistoryEntry
 import com.naoya0117.paperless.core.model.Note
 import com.naoya0117.paperless.core.model.NoteAuthor
@@ -16,7 +17,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import java.time.LocalDate
-import java.time.OffsetDateTime
 
 /** API v8+: `user` is an object. */
 @Serializable
@@ -39,7 +39,7 @@ internal fun NoteDto.toModel() =
     Note(
         id = id,
         text = note,
-        created = OffsetDateTime.parse(created).toInstant(),
+        created = parseInstant(created),
         user =
             user?.let {
                 NoteAuthor(
@@ -128,21 +128,23 @@ internal data class HistoryActorDto(
 internal fun HistoryEntryDto.toModel() =
     HistoryEntry(
         id = id,
-        timestamp = OffsetDateTime.parse(timestamp).toInstant(),
+        timestamp = parseInstant(timestamp),
         action = action,
-        changes =
-            (changes as? JsonObject)
-                ?.mapValues { (_, change) ->
-                    (change as? JsonArray)?.map { it.displayString() }
-                        ?: listOf(change.displayString())
-                }.orEmpty(),
+        changes = (changes as? JsonObject)?.mapValues { (_, change) -> change.toHistoryChange() }.orEmpty(),
         actor = actor?.let { HistoryActor(it.id, it.username) },
     )
 
-/** The server stores most values as strings already ("None" for null); keep other JSON as text. */
+/** `[old, new]` pairs become [HistoryChange.Values] (the server writes "None" for no value). */
+private fun JsonElement.toHistoryChange(): HistoryChange {
+    if (this is JsonArray && size == 2 && all { it is JsonPrimitive }) {
+        return HistoryChange.Values(this[0].displayString(), this[1].displayString())
+    }
+    return HistoryChange.Other(toString())
+}
+
 private fun JsonElement.displayString(): String? =
     when (this) {
         is JsonNull -> null
-        is JsonPrimitive -> contentOrNull
+        is JsonPrimitive -> contentOrNull?.takeUnless { it == "None" }
         else -> toString()
     }

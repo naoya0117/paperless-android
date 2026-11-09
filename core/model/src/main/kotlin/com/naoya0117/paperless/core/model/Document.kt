@@ -23,8 +23,8 @@ data class Document(
     val mimeType: String?,
     val pageCount: Int?,
     val customFields: List<CustomFieldValue>,
-    /** Oldest first. */
-    val notes: List<Note>,
+    /** Oldest first; `null` if the server did not include notes (e.g. the user may not view them). */
+    val notes: List<Note>?,
     val owner: Long?,
     /** Whether the current user may edit the document (`false` if the server did not say). */
     val userCanChange: Boolean,

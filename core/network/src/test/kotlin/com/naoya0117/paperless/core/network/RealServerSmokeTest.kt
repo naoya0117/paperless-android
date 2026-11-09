@@ -214,16 +214,15 @@ class RealServerSmokeTest {
 
             val thumbnail =
                 admin.documents.openFile(invoice.id, DocumentFileKind.THUMBNAIL).use {
-                    it.contentType to
-                        it.stream.readBytes()
+                    it.contentType to it.readBytes()
                 }
             assertEquals("image/webp", thumbnail.first)
             assertEquals("RIFF", String(thumbnail.second, 0, 4))
-            val preview = admin.documents.openFile(invoice.id, DocumentFileKind.PREVIEW).use { it.stream.readBytes() }
+            val preview = admin.documents.openFile(invoice.id, DocumentFileKind.PREVIEW).use { it.readBytes() }
             assertEquals("%PDF", String(preview, 0, 4))
             admin.documents.openFile(invoice.id, DocumentFileKind.ORIGINAL).use { original ->
                 assertEquals("Invoice 2026-001.pdf", original.fileName?.substringAfter("ACME Corp "))
-                assertTrue("the original is the small uploaded PDF", original.stream.readBytes().size < preview.size)
+                assertTrue("the original is the small uploaded PDF", original.readBytes().size < preview.size)
             }
 
             val notes = admin.documents.addNote(invoice.id, "Smoke test note")
@@ -233,7 +232,7 @@ class RealServerSmokeTest {
                     notes.map { it.text },
                     admin.documents
                         .get(invoice.id)
-                        .notes
+                        .notes!!
                         .map { it.text },
                 )
             } finally {
@@ -242,7 +241,7 @@ class RealServerSmokeTest {
             assertTrue(
                 admin.documents
                     .get(invoice.id)
-                    .notes
+                    .notes!!
                     .none { it.text == "Smoke test note" },
             )
 

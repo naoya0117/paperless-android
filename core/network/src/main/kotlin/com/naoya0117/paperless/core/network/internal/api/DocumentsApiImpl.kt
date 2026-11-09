@@ -53,12 +53,17 @@ internal class DocumentsApiImpl(
             }
         val response = service.file(id, path, original)
         val body = response.body() ?: throw PaperlessException.InvalidResponse("empty body")
-        return DocumentFile(
-            contentType = body.contentType()?.toString(),
-            fileName = fileNameFromContentDisposition(response.headers()["Content-Disposition"]),
-            contentLength = body.contentLength().takeIf { it >= 0 },
-            stream = body.byteStream(),
-        )
+        try {
+            return DocumentFile(
+                contentType = body.contentType()?.toString(),
+                fileName = fileNameFromContentDisposition(response.headers()["Content-Disposition"]),
+                contentLength = body.contentLength().takeIf { it >= 0 },
+                stream = body.byteStream(),
+            )
+        } catch (e: Throwable) {
+            body.close() // release the connection; nobody else holds the body yet
+            throw e
+        }
     }
 
     override suspend fun addNote(
@@ -74,11 +79,12 @@ internal class DocumentsApiImpl(
         noteId: Long,
     ): List<Note> = parsing { service.deleteNote(documentId, noteId).toNotes() }
 
-    override suspend fun metadata(id: Long): DocumentMetadata = service.metadata(id).toModel()
+    override suspend fun metadata(id: Long): DocumentMetadata = parsing { service.metadata(id).toModel() }
 
-    override suspend fun suggestions(id: Long): DocumentSuggestions = service.suggestions(id).toModel()
+    override suspend fun suggestions(id: Long): DocumentSuggestions = parsing { service.suggestions(id).toModel() }
 
-    override suspend fun history(id: Long): List<HistoryEntry> = parsing { service.history(id).map { it.toModel() } }
+    override suspend fun history(id: Long): List<HistoryEntry> =
+        parsing { service.history(id).map { it.toModel() } }.sortedByDescending { it.timestamp }
 
     override suspend fun nextArchiveSerialNumber(): Long = service.nextAsn()
 
