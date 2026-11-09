@@ -12,7 +12,10 @@ public interface LabelApi<T, D> {
     /** One page; [ListQuery.page] starts at 1. */
     public suspend fun list(query: ListQuery = ListQuery()): Page<T>
 
-    /** Every object the user can see, fetched page by page. */
+    /**
+     * Every object the user can see. Fetched in pages of [ListQuery.MAX_PAGE_SIZE]; if objects change
+     * between pages, the result may miss some of them (it never contains duplicates).
+     */
     public suspend fun listAll(): List<T>
 
     /** @throws PaperlessException.Http.NotFound */
@@ -21,12 +24,16 @@ public interface LabelApi<T, D> {
     /** @throws PaperlessException.Http.BadRequest e.g. for a duplicate name */
     public suspend fun create(draft: D): T
 
-    /** Applies [draft] to the object (PATCH); see the draft type for how `null` properties are treated. */
+    /**
+     * Changes [current] to [draft] (PATCH), sending only the properties that differ. Returns [current]
+     * without a request if nothing differs.
+     */
     public suspend fun update(
-        id: Long,
+        current: T,
         draft: D,
     ): T
 
+    /** For tags, sub-tags are deleted too (and the request fails with 403 if one of them may not be deleted). */
     public suspend fun delete(id: Long)
 }
 

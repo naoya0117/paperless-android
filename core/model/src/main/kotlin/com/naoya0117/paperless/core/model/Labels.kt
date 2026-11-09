@@ -15,7 +15,7 @@ sealed interface MatchingLabel {
     /** User ID of the owner; `null` means the object is not owned (visible to everyone). */
     val owner: Long?
 
-    /** Whether the current user may edit or delete the object. */
+    /** Whether the current user may edit or delete the object (`false` if the server did not say). */
     val userCanChange: Boolean
 }
 
@@ -72,30 +72,46 @@ data class StoragePath(
 ) : MatchingLabel
 
 /**
- * Values to create or update a label with. For optional properties, `null` leaves the choice to the
- * server: its default on create, the current value on update.
+ * The desired state of a label: everything is sent on create; on update only the properties that differ
+ * from the current object are sent (see [LabelApi.update][com.naoya0117.paperless.core.network.LabelApi]),
+ * so unchanged values (e.g. the name, which the server re-validates for uniqueness) are left alone.
+ * Defaults match the server's defaults for new objects.
  */
 data class TagDraft(
     val name: String,
-    val color: String? = null,
-    val matching: Matching? = null,
-    val isInboxTag: Boolean? = null,
-    /** Sent as is: `null` makes the tag a root tag. */
+    val color: String = DEFAULT_TAG_COLOR,
+    val matching: Matching = DEFAULT_MATCHING,
+    val isInboxTag: Boolean = false,
+    /** `null` makes the tag a root tag. */
     val parentId: Long? = null,
 )
 
 data class CorrespondentDraft(
     val name: String,
-    val matching: Matching? = null,
+    val matching: Matching = DEFAULT_MATCHING,
 )
 
 data class DocumentTypeDraft(
     val name: String,
-    val matching: Matching? = null,
+    val matching: Matching = DEFAULT_MATCHING,
 )
 
 data class StoragePathDraft(
     val name: String,
     val path: String,
-    val matching: Matching? = null,
+    val matching: Matching = DEFAULT_MATCHING,
 )
+
+/** The server's default color for new tags. */
+const val DEFAULT_TAG_COLOR: String = "#a6cee3"
+
+/** The server's default matching for new labels. */
+val DEFAULT_MATCHING: Matching = Matching(MatchingAlgorithm.ANY)
+
+fun Tag.toDraft(): TagDraft = TagDraft(name, color, matching, isInboxTag, parentId)
+
+fun Correspondent.toDraft(): CorrespondentDraft = CorrespondentDraft(name, matching)
+
+fun DocumentType.toDraft(): DocumentTypeDraft = DocumentTypeDraft(name, matching)
+
+fun StoragePath.toDraft(): StoragePathDraft = StoragePathDraft(name, path, matching)

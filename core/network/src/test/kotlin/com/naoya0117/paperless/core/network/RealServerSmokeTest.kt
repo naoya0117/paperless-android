@@ -5,8 +5,8 @@ import com.naoya0117.paperless.core.model.AuthToken
 import com.naoya0117.paperless.core.model.CustomFieldDataType
 import com.naoya0117.paperless.core.model.CustomFieldDraft
 import com.naoya0117.paperless.core.model.SelectOption
-import com.naoya0117.paperless.core.model.SelectOptionDraft
 import com.naoya0117.paperless.core.model.TagDraft
+import com.naoya0117.paperless.core.model.toDraft
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -59,10 +59,17 @@ class RealServerSmokeTest {
             val created = admin.tags.create(TagDraft("Smoke test tag", color = "#336699", parentId = finance.id))
             try {
                 assertEquals(finance.id, created.parentId)
-                val updated = admin.tags.update(created.id, TagDraft("Smoke test tag 2", parentId = null))
+                // Changing only the color keeps the parent.
+                val recolored = admin.tags.update(created, created.toDraft().copy(color = "#112233"))
+                assertEquals(finance.id, recolored.parentId)
+                val updated =
+                    admin.tags.update(
+                        recolored,
+                        recolored.toDraft().copy(name = "Smoke test tag 2", parentId = null),
+                    )
                 assertEquals("Smoke test tag 2", updated.name)
                 assertNull(updated.parentId)
-                assertEquals("#336699", updated.color)
+                assertEquals("#112233", updated.color)
             } finally {
                 admin.tags.delete(created.id)
             }
@@ -73,27 +80,25 @@ class RealServerSmokeTest {
     fun `select options keep their ids on update`() =
         runTest {
             val admin = client().signIn("admin", "admin-password").client
-            val draft =
-                CustomFieldDraft(
-                    "Smoke test select",
-                    CustomFieldDataType.SELECT,
-                    listOf(SelectOptionDraft(null, "One"), SelectOptionDraft(null, "Two")),
+            val created =
+                admin.customFields.create(
+                    CustomFieldDraft(
+                        "Smoke test select",
+                        CustomFieldDataType.SELECT,
+                        listOf(SelectOption(null, "One"), SelectOption(null, "Two")),
+                    ),
                 )
-            val created = admin.customFields.create(draft)
             try {
                 val one = created.selectOptions.single { it.label == "One" }
+                val renamed = admin.customFields.update(created, created.toDraft().copy(name = "Smoke test select 2"))
+                assertEquals(created.selectOptions, renamed.selectOptions)
                 val updated =
                     admin.customFields.update(
-                        created.id,
-                        draft.copy(
-                            selectOptions =
-                                listOf(
-                                    SelectOptionDraft(one.id, "One renamed"),
-                                    SelectOptionDraft(null, "Three"),
-                                ),
+                        renamed,
+                        renamed.toDraft().copy(
+                            selectOptions = listOf(SelectOption(one.id, "One renamed"), SelectOption(null, "Three")),
                         ),
                     )
-                assertEquals(CustomFieldDataType.SELECT, updated.dataType)
                 assertEquals(SelectOption(one.id, "One renamed"), updated.selectOptions.first())
                 assertEquals(listOf("One renamed", "Three"), updated.selectOptions.map { it.label })
             } finally {

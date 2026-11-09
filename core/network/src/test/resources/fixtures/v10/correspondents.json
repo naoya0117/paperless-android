@@ -11,6 +11,7 @@
       "matching_algorithm": 6,
       "is_insensitive": true,
       "document_count": 0,
+      "last_correspondence": null,
       "owner": 2,
       "user_can_change": true
     }

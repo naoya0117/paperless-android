@@ -287,8 +287,16 @@ def main():
     # Labels (as admin, who owns them)
     ids = ensure_labels(base, admin_token)
     for endpoint in ["tags", "correspondents", "document_types", "storage_paths", "custom_fields"]:
-        record(out, endpoint, 200, request(base, "GET", f"/api/{endpoint}/?page=1&page_size=25", token=admin_token))
+        extra = "&last_correspondence=true" if endpoint == "correspondents" else ""
+        record(out, endpoint, 200,
+               request(base, "GET", f"/api/{endpoint}/?page=1&page_size=25{extra}", token=admin_token))
     record(out, "tag_child", 200, request(base, "GET", f"/api/tags/{ids[('tags', 'Tax')]}/", token=admin_token))
+    # Leftovers of an interrupted earlier run would make the creates below fail as duplicates.
+    for endpoint, name in [("tags", "Temporary"), ("tags", "Temporary renamed"), ("custom_fields", "Temporary select")]:
+        found = json_body(request(base, "GET", f"/api/{endpoint}/?name__iexact={urllib.parse.quote(name)}",
+                                  token=admin_token), "looking up leftovers")["results"]
+        for item in found:
+            request(base, "DELETE", f"/api/{endpoint}/{item['id']}/", token=admin_token)
     created = request(base, "POST", "/api/tags/", token=admin_token,
                       body={"name": "Temporary", "color": "#123456", "parent": ids[("tags", "Finance")]})
     record(out, "tag_created", 201, created)

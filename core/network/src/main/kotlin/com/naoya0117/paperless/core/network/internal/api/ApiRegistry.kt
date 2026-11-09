@@ -17,10 +17,12 @@ import com.naoya0117.paperless.core.network.ServerApi
 import com.naoya0117.paperless.core.network.internal.dto.CorrespondentDto
 import com.naoya0117.paperless.core.network.internal.dto.CustomFieldDto
 import com.naoya0117.paperless.core.network.internal.dto.DocumentTypeDto
+import com.naoya0117.paperless.core.network.internal.dto.PageDto
 import com.naoya0117.paperless.core.network.internal.dto.StoragePathDto
 import com.naoya0117.paperless.core.network.internal.dto.TagDto
-import com.naoya0117.paperless.core.network.internal.dto.toDto
+import com.naoya0117.paperless.core.network.internal.dto.toCreateBody
 import com.naoya0117.paperless.core.network.internal.dto.toModel
+import com.naoya0117.paperless.core.network.internal.dto.toPatchBody
 import com.naoya0117.paperless.core.network.internal.http.OkHttpClientFactory
 import com.naoya0117.paperless.core.network.internal.http.PaperlessCallAdapterFactory
 import com.naoya0117.paperless.core.network.internal.http.PaperlessJson
@@ -29,6 +31,7 @@ import com.naoya0117.paperless.core.network.internal.service.CustomFieldService
 import com.naoya0117.paperless.core.network.internal.service.DocumentTypeService
 import com.naoya0117.paperless.core.network.internal.service.StoragePathService
 import com.naoya0117.paperless.core.network.internal.service.TagService
+import kotlinx.serialization.json.JsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
@@ -62,47 +65,101 @@ internal class ApiRegistry(
 
     val tags: LabelApi<Tag, TagDraft> by lazy {
         val s = retrofit.create<TagService>()
-        CrudApiImpl(s::list, s::get, s::create, s::update, s::delete, TagDto::toModel, TagDraft::toDto)
+        crud(
+            s::list,
+            s::get,
+            s::create,
+            s::update,
+            s::delete,
+            TagDto::toModel,
+            Tag::id,
+            TagDraft::toCreateBody,
+            TagDraft::toPatchBody,
+        )
     }
     val correspondents: LabelApi<Correspondent, CorrespondentDraft> by lazy {
         val s = retrofit.create<CorrespondentService>()
-        CrudApiImpl(
+        crud(
             s::list,
             s::get,
             s::create,
             s::update,
             s::delete,
             CorrespondentDto::toModel,
-            CorrespondentDraft::toDto,
+            Correspondent::id,
+            CorrespondentDraft::toCreateBody,
+            CorrespondentDraft::toPatchBody,
+            // Only then does the list include each correspondent's newest document date.
+            extraListParams = mapOf("last_correspondence" to "true"),
         )
     }
     val documentTypes: LabelApi<DocumentType, DocumentTypeDraft> by lazy {
         val s = retrofit.create<DocumentTypeService>()
-        CrudApiImpl(
+        crud(
             s::list,
             s::get,
             s::create,
             s::update,
             s::delete,
             DocumentTypeDto::toModel,
-            DocumentTypeDraft::toDto,
+            DocumentType::id,
+            DocumentTypeDraft::toCreateBody,
+            DocumentTypeDraft::toPatchBody,
         )
     }
     val storagePaths: LabelApi<StoragePath, StoragePathDraft> by lazy {
         val s = retrofit.create<StoragePathService>()
-        CrudApiImpl(s::list, s::get, s::create, s::update, s::delete, StoragePathDto::toModel, StoragePathDraft::toDto)
+        crud(
+            s::list,
+            s::get,
+            s::create,
+            s::update,
+            s::delete,
+            StoragePathDto::toModel,
+            StoragePath::id,
+            StoragePathDraft::toCreateBody,
+            StoragePathDraft::toPatchBody,
+        )
     }
     val customFields: LabelApi<CustomField, CustomFieldDraft> by lazy {
         val s = retrofit.create<CustomFieldService>()
-        CrudApiImpl(
+        crud(
             s::list,
             s::get,
             s::create,
             s::update,
             s::delete,
             CustomFieldDto::toModel,
-            toCreateDto = { it.toDto(includeDataType = true) },
-            toUpdateDto = { it.toDto(includeDataType = false) },
+            CustomField::id,
+            CustomFieldDraft::toCreateBody,
+            CustomFieldDraft::toPatchBody,
         )
     }
+
+    /** Named arguments keep the many function references of a [CrudApiImpl] readable at the call site. */
+    @Suppress("LongParameterList")
+    private fun <Dto, T, D> crud(
+        list: suspend (Map<String, String>) -> PageDto<Dto>,
+        get: suspend (Long) -> Dto,
+        create: suspend (JsonObject) -> Dto,
+        update: suspend (Long, JsonObject) -> Dto,
+        delete: suspend (Long) -> Unit,
+        toModel: (Dto) -> T,
+        idOf: (T) -> Long,
+        createBody: (D) -> JsonObject,
+        patchBody: (D, T) -> JsonObject,
+        extraListParams: Map<String, String> = emptyMap(),
+    ): LabelApi<T, D> =
+        CrudApiImpl(
+            list,
+            get,
+            create,
+            update,
+            delete,
+            toModel,
+            idOf,
+            createBody,
+            { current, draft -> patchBody(draft, current) },
+            extraListParams,
+        )
 }

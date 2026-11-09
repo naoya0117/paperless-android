@@ -19,9 +19,12 @@ value class CustomFieldDataType(
     }
 }
 
-/** An option of a [CustomFieldDataType.SELECT] field; documents store the [id]. */
+/**
+ * An option of a [CustomFieldDataType.SELECT] field; documents store the [id]. [id] is `null` only for
+ * options the server stored without one (legacy data); they are kept so that an update does not drop them.
+ */
 data class SelectOption(
-    val id: String,
+    val id: String?,
     val label: String,
 )
 
@@ -37,26 +40,36 @@ data class CustomField(
 )
 
 /**
- * Values to create or update a custom field with. The data type cannot be changed after creation.
+ * The desired state of a custom field (see [TagDraft] for how create and update use it). [dataType] is only
+ * used on create; the server does not allow changing it.
  *
- * @property selectOptions required for select fields, on every update too (the server rejects updates of
- *   select fields without them). Existing options keep their [SelectOptionDraft.id] so that documents
- *   referencing them stay valid; new options have `id = null` and get one from the server.
+ * @property selectOptions select fields only, at least one. Existing options keep their [SelectOption.id]
+ *   so that documents referencing them stay valid; new options have `id = null` and get one from the server.
+ * @property defaultCurrency monetary fields only: a 3-letter ISO 4217 code, or `null` for none.
  */
 data class CustomFieldDraft(
     val name: String,
     val dataType: CustomFieldDataType,
-    val selectOptions: List<SelectOptionDraft>? = null,
+    val selectOptions: List<SelectOption> = emptyList(),
     val defaultCurrency: String? = null,
 ) {
     init {
-        require(dataType != CustomFieldDataType.SELECT || !selectOptions.isNullOrEmpty()) {
-            "Select fields need at least one option"
+        if (dataType == CustomFieldDataType.SELECT) {
+            require(selectOptions.isNotEmpty()) { "Select fields need at least one option" }
+        } else {
+            require(selectOptions.isEmpty()) { "Only select fields have options" }
         }
+        require(defaultCurrency == null || dataType == CustomFieldDataType.MONETARY) {
+            "Only monetary fields have a default currency"
+        }
+        require(defaultCurrency == null || CURRENCY_CODE.matches(defaultCurrency)) {
+            "Default currency must be a 3-letter code: $defaultCurrency"
+        }
+    }
+
+    private companion object {
+        val CURRENCY_CODE = Regex("[A-Za-z]{3}")
     }
 }
 
-data class SelectOptionDraft(
-    val id: String?,
-    val label: String,
-)
+fun CustomField.toDraft(): CustomFieldDraft = CustomFieldDraft(name, dataType, selectOptions, defaultCurrency)

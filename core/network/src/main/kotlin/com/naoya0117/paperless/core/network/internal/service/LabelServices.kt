@@ -2,14 +2,11 @@ package com.naoya0117.paperless.core.network.internal.service
 
 import com.naoya0117.paperless.core.network.internal.dto.CorrespondentDto
 import com.naoya0117.paperless.core.network.internal.dto.CustomFieldDto
-import com.naoya0117.paperless.core.network.internal.dto.CustomFieldWriteDto
 import com.naoya0117.paperless.core.network.internal.dto.DocumentTypeDto
-import com.naoya0117.paperless.core.network.internal.dto.MatchingLabelWriteDto
 import com.naoya0117.paperless.core.network.internal.dto.PageDto
 import com.naoya0117.paperless.core.network.internal.dto.StoragePathDto
-import com.naoya0117.paperless.core.network.internal.dto.StoragePathWriteDto
 import com.naoya0117.paperless.core.network.internal.dto.TagDto
-import com.naoya0117.paperless.core.network.internal.dto.TagWriteDto
+import kotlinx.serialization.json.JsonObject
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -33,13 +30,13 @@ internal interface TagService {
 
     @POST("api/tags/")
     suspend fun create(
-        @Body body: TagWriteDto,
+        @Body body: JsonObject,
     ): TagDto
 
     @PATCH("api/tags/{id}/")
     suspend fun update(
         @Path("id") id: Long,
-        @Body body: TagWriteDto,
+        @Body body: JsonObject,
     ): TagDto
 
     @DELETE("api/tags/{id}/")
@@ -61,13 +58,13 @@ internal interface CorrespondentService {
 
     @POST("api/correspondents/")
     suspend fun create(
-        @Body body: MatchingLabelWriteDto,
+        @Body body: JsonObject,
     ): CorrespondentDto
 
     @PATCH("api/correspondents/{id}/")
     suspend fun update(
         @Path("id") id: Long,
-        @Body body: MatchingLabelWriteDto,
+        @Body body: JsonObject,
     ): CorrespondentDto
 
     @DELETE("api/correspondents/{id}/")
@@ -89,13 +86,13 @@ internal interface DocumentTypeService {
 
     @POST("api/document_types/")
     suspend fun create(
-        @Body body: MatchingLabelWriteDto,
+        @Body body: JsonObject,
     ): DocumentTypeDto
 
     @PATCH("api/document_types/{id}/")
     suspend fun update(
         @Path("id") id: Long,
-        @Body body: MatchingLabelWriteDto,
+        @Body body: JsonObject,
     ): DocumentTypeDto
 
     @DELETE("api/document_types/{id}/")
@@ -117,13 +114,13 @@ internal interface StoragePathService {
 
     @POST("api/storage_paths/")
     suspend fun create(
-        @Body body: StoragePathWriteDto,
+        @Body body: JsonObject,
     ): StoragePathDto
 
     @PATCH("api/storage_paths/{id}/")
     suspend fun update(
         @Path("id") id: Long,
-        @Body body: StoragePathWriteDto,
+        @Body body: JsonObject,
     ): StoragePathDto
 
     @DELETE("api/storage_paths/{id}/")
@@ -145,13 +142,13 @@ internal interface CustomFieldService {
 
     @POST("api/custom_fields/")
     suspend fun create(
-        @Body body: CustomFieldWriteDto,
+        @Body body: JsonObject,
     ): CustomFieldDto
 
     @PATCH("api/custom_fields/{id}/")
     suspend fun update(
         @Path("id") id: Long,
-        @Body body: CustomFieldWriteDto,
+        @Body body: JsonObject,
     ): CustomFieldDto
 
     @DELETE("api/custom_fields/{id}/")

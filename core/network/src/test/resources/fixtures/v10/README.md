@@ -13,3 +13,6 @@ Headers are not part of the fixtures; tests set the relevant ones (`X-Api-Versio
 `Retry-After`) explicitly. Captured values: `X-Api-Version: 10` and `X-Version: 3.4.2` on authenticated
 responses, including 403 but not 406 (DRF rejects the version before authenticating);
 `WWW-Authenticate: Token` on 401.
+
+Objects the capture script creates and deletes on every run (`tag_created`, `tag_updated`,
+`custom_field_select_created`) get new IDs and select option IDs each time; tests must not depend on them.
