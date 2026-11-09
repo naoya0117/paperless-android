@@ -21,7 +21,13 @@ dependencies {
 }
 
 tasks.test {
-    // Opt-in smoke test against a local server (RealServerSmokeTest); not cached, as the server is external.
-    environment("PAPERLESS_DEV_URL", providers.environmentVariable("PAPERLESS_DEV_URL").getOrElse(""))
-    if (providers.environmentVariable("PAPERLESS_DEV_URL").isPresent) outputs.upToDateWhen { false }
+    // Opt-in smoke test against a local server (RealServerSmokeTest). The URL is an explicit input, and
+    // runs against a server are never taken from the cache, as the server's state is not an input.
+    val devUrl = providers.environmentVariable("PAPERLESS_DEV_URL").getOrElse("")
+    environment("PAPERLESS_DEV_URL", devUrl)
+    inputs.property("paperlessDevUrl", devUrl)
+    if (devUrl.isNotEmpty()) {
+        outputs.upToDateWhen { false }
+        outputs.cacheIf { false }
+    }
 }

@@ -10,5 +10,6 @@ python3 -I tools/paperless-dev/capture_v10.py --write-fixtures core/network/src/
 ```
 
 Headers are not part of the fixtures; tests set the relevant ones (`X-Api-Version`, `X-Version`,
-`Retry-After`) explicitly. Captured values: `X-Api-Version: 10` and `X-Version: 3.4.2` on every
-authenticated response (including 403), `WWW-Authenticate: Token` on 401.
+`Retry-After`) explicitly. Captured values: `X-Api-Version: 10` and `X-Version: 3.4.2` on authenticated
+responses, including 403 but not 406 (DRF rejects the version before authenticating);
+`WWW-Authenticate: Token` on 401.

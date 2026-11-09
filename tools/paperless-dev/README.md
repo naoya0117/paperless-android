@@ -27,5 +27,7 @@ The capture script creates these users (password `Fixture-Passw0rd!`):
 | `limited` | no permissions (403 on `/api/ui_settings/`) |
 | `mfa` | TOTP enabled (the secret is not kept) |
 
-The server limits logins (`PAPERLESS_TOKEN_THROTTLE_RATE`, raised to 20/min here). If the script reports
-throttling, wait a minute and run it again.
+The server limits logins per client IP (`PAPERLESS_TOKEN_THROTTLE_RATE`, raised to 20/min here). The script
+exhausts the limit on purpose to capture the 429 response, then waits until it resets, so the smoke tests can
+run right after it. If it stops with "expected HTTP …", a previous run or other logins used up the limit:
+wait a minute and run it again.

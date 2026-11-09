@@ -244,12 +244,14 @@ class PaperlessClientTest {
     @Test
     fun `throttling exposes retry after`() =
         runTest {
-            server.enqueue(jsonResponse(429, "error_throttled.json", "Retry-After" to "42"))
+            // Keep the header consistent with the captured body ("Expected available in N seconds.").
+            val seconds = Regex("""in (\d+) second""").find(fixture("error_throttled.json"))!!.groupValues[1]
+            server.enqueue(jsonResponse(429, "error_throttled.json", "Retry-After" to seconds))
 
             val e =
                 assertFailsWith<PaperlessException.Http.RateLimited> { server.client().auth.obtainToken("alice", "pw") }
 
-            assertEquals(42.seconds, e.retryAfter)
+            assertEquals(seconds.toLong().seconds, e.retryAfter)
         }
 
     @Test
