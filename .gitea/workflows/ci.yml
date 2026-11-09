@@ -40,12 +40,24 @@ jobs:
 
       # Compile, unit tests, Android Lint, ktlint, debug/release APKs.
       # The runner host has little free memory, so cap the Gradle heap, run the Kotlin compiler
-      # in-process (no separate Kotlin daemon) and limit parallel workers.
-      - name: Build
+      # in-process (no separate Kotlin daemon) and limit parallel workers. The work is split
+      # into two Gradle invocations with a daemon restart in between: a single `build` ran
+      # out of Metaspace during Lint and the daemon was killed.
+      - name: Build and unit test
+        run: >-
+          ./gradlew assemble test --console=plain
+          --max-workers=2
+          -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
+          -Pkotlin.compiler.execution.strategy=in-process
+
+      - name: Stop Gradle daemon
+        run: ./gradlew --stop
+
+      - name: Lint and remaining checks
         run: >-
           ./gradlew build --console=plain
           --max-workers=2
-          -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
+          -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
           -Pkotlin.compiler.execution.strategy=in-process
 
       # upload-artifact v4 requires Gitea 1.23 or later.
