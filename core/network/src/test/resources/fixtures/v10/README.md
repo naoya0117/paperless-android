@@ -16,3 +16,4 @@ responses, including 403 but not 406 (DRF rejects the version before authenticat
 
 Objects the capture script creates and deletes on every run (`tag_created`, `tag_updated`,
 `custom_field_select_created`) get new IDs and select option IDs each time; tests must not depend on them.
+`document_history` keeps only the newest 5 entries of the audit log, which grows on every run.

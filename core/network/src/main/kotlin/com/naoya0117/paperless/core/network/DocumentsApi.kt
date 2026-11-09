@@ -2,7 +2,11 @@ package com.naoya0117.paperless.core.network
 
 import com.naoya0117.paperless.core.model.Document
 import com.naoya0117.paperless.core.model.DocumentDraft
+import com.naoya0117.paperless.core.model.DocumentMetadata
 import com.naoya0117.paperless.core.model.DocumentQuery
+import com.naoya0117.paperless.core.model.DocumentSuggestions
+import com.naoya0117.paperless.core.model.HistoryEntry
+import com.naoya0117.paperless.core.model.Note
 import com.naoya0117.paperless.core.model.Page
 
 public interface DocumentsApi {
@@ -28,4 +32,32 @@ public interface DocumentsApi {
 
     /** Moves the document to the trash (restorable until the server empties it). */
     public suspend fun delete(id: Long)
+
+    /** Opens a file of the document for streaming; the caller must close the result. */
+    public suspend fun openFile(
+        id: Long,
+        kind: DocumentFileKind,
+    ): DocumentFile
+
+    /** @return all notes of the document after adding, oldest first */
+    public suspend fun addNote(
+        documentId: Long,
+        text: String,
+    ): List<Note>
+
+    /** @return the remaining notes, oldest first */
+    public suspend fun deleteNote(
+        documentId: Long,
+        noteId: Long,
+    ): List<Note>
+
+    public suspend fun metadata(id: Long): DocumentMetadata
+
+    public suspend fun suggestions(id: Long): DocumentSuggestions
+
+    /** Newest first. */
+    public suspend fun history(id: Long): List<HistoryEntry>
+
+    /** The archive serial number the next document would get. */
+    public suspend fun nextArchiveSerialNumber(): Long
 }
