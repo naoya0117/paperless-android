@@ -4,17 +4,28 @@
     "username": "alice",
     "is_staff": false,
     "is_superuser": false,
-    "groups": [1],
+    "groups": [],
     "first_name": "Alice"
   },
   "settings": {
-    "update_checking": {"backend_setting": "default"},
+    "update_checking": {
+      "backend_setting": "default"
+    },
     "trash_delay": 30,
+    "version": "3.4.2",
     "app_title": null,
     "app_logo": null,
     "auditlog_enabled": true,
+    "remote_ocr": {
+      "configured": false,
+      "mode": "always"
+    },
     "email_enabled": false,
     "ai_enabled": false
   },
-  "permissions": ["view_document", "add_document", "change_document", "delete_document"]
+  "permissions": [
+    "view_uisettings",
+    "add_uisettings",
+    "change_uisettings"
+  ]
 }

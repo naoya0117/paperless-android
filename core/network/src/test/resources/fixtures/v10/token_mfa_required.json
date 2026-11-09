@@ -1,1 +1,5 @@
-{"non_field_errors": ["MFA code is required"]}
+{
+  "non_field_errors": [
+    "MFA code is required"
+  ]
+}

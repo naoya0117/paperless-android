@@ -19,3 +19,15 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.okhttp.tls)
 }
+
+tasks.test {
+    // Opt-in smoke test against a local server (RealServerSmokeTest). The URL is an explicit input, and
+    // runs against a server are never taken from the cache, as the server's state is not an input.
+    val devUrl = providers.environmentVariable("PAPERLESS_DEV_URL").getOrElse("")
+    environment("PAPERLESS_DEV_URL", devUrl)
+    inputs.property("paperlessDevUrl", devUrl)
+    if (devUrl.isNotEmpty()) {
+        outputs.upToDateWhen { false }
+        outputs.cacheIf { false }
+    }
+}

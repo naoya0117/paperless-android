@@ -244,12 +244,14 @@ class PaperlessClientTest {
     @Test
     fun `throttling exposes retry after`() =
         runTest {
-            server.enqueue(jsonResponse(429, "error_throttled.json", "Retry-After" to "42"))
+            // Keep the header consistent with the captured body ("Expected available in N seconds.").
+            val seconds = Regex("""in (\d+) second""").find(fixture("error_throttled.json"))!!.groupValues[1]
+            server.enqueue(jsonResponse(429, "error_throttled.json", "Retry-After" to seconds))
 
             val e =
                 assertFailsWith<PaperlessException.Http.RateLimited> { server.client().auth.obtainToken("alice", "pw") }
 
-            assertEquals(42.seconds, e.retryAfter)
+            assertEquals(seconds.toLong().seconds, e.retryAfter)
         }
 
     @Test
@@ -314,13 +316,7 @@ class PaperlessClientTest {
     @Test
     fun `blank login fields are invalid credentials`() =
         runTest {
-            server.enqueue(
-                MockResponse
-                    .Builder()
-                    .code(400)
-                    .body("""{"username": ["This field may not be blank."]}""")
-                    .build(),
-            )
+            server.enqueue(jsonResponse(400, "token_blank_username.json"))
 
             val e =
                 assertFailsWith<PaperlessException.Auth.InvalidCredentials> {
@@ -328,6 +324,33 @@ class PaperlessClientTest {
                 }
 
             assertEquals("This field may not be blank.", e.serverMessage)
+        }
+
+    @Test
+    fun `missing token is unauthorized`() =
+        runTest {
+            server.enqueue(jsonResponse(401, "error_unauthenticated.json", "WWW-Authenticate" to "Token"))
+
+            val e = assertFailsWith<PaperlessException.Http.Unauthorized> { server.client().server.fetchServerInfo() }
+
+            assertEquals("Authentication credentials were not provided.", e.detail)
+        }
+
+    @Test
+    fun `sign in fails without the ui settings view permission`() =
+        runTest {
+            server.enqueue(
+                jsonResponse(
+                    403,
+                    "ui_settings_without_permission.json",
+                    "X-Api-Version" to "10",
+                    "X-Version" to "3.4.2",
+                ),
+            )
+
+            val e = assertFailsWith<PaperlessException.Http.Forbidden> { server.client().signIn(AuthToken("abc")) }
+
+            assertEquals("You do not have permission to perform this action.", e.detail)
         }
 
     @Test
