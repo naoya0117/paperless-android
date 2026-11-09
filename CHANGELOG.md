@@ -23,3 +23,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Typed errors for HTTP, login, and network failures
 - Label APIs: tags (with hierarchy), correspondents, document types, storage paths and custom fields
   - List (paged or all), get, create, update and delete
+- Documents API: list with filters (tags, correspondent, document type, storage path, dates, ASN, inbox,
+  custom field query), full-text search (text, title, advanced query, similar documents), get, update, delete

@@ -9,7 +9,7 @@ import com.naoya0117.paperless.core.model.Page
  * @param D the values to create or update it with
  */
 public interface LabelApi<T, D> {
-    /** One page; [ListQuery.page] starts at 1. */
+    /** One page; [ListQuery.page] starts at 1. A page beyond the last one is returned empty. */
     public suspend fun list(query: ListQuery = ListQuery()): Page<T>
 
     /**

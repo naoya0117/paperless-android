@@ -10,14 +10,14 @@
       "extra_data": {
         "default_currency": "EUR"
       },
-      "document_count": 0
+      "document_count": 1
     },
     {
       "id": 1,
       "name": "Due date",
       "data_type": "date",
       "extra_data": null,
-      "document_count": 0
+      "document_count": 1
     },
     {
       "id": 2,
@@ -35,7 +35,7 @@
           }
         ]
       },
-      "document_count": 0
+      "document_count": 1
     }
   ]
 }
