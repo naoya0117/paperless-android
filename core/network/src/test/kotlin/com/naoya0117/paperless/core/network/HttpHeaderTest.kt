@@ -7,7 +7,7 @@ import org.junit.Test
 class HttpHeaderTest {
     @Test
     fun `rejects headers managed by the client`() {
-        listOf("Authorization", "accept", "Host").forEach {
+        listOf("Authorization", "accept", "Host", "Accept-Encoding", "Connection", "Transfer-Encoding").forEach {
             assertThrows(it, IllegalArgumentException::class.java) { HttpHeader(it, "x") }
         }
     }

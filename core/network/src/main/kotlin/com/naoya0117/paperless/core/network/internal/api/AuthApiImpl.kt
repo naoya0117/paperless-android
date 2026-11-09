@@ -31,10 +31,13 @@ internal class AuthApiImpl(
      */
     private fun PaperlessException.Http.BadRequest.toLoginException(): PaperlessException {
         val messages = errors["non_field_errors"].orEmpty()
+        // Field errors, e.g. {"username": ["This field may not be blank."]}.
+        val fieldMessage = (errors["username"].orEmpty() + errors["password"].orEmpty()).firstOrNull()
         return when {
             MFA_REQUIRED in messages -> PaperlessException.Auth.MfaRequired()
             INVALID_MFA_CODE in messages -> PaperlessException.Auth.InvalidMfaCode()
             messages.isNotEmpty() -> PaperlessException.Auth.InvalidCredentials(messages.first())
+            fieldMessage != null -> PaperlessException.Auth.InvalidCredentials(fieldMessage)
             else -> this
         }
     }

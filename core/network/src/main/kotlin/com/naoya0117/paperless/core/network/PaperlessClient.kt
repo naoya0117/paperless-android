@@ -33,8 +33,10 @@ public class PaperlessClient private constructor(
         mfaCode: String? = null,
     ): PaperlessSession {
         // Without a token: DRF authenticates /api/token/ requests too, so a stale token would fail with 401.
-        val (_, token) = withVersionFallback(token = null) { it.auth.obtainToken(username, password, mfaCode) }
-        return signIn(token)
+        val (client, token) = withVersionFallback(token = null) { it.auth.obtainToken(username, password, mfaCode) }
+        // The server already accepted this API version; no need to negotiate again.
+        val authenticated = client.withConfig { it.copy(token = token) }
+        return PaperlessSession(authenticated, authenticated.server.fetchServerInfo())
     }
 
     /** Signs in with an existing token (e.g. one generated in the Paperless web UI). */

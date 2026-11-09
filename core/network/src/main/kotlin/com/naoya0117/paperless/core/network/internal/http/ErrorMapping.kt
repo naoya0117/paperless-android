@@ -13,11 +13,13 @@ import java.io.InterruptedIOException
 import java.net.ConnectException
 import java.net.NoRouteToHostException
 import java.net.UnknownHostException
+import java.security.cert.CertificateException
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
-import javax.net.ssl.SSLException
+import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toKotlinDuration
@@ -32,11 +34,18 @@ internal fun Response<*>.toPaperlessException(): PaperlessException {
         }
     val detail = errors["detail"]?.firstOrNull()
     return when (val code = code()) {
+        in 300..399 -> PaperlessException.Http.Redirected(code, headers()["Location"])
         400 -> PaperlessException.Http.BadRequest(errors)
         401 -> PaperlessException.Http.Unauthorized(detail)
         403 -> PaperlessException.Http.Forbidden(detail)
         404 -> PaperlessException.Http.NotFound()
-        406 -> PaperlessException.UnsupportedServerVersion(serverMaxApiVersion = null)
+        // DRF answers a rejected Accept version with a JSON `detail`; a WAF's 406 page is something else.
+        406 ->
+            if (detail != null) {
+                PaperlessException.UnsupportedServerVersion(serverMaxApiVersion = null)
+            } else {
+                PaperlessException.Http.UnexpectedStatus(code)
+            }
         429 -> PaperlessException.Http.RateLimited(parseRetryAfter(headers()["Retry-After"]))
         in 500..599 -> PaperlessException.Http.ServerError(code)
         else -> PaperlessException.Http.UnexpectedStatus(code)
@@ -78,9 +87,16 @@ internal fun Throwable.toPaperlessException(): Throwable =
         else -> PaperlessException.Network.Other(this)
     }
 
-/** Coroutine stack trace recovery may wrap the exception, so check the whole cause chain. */
+/**
+ * Handshake and certificate failures only: on Android a connection reset mid-stream is also an
+ * [javax.net.ssl.SSLException], but that is not a certificate problem. Coroutine stack trace recovery
+ * may wrap the exception, so the whole cause chain is checked.
+ */
 private fun Throwable.hasTlsFailure(): Boolean =
-    generateSequence(this) { it.cause }.any { e -> e is SSLException || e.suppressed.any { it is SSLException } }
+    generateSequence(this) { it.cause }.any { e -> e.isTlsFailure() || e.suppressed.any { it.isTlsFailure() } }
+
+private fun Throwable.isTlsFailure(): Boolean =
+    this is SSLHandshakeException || this is SSLPeerUnverifiedException || this is CertificateException
 
 /**
  * DRF error bodies are `{"detail": "..."}` or `{"field": ["msg", ...], "non_field_errors": [...]}`.

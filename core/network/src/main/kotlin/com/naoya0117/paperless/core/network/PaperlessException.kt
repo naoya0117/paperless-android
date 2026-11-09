@@ -48,6 +48,15 @@ public sealed class PaperlessException(
 
         public class NotFound : Http(404, "Not found")
 
+        /**
+         * 3xx: redirects are never followed (they could carry credentials elsewhere). Typical causes: the URL
+         * should be `https://` ([location] says so), or an authenticating proxy redirects to its login page.
+         */
+        public class Redirected(
+            statusCode: Int,
+            public val location: String?,
+        ) : Http(statusCode, "Redirected (HTTP $statusCode) to $location")
+
         /** 429: throttled (login is limited to 5/min by default). */
         public class RateLimited(
             public val retryAfter: Duration?,

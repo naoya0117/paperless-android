@@ -23,6 +23,21 @@ public class HttpHeader(
     override fun toString(): String = "HttpHeader($name: ***)"
 
     private companion object {
-        val RESERVED = setOf("authorization", "accept", "host", "content-type", "content-length")
+        /** Set by the client or OkHttp; overriding them breaks auth, versioning, gzip or message framing. */
+        val RESERVED =
+            setOf(
+                "authorization",
+                "accept",
+                "accept-encoding",
+                "host",
+                "content-type",
+                "content-length",
+                "connection",
+                "transfer-encoding",
+                "te",
+                "upgrade",
+                "keep-alive",
+                "proxy-connection",
+            )
     }
 }

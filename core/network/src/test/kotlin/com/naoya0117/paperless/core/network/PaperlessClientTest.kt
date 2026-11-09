@@ -8,7 +8,6 @@ import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -62,35 +61,44 @@ class PaperlessClientTest {
         }
 
     @Test
-    fun `does not send credentials to another host after a redirect`() =
+    fun `does not follow a redirect that would re-send the password to another host`() =
         runTest {
             MockWebServer().use { other ->
                 other.start()
-                other.enqueue(uiSettingsResponse())
                 server.enqueue(
                     MockResponse
                         .Builder()
-                        .code(302)
-                        .addHeader("Location", other.url("/api/ui_settings/"))
+                        .code(307)
+                        .addHeader("Location", other.url("/steal/"))
                         .build(),
                 )
-                val client =
-                    server.client {
-                        PaperlessClientConfig(
-                            it,
-                            AuthToken("abc"),
-                            customHeaders = listOf(HttpHeader("X-Secret", "s")),
-                        )
+
+                val e =
+                    assertFailsWith<PaperlessException.Http.Redirected> {
+                        server.client().signIn("alice", "hunter2")
                     }
 
-                client.server.fetchServerInfo()
-
-                assertEquals("Token abc", server.takeRequest().headers["Authorization"])
-                val redirected = other.takeRequest().headers
-                assertNull(redirected["Authorization"])
-                assertNull(redirected["X-Secret"])
-                assertFalse(redirected["Accept"].orEmpty().contains("version="))
+                assertEquals(307, e.statusCode)
+                assertEquals(other.url("/steal/").toString(), e.location)
+                assertEquals(0, other.requestCount)
             }
+        }
+
+    @Test
+    fun `reports an http to https redirect instead of following it`() =
+        runTest {
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(301)
+                    .addHeader("Location", "https://paperless.example.com/api/token/")
+                    .build(),
+            )
+
+            val e = assertFailsWith<PaperlessException.Http.Redirected> { server.client().signIn("alice", "pw") }
+
+            assertEquals("https://paperless.example.com/api/token/", e.location)
+            assertEquals(1, server.requestCount)
         }
 
     @Test
@@ -234,36 +242,6 @@ class PaperlessClientTest {
         }
 
     @Test
-    fun `does not send credentials outside the base path on the same host`() =
-        runTest {
-            server.enqueue(
-                MockResponse
-                    .Builder()
-                    .code(302)
-                    .addHeader("Location", server.url("/other-app/"))
-                    .build(),
-            )
-            server.enqueue(uiSettingsResponse())
-            val client =
-                PaperlessClient.create(
-                    PaperlessClientConfig(
-                        ServerUrl.parse(server.url("/paperless/").toString()),
-                        AuthToken("abc"),
-                        customHeaders = listOf(HttpHeader("X-Secret", "s")),
-                    ),
-                    testBaseClient,
-                )
-
-            client.server.fetchServerInfo()
-
-            assertEquals("Token abc", server.takeRequest().headers["Authorization"])
-            val redirected = server.takeRequest()
-            assertEquals("/other-app/", redirected.url.encodedPath)
-            assertNull(redirected.headers["Authorization"])
-            assertNull(redirected.headers["X-Secret"])
-        }
-
-    @Test
     fun `throttling exposes retry after`() =
         runTest {
             server.enqueue(jsonResponse(429, "error_throttled.json", "Retry-After" to "42"))
@@ -329,6 +307,50 @@ class PaperlessClientTest {
                     .body("""{"unexpected": true}""")
                     .build(),
             )
+
+            assertFailsWith<PaperlessException.InvalidResponse> { server.client().auth.obtainToken("alice", "pw") }
+        }
+
+    @Test
+    fun `blank login fields are invalid credentials`() =
+        runTest {
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(400)
+                    .body("""{"username": ["This field may not be blank."]}""")
+                    .build(),
+            )
+
+            val e =
+                assertFailsWith<PaperlessException.Auth.InvalidCredentials> {
+                    server.client().auth.obtainToken("", "pw")
+                }
+
+            assertEquals("This field may not be blank.", e.serverMessage)
+        }
+
+    @Test
+    fun `406 without a drf body is not a version problem`() =
+        runTest {
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(406)
+                    .body("<html>Not Acceptable (WAF)</html>")
+                    .build(),
+            )
+
+            val e =
+                assertFailsWith<PaperlessException.Http.UnexpectedStatus> { server.client().auth.obtainToken("a", "b") }
+
+            assertEquals(406, e.statusCode)
+        }
+
+    @Test
+    fun `successful response without a body is an invalid response`() =
+        runTest {
+            server.enqueue(MockResponse.Builder().code(204).build())
 
             assertFailsWith<PaperlessException.InvalidResponse> { server.client().auth.obtainToken("alice", "pw") }
         }

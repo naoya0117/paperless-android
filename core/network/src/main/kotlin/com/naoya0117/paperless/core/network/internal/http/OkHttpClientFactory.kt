@@ -19,8 +19,11 @@ internal object OkHttpClientFactory {
                 connectTimeout(config.timeouts.connect.toJavaDuration())
                 readTimeout(config.timeouts.read.toJavaDuration())
                 writeTimeout(config.timeouts.write.toJavaDuration())
-                // Network interceptors run once per request actually sent, including redirects, so the
-                // origin check also keeps credentials away from redirect targets on other hosts.
+                // Never follow redirects: OkHttp re-sends a POST body (the login password) on 307/308 to any
+                // host, and turns POST into GET on 301/302. Redirects surface as Http.Redirected instead.
+                followRedirects(false)
+                followSslRedirects(false)
+                // A network interceptor sees the request exactly as sent, so the headers are added last.
                 addNetworkInterceptor(PaperlessHeadersInterceptor(config))
                 config.tls?.let { applyTls(it) }
                 config.logging?.let { addNetworkInterceptor(loggingInterceptor(it, config)) }

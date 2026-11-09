@@ -1,5 +1,6 @@
 package com.naoya0117.paperless.core.network.internal.http
 
+import com.naoya0117.paperless.core.network.PaperlessException
 import kotlinx.serialization.SerializationException
 import okhttp3.Request
 import okio.Timeout
@@ -29,13 +30,14 @@ internal class PaperlessCallAdapterFactory : CallAdapter.Factory() {
         return object : CallAdapter<Any, Call<Any>> {
             override fun responseType(): Type = responseType
 
-            override fun adapt(call: Call<Any>): Call<Any> = ErrorMappingCall(call)
+            override fun adapt(call: Call<Any>): Call<Any> = ErrorMappingCall(call, responseType)
         }
     }
 }
 
 private class ErrorMappingCall<T>(
     private val delegate: Call<T>,
+    private val responseType: Type,
 ) : Call<T> {
     override fun enqueue(callback: Callback<T>) {
         delegate.enqueue(
@@ -44,10 +46,9 @@ private class ErrorMappingCall<T>(
                     call: Call<T>,
                     response: Response<T>,
                 ) {
-                    if (response.isSuccessful) {
-                        callback.onResponse(this@ErrorMappingCall, response)
-                    } else {
-                        callback.onFailure(this@ErrorMappingCall, response.toPaperlessException())
+                    when (val failure = response.failure()) {
+                        null -> callback.onResponse(this@ErrorMappingCall, response)
+                        else -> callback.onFailure(this@ErrorMappingCall, failure)
                     }
                 }
 
@@ -72,11 +73,23 @@ private class ErrorMappingCall<T>(
             } catch (e: SerializationException) {
                 throw e.toPaperlessException()
             }
-        if (!response.isSuccessful) throw response.toPaperlessException()
+        response.failure()?.let { throw it }
         return response
     }
 
-    override fun clone(): Call<T> = ErrorMappingCall(delegate.clone())
+    /**
+     * Non-2xx, or 2xx without the body the endpoint declares (e.g. a proxy answering 204), which Retrofit
+     * would otherwise report as a KotlinNullPointerException.
+     */
+    private fun Response<T>.failure(): PaperlessException? =
+        when {
+            !isSuccessful -> toPaperlessException()
+            body() == null && responseType != Unit::class.java ->
+                PaperlessException.InvalidResponse("empty body (HTTP ${code()})")
+            else -> null
+        }
+
+    override fun clone(): Call<T> = ErrorMappingCall(delegate.clone(), responseType)
 
     override fun isExecuted(): Boolean = delegate.isExecuted
 
