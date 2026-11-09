@@ -4,6 +4,8 @@ import com.naoya0117.paperless.core.model.ApiVersion
 import com.naoya0117.paperless.core.model.AuthToken
 import com.naoya0117.paperless.core.model.CustomFieldDataType
 import com.naoya0117.paperless.core.model.CustomFieldDraft
+import com.naoya0117.paperless.core.model.Matching
+import com.naoya0117.paperless.core.model.MatchingAlgorithm
 import com.naoya0117.paperless.core.model.SelectOption
 import com.naoya0117.paperless.core.model.TagDraft
 import com.naoya0117.paperless.core.model.toDraft
@@ -74,6 +76,26 @@ class RealServerSmokeTest {
                 admin.tags.delete(created.id)
             }
             assertFailsWith<PaperlessException.Http.NotFound> { admin.tags.get(created.id) }
+        }
+
+    @Test
+    fun `an invalid regex is rejected on update`() =
+        runTest {
+            val admin = client().signIn("admin", "admin-password").client
+            val created =
+                admin.tags.create(
+                    TagDraft("Smoke test regex", matching = Matching(MatchingAlgorithm.ANY, "a(b")),
+                )
+            try {
+                assertFailsWith<PaperlessException.Http.BadRequest> {
+                    admin.tags.update(
+                        created,
+                        created.toDraft().copy(matching = created.matching.copy(algorithm = MatchingAlgorithm.REGEX)),
+                    )
+                }
+            } finally {
+                admin.tags.delete(created.id)
+            }
         }
 
     @Test

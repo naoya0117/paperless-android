@@ -45,7 +45,8 @@ data class CustomField(
  *
  * @property selectOptions select fields only, at least one. Existing options keep their [SelectOption.id]
  *   so that documents referencing them stay valid; new options have `id = null` and get one from the server.
- * @property defaultCurrency monetary fields only: a 3-letter ISO 4217 code, or `null` for none.
+ * @property defaultCurrency monetary fields only: an ISO 4217 code (the server requires exactly 3 characters),
+ *   or `null` for none.
  */
 data class CustomFieldDraft(
     val name: String,
@@ -62,13 +63,9 @@ data class CustomFieldDraft(
         require(defaultCurrency == null || dataType == CustomFieldDataType.MONETARY) {
             "Only monetary fields have a default currency"
         }
-        require(defaultCurrency == null || CURRENCY_CODE.matches(defaultCurrency)) {
-            "Default currency must be a 3-letter code: $defaultCurrency"
+        require(defaultCurrency == null || defaultCurrency.length == 3) {
+            "Default currency must have 3 characters: $defaultCurrency"
         }
-    }
-
-    private companion object {
-        val CURRENCY_CODE = Regex("[A-Za-z]{3}")
     }
 }
 

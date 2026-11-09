@@ -14,9 +14,10 @@ class CustomFieldDraftTest {
     }
 
     @Test
-    fun `default currency is a 3-letter code on monetary fields`() {
+    fun `default currency has 3 characters on monetary fields`() {
         CustomFieldDraft("M", CustomFieldDataType.MONETARY, defaultCurrency = "EUR")
         CustomFieldDraft("M", CustomFieldDataType.MONETARY, defaultCurrency = null)
+        CustomFieldDraft("M", CustomFieldDataType.MONETARY, defaultCurrency = "US$")
         assertThrows(IllegalArgumentException::class.java) {
             CustomFieldDraft("M", CustomFieldDataType.MONETARY, defaultCurrency = "usdd")
         }

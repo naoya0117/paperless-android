@@ -260,7 +260,44 @@ class LabelApiTest {
 
             client.tags.update(tax, tax.toDraft().copy(color = "#000000", matching = Matching(MatchingAlgorithm.AUTO)))
 
-            assertEquals("""{"color":"#000000","matching_algorithm":6}""", server.takeRequest().body?.utf8())
+            assertEquals("""{"color":"#000000","match":"","matching_algorithm":6}""", server.takeRequest().body?.utf8())
+        }
+
+    @Test
+    fun `pattern and algorithm are sent together so the server validates regexes`() =
+        runTest {
+            server.enqueue(jsonResponse(200, "tag_child.json"))
+            server.enqueue(jsonResponse(200, "tag_child.json"))
+            val client = client()
+            val tax = client.tags.get(2)
+            server.takeRequest()
+
+            client.tags.update(
+                tax,
+                tax.toDraft().copy(matching = tax.matching.copy(algorithm = MatchingAlgorithm.REGEX)),
+            )
+
+            assertEquals("""{"match":"","matching_algorithm":4}""", server.takeRequest().body?.utf8())
+        }
+
+    @Test
+    fun `extra data that does not fit the data type is ignored`() =
+        runTest {
+            val body = """{"id": 9, "name": "S", "data_type": "string",
+                "extra_data": {"default_currency": "EUR", "select_options": [{"label": "x"}]}}"""
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(200)
+                    .body(body)
+                    .build(),
+            )
+
+            val field = client().customFields.get(9)
+
+            assertEquals(emptyList<SelectOption>(), field.selectOptions)
+            assertNull(field.defaultCurrency)
+            field.toDraft()
         }
 
     @Test

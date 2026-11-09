@@ -37,12 +37,15 @@ private fun JsonObjectBuilder.putName(
     if (name != current) put("name", name)
 }
 
+/** Pattern and algorithm go together: the server only validates a regex when it receives both. */
 private fun JsonObjectBuilder.putMatchingChanges(
     matching: Matching,
     current: Matching,
 ) {
-    if (matching.pattern != current.pattern) put("match", matching.pattern)
-    if (matching.algorithm != current.algorithm) put("matching_algorithm", matching.algorithm.id)
+    if (matching.pattern != current.pattern || matching.algorithm != current.algorithm) {
+        put("match", matching.pattern)
+        put("matching_algorithm", matching.algorithm.id)
+    }
     if (matching.isInsensitive != current.isInsensitive) put("is_insensitive", matching.isInsensitive)
 }
 

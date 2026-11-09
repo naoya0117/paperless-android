@@ -29,16 +29,20 @@ internal data class SelectOptionDto(
     val label: String,
 )
 
-internal fun CustomFieldDto.toModel() =
-    CustomField(
+/** Extra data that does not belong to the data type (the server does not prevent it) is ignored. */
+internal fun CustomFieldDto.toModel(): CustomField {
+    val type = CustomFieldDataType(dataType)
+    return CustomField(
         id = id,
         name = name,
-        dataType = CustomFieldDataType(dataType),
+        dataType = type,
         selectOptions =
-            extraData
-                ?.selectOptions
-                .orEmpty()
-                .map { SelectOption(it.id, it.label) },
-        defaultCurrency = extraData?.defaultCurrency?.ifEmpty { null },
+            if (type == CustomFieldDataType.SELECT) {
+                extraData?.selectOptions.orEmpty().map { SelectOption(it.id, it.label) }
+            } else {
+                emptyList()
+            },
+        defaultCurrency = extraData?.defaultCurrency?.ifEmpty { null }?.takeIf { type == CustomFieldDataType.MONETARY },
         documentCount = documentCount,
     )
+}
