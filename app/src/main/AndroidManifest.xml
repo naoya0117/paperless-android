@@ -9,6 +9,7 @@
         that must not leave the device via cloud backup or device-to-device transfer.
     -->
     <application
+        android:name=".PaperlessApplication"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"

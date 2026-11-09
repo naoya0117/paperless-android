@@ -8,6 +8,11 @@ android {
 
 dependencies {
     api(projects.core.model)
-    implementation(projects.core.network)
+    api(projects.core.network)
+    api(projects.core.datastore)
+    implementation(libs.javax.inject)
     implementation(libs.kotlinx.coroutines.core)
+
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
 }

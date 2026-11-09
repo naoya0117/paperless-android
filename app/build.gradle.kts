@@ -1,5 +1,7 @@
 plugins {
     alias(libs.plugins.paperless.android.application)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -45,6 +47,8 @@ android {
 
 dependencies {
     implementation(projects.core.data)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
