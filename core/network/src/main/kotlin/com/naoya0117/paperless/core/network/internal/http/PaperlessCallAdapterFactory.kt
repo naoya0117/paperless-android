@@ -55,8 +55,9 @@ private class ErrorMappingCall<T>(
                     call: Call<T>,
                     t: Throwable,
                 ) {
-                    // A cancelled call belongs to a cancelled coroutine; keep the original exception.
-                    callback.onFailure(this@ErrorMappingCall, if (call.isCanceled) t else t.toPaperlessException())
+                    // Also mapped when cancelled: OkHttp's call timeout cancels the call, and for a cancelled
+                    // coroutine Retrofit ignores the result anyway.
+                    callback.onFailure(this@ErrorMappingCall, t.toPaperlessException())
                 }
             },
         )

@@ -13,8 +13,14 @@ import java.io.InterruptedIOException
 import java.net.ConnectException
 import java.net.NoRouteToHostException
 import java.net.UnknownHostException
+import java.time.Instant
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 import javax.net.ssl.SSLException
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.toKotlinDuration
 
 /** Converts a non-2xx response. */
 internal fun Response<*>.toPaperlessException(): PaperlessException {
@@ -31,16 +37,29 @@ internal fun Response<*>.toPaperlessException(): PaperlessException {
         403 -> PaperlessException.Http.Forbidden(detail)
         404 -> PaperlessException.Http.NotFound()
         406 -> PaperlessException.UnsupportedServerVersion(serverMaxApiVersion = null)
-        429 ->
-            PaperlessException.Http.RateLimited(
-                headers()["Retry-After"]
-                    ?.trim()
-                    ?.toLongOrNull()
-                    ?.seconds,
-            )
+        429 -> PaperlessException.Http.RateLimited(parseRetryAfter(headers()["Retry-After"]))
         in 500..599 -> PaperlessException.Http.ServerError(code)
         else -> PaperlessException.Http.UnexpectedStatus(code)
     }
+}
+
+/** `Retry-After` is either delay-seconds or an HTTP-date (RFC 9110 §10.2.3). */
+internal fun parseRetryAfter(
+    value: String?,
+    now: Instant = Instant.now(),
+): Duration? {
+    val trimmed = value?.trim()?.ifEmpty { null } ?: return null
+    trimmed.toLongOrNull()?.let { return it.coerceAtLeast(0).seconds }
+    val date =
+        try {
+            ZonedDateTime.parse(trimmed, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant()
+        } catch (_: DateTimeParseException) {
+            return null
+        }
+    return java.time.Duration
+        .between(now, date)
+        .toKotlinDuration()
+        .coerceAtLeast(Duration.ZERO)
 }
 
 /** Converts a failure that produced no usable response. Unknown exception types are passed through. */

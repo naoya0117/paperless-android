@@ -28,6 +28,23 @@ class NetworkErrorTest {
         }
 
     @Test
+    fun `call timeout is a timeout`() =
+        runTest {
+            MockWebServer().use { server ->
+                server.start()
+                server.enqueue(uiSettingsResponse().newBuilder().headersDelay(2, TimeUnit.SECONDS).build())
+                val baseClient = testBaseClient.newBuilder().callTimeout(200, TimeUnit.MILLISECONDS).build()
+                val client =
+                    PaperlessClient.create(
+                        PaperlessClientConfig(ServerUrl.parse(server.url("/").toString()), AuthToken("abc")),
+                        baseClient,
+                    )
+
+                assertFailsWith<PaperlessException.Network.Timeout> { client.server.fetchServerInfo() }
+            }
+        }
+
+    @Test
     fun `connection refused`() =
         runTest {
             // Reserve a free port, then close it so nothing listens there.

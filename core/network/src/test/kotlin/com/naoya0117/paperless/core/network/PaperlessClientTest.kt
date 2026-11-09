@@ -188,18 +188,79 @@ class PaperlessClientTest {
         }
 
     @Test
-    fun `old server version is rejected after login`() =
+    fun `falls back to an older api version when the newest one is not accepted`() =
         runTest {
+            server.enqueue(jsonResponse(406, "error_not_acceptable.json"))
             server.enqueue(uiSettingsResponse(apiVersion = 9))
+            val client =
+                PaperlessClient.create(
+                    PaperlessClientConfig(ServerUrl.parse(server.url("/").toString())),
+                    testBaseClient,
+                    supportedVersions = ApiVersion(9)..ApiVersion(10),
+                )
 
-            val e =
-                assertFailsWith<PaperlessException.UnsupportedServerVersion> {
-                    server.client().signIn(
+            val session = client.signIn(AuthToken("abc"))
+
+            assertEquals("application/json; version=10", server.takeRequest().headers["Accept"])
+            assertEquals("application/json; version=9", server.takeRequest().headers["Accept"])
+            assertEquals(ApiVersion(9), session.serverInfo.apiVersion)
+            assertEquals(ApiVersion(9), session.client.config.apiVersion)
+        }
+
+    @Test
+    fun `fails when the server accepts none of the supported versions`() =
+        runTest {
+            repeat(2) { server.enqueue(jsonResponse(406, "error_not_acceptable.json")) }
+            val client =
+                PaperlessClient.create(
+                    PaperlessClientConfig(ServerUrl.parse(server.url("/").toString())),
+                    testBaseClient,
+                    supportedVersions = ApiVersion(10)..ApiVersion(11),
+                )
+
+            assertFailsWith<PaperlessException.UnsupportedServerVersion> { client.signIn("alice", "pw") }
+            assertEquals(2, server.requestCount)
+        }
+
+    @Test
+    fun `login does not send a stale token`() =
+        runTest {
+            server.enqueue(jsonResponse(200, "token.json"))
+            server.enqueue(uiSettingsResponse())
+
+            server.client { PaperlessClientConfig(it, token = AuthToken("revoked")) }.signIn("alice", "pw")
+
+            assertNull(server.takeRequest().headers["Authorization"])
+        }
+
+    @Test
+    fun `does not send credentials outside the base path on the same host`() =
+        runTest {
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(302)
+                    .addHeader("Location", server.url("/other-app/"))
+                    .build(),
+            )
+            server.enqueue(uiSettingsResponse())
+            val client =
+                PaperlessClient.create(
+                    PaperlessClientConfig(
+                        ServerUrl.parse(server.url("/paperless/").toString()),
                         AuthToken("abc"),
-                    )
-                }
+                        customHeaders = listOf(HttpHeader("X-Secret", "s")),
+                    ),
+                    testBaseClient,
+                )
 
-            assertEquals(ApiVersion(9), e.serverMaxApiVersion)
+            client.server.fetchServerInfo()
+
+            assertEquals("Token abc", server.takeRequest().headers["Authorization"])
+            val redirected = server.takeRequest()
+            assertEquals("/other-app/", redirected.url.encodedPath)
+            assertNull(redirected.headers["Authorization"])
+            assertNull(redirected.headers["X-Secret"])
         }
 
     @Test

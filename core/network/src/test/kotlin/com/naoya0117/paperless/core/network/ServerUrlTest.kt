@@ -41,11 +41,13 @@ class ServerUrlTest {
     }
 
     @Test
-    fun `same origin requires scheme host and port to match`() {
+    fun `contains requires same origin and base path`() {
         val url = ServerUrl.parse("https://example.com/paperless/")
-        assertTrue(url.isSameOrigin("https://example.com/other".toHttpUrl()))
-        assertFalse(url.isSameOrigin("http://example.com/paperless/".toHttpUrl()))
-        assertFalse(url.isSameOrigin("https://example.com:8443/paperless/".toHttpUrl()))
-        assertFalse(url.isSameOrigin("https://evil.example/paperless/".toHttpUrl()))
+        assertTrue("https://example.com/paperless/api/documents/".toHttpUrl() in url)
+        assertFalse("https://example.com/other-app/".toHttpUrl() in url)
+        assertFalse("https://example.com/paperless-other/".toHttpUrl() in url)
+        assertFalse("http://example.com/paperless/".toHttpUrl() in url)
+        assertFalse("https://example.com:8443/paperless/".toHttpUrl() in url)
+        assertFalse("https://evil.example/paperless/".toHttpUrl() in url)
     }
 }

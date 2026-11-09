@@ -14,7 +14,7 @@ internal class PaperlessHeadersInterceptor(
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (!config.serverUrl.isSameOrigin(request.url)) return chain.proceed(request)
+        if (request.url !in config.serverUrl) return chain.proceed(request)
 
         val builder = request.newBuilder()
         config.customHeaders.forEach { builder.header(it.name, it.value) }

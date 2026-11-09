@@ -13,9 +13,15 @@ public class ServerUrl private constructor(
     /** `true` for plain HTTP; the UI should warn before sending credentials over it. */
     public val isCleartext: Boolean get() = !httpUrl.isHttps
 
-    /** Whether [url] points at this server (same scheme, host and port). Used to scope credentials. */
-    public fun isSameOrigin(url: HttpUrl): Boolean =
-        url.scheme == httpUrl.scheme && url.host == httpUrl.host && url.port == httpUrl.port
+    /**
+     * Whether [url] belongs to this server: same scheme, host and port, and below the base path. Used to
+     * scope credentials, so other apps on the same host (e.g. `https://example.com/other/`) never get them.
+     */
+    public operator fun contains(url: HttpUrl): Boolean =
+        url.scheme == httpUrl.scheme &&
+            url.host == httpUrl.host &&
+            url.port == httpUrl.port &&
+            url.encodedPath.startsWith(httpUrl.encodedPath)
 
     override fun equals(other: Any?): Boolean = other is ServerUrl && other.httpUrl == httpUrl
 
