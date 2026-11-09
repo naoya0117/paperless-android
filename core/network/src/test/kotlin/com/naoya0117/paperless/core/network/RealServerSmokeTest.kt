@@ -260,6 +260,21 @@ class RealServerSmokeTest {
         }
 
     @Test
+    fun `saved views list the same documents as the web ui would`() =
+        runTest {
+            val admin = client().signIn("admin", "admin-password").client
+            val views = admin.savedViews.listAll().associateBy { it.name }
+
+            val invoices = admin.documents.list(views.getValue("Invoices").toDocumentQuery()).items
+            assertEquals(listOf("Invoice 2026-002", "Invoice 2026-001"), invoices.map { it.title })
+            val noCorrespondent = admin.documents.list(views.getValue("No correspondent").toDocumentQuery()).items
+            assertEquals(listOf("Contract renewal"), noCorrespondent.map { it.title })
+
+            val visibility = admin.server.fetchSavedViewVisibility()
+            assertEquals(listOf(views.getValue("Invoices").id), visibility.dashboardViewIds)
+        }
+
+    @Test
     fun `upload consume and clean up`() =
         runBlocking {
             val session = client().signIn("admin", "admin-password")

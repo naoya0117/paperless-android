@@ -1,0 +1,47 @@
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "name": "Invoices",
+      "icon": "funnel",
+      "sort_field": "created",
+      "sort_reverse": true,
+      "filter_rules": [
+        {
+          "rule_type": 6,
+          "value": "1"
+        }
+      ],
+      "page_size": 25,
+      "display_mode": "table",
+      "display_fields": [
+        "title",
+        "created",
+        "tag"
+      ],
+      "owner": 2,
+      "user_can_change": true
+    },
+    {
+      "id": 2,
+      "name": "No correspondent",
+      "icon": "funnel",
+      "sort_field": "title",
+      "sort_reverse": false,
+      "filter_rules": [
+        {
+          "rule_type": 3,
+          "value": null
+        }
+      ],
+      "page_size": null,
+      "display_mode": null,
+      "display_fields": null,
+      "owner": 2,
+      "user_can_change": true
+    }
+  ]
+}

@@ -75,6 +75,8 @@ FIXTURES = [
     "task_failure",
     "error_unsupported_file_type",
     "tasks_acknowledged",
+    "saved_views",
+    "ui_settings_saved_views",
 ]
 # Documents uploaded once (looked up by title): title -> (text lines, created, tag names, correspondent).
 DOCUMENTS = {
@@ -470,6 +472,33 @@ def main():
            post_document(base, admin_token, "random.bin", bytes(range(256)) * 8, []))
     record(out, "tasks_acknowledged", 200, request(base, "POST", "/api/tasks/acknowledge/", token=admin_token,
                                                    body={"tasks": [failed["id"]]}))
+    # Saved views (created once by name, then patched back) and their dashboard/sidebar visibility.
+    views = {
+        "Invoices": {"filter_rules": [{"rule_type": 6, "value": str(ids[("tags", "Finance")])}],
+                     "sort_field": "created", "sort_reverse": True, "page_size": 25,
+                     "display_mode": "table", "display_fields": ["title", "created", "tag"]},
+        "No correspondent": {"filter_rules": [{"rule_type": 3, "value": None}],
+                             "sort_field": "title", "sort_reverse": False},
+    }
+    view_ids = {}
+    for name, view in views.items():
+        # The saved views endpoint has no name filter (unknown filters are ignored), so match here.
+        all_views = json_body(request(base, "GET", "/api/saved_views/?page_size=1000", token=admin_token),
+                              "listing saved views")["results"]
+        found = [v for v in all_views if v["name"] == name]
+        if found:
+            response = request(base, "PATCH", f"/api/saved_views/{found[0]['id']}/", token=admin_token, body=view)
+        else:
+            response = request(base, "POST", "/api/saved_views/", token=admin_token, body={"name": name, **view})
+        if response[0] not in (200, 201):
+            raise SystemExit(f"saving view {name} failed: HTTP {response[0]} {response[2][:300]!r}")
+        view_ids[name] = json.loads(response[2])["id"]
+    # POST replaces the user's whole UI settings; fine for the throwaway admin.
+    request(base, "POST", "/api/ui_settings/", token=admin_token, body={"settings": {"saved_views": {
+        "dashboard_views_visible_ids": [view_ids["Invoices"]],
+        "sidebar_views_visible_ids": [view_ids["Invoices"], view_ids["No correspondent"]]}}})
+    record(out, "saved_views", 200, request(base, "GET", "/api/saved_views/?page=1&page_size=25", token=admin_token))
+    record(out, "ui_settings_saved_views", 200, request(base, "GET", "/api/ui_settings/", token=admin_token))
     record(out, "error_invalid_custom_field_query", 400,
            request(base, "GET", "/api/documents/?custom_field_query=%5B%22nope%22%5D", token=admin_token))
     # Last: exhaust the login throttle (it also counts the logins above).

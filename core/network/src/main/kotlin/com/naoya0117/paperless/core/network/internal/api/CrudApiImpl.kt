@@ -15,6 +15,8 @@ import kotlinx.serialization.json.JsonObject
  * DTO mapping and request bodies.
  *
  * @param extraListParams added to every list request (e.g. to make the server include optional fields).
+ * @param supportsNameFilter / supportedOrderings what the endpoint's list supports; the server silently
+ *   ignores anything else, so other options are rejected instead of returning unfiltered results.
  */
 internal class CrudApiImpl<Dto, T, D>(
     private val listPage: suspend (Map<String, String>) -> PageDto<Dto>,
@@ -27,8 +29,20 @@ internal class CrudApiImpl<Dto, T, D>(
     private val createBody: (D) -> JsonObject,
     private val patchBody: (T, D) -> JsonObject,
     private val extraListParams: Map<String, String> = emptyMap(),
+    private val supportsNameFilter: Boolean = true,
+    private val supportedOrderings: Set<ListQuery.Ordering.Field> =
+        ListQuery.Ordering.Field.entries
+            .toSet(),
 ) : LabelApi<T, D> {
-    override suspend fun list(query: ListQuery): Page<T> =
+    override suspend fun list(query: ListQuery): Page<T> {
+        require(supportsNameFilter || query.nameContains == null) { "This endpoint cannot filter by name" }
+        require(query.ordering == null || query.ordering.field in supportedOrderings) {
+            "This endpoint cannot order by ${query.ordering?.field}"
+        }
+        return loadPage(query)
+    }
+
+    private suspend fun loadPage(query: ListQuery): Page<T> =
         pageOrEmptyBeyondEnd(query.page) { listPage(query.toQueryMap() + extraListParams) }
             .toModel { parsing { toModel(it) } }
 

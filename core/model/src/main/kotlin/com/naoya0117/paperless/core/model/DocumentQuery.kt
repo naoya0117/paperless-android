@@ -26,6 +26,13 @@ data class DocumentQuery(
     val ordering: DocumentOrdering? = null,
     /** Shorten [Document.content] in the results, as lists rarely need the full text. */
     val truncateContent: Boolean = true,
+    /**
+     * Additional raw query parameters for conditions the typed properties cannot express (e.g. from a
+     * saved view's filter rules), combined with the typed ones by AND: "all of" / "none of" lists with the
+     * same key are merged; any other key set both here and by a typed property, or a second kind of search,
+     * is rejected when the request is built. `page` and `page_size` cannot be set here.
+     */
+    val extraParams: Map<String, String> = emptyMap(),
 ) {
     init {
         require(page >= 1) { "page starts at 1: $page" }

@@ -3,11 +3,13 @@ package com.naoya0117.paperless.core.network.internal.dto
 import com.naoya0117.paperless.core.model.CurrentUser
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 /** `GET /api/ui_settings/`; only the fields the client uses. */
 @Serializable
 internal data class UiSettingsDto(
     val user: UiSettingsUserDto,
+    val settings: JsonObject? = null,
 )
 
 @Serializable
