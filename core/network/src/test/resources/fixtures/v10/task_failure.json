@@ -1,0 +1,40 @@
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 19,
+      "task_id": "e2f6c6d0-844b-4a7a-ac2d-89da453832b1",
+      "task_type": "consume_file",
+      "task_type_display": "Consume File",
+      "trigger_source": "api_upload",
+      "trigger_source_display": "API Upload",
+      "status": "failure",
+      "status_display": "Failure",
+      "date_created": "2026-11-09T17:35:51.606429Z",
+      "date_started": "2026-11-09T17:35:51.623479Z",
+      "date_done": "2026-11-09T17:35:52.443821Z",
+      "duration_seconds": 0.820342,
+      "wait_time_seconds": 0.01705,
+      "input_data": {
+        "filename": "corrupt.pdf",
+        "mime_type": "application/pdf",
+        "overrides": {
+          "filename": "corrupt.pdf",
+          "owner_id": 2,
+          "remote_ocr": false,
+          "skip_asn_if_exists": false
+        }
+      },
+      "result_data": {
+        "traceback": "<omitted>",
+        "error_type": "ConsumerError",
+        "error_message": "corrupt.pdf: Error occurred while consuming document corrupt.pdf: InputFileError: "
+      },
+      "related_document_ids": [],
+      "acknowledged": false,
+      "owner": 2
+    }
+  ]
+}

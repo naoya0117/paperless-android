@@ -1,0 +1,73 @@
+{
+  "count": 6,
+  "next": "http://localhost:8000/api/tasks/?page=2&page_size=2&status=success&task_type=consume_file",
+  "previous": null,
+  "results": [
+    {
+      "id": 17,
+      "task_id": "bdd31015-6bec-4990-8082-0fc6c9c7edf0",
+      "task_type": "consume_file",
+      "task_type_display": "Consume File",
+      "trigger_source": "api_upload",
+      "trigger_source_display": "API Upload",
+      "status": "success",
+      "status_display": "Success",
+      "date_created": "2026-11-09T17:33:42.907053Z",
+      "date_started": "2026-11-09T17:33:45.505463Z",
+      "date_done": "2026-11-09T17:33:45.830288Z",
+      "duration_seconds": 0.324825,
+      "wait_time_seconds": 2.59841,
+      "input_data": {
+        "filename": "x.xyz",
+        "mime_type": "text/plain",
+        "overrides": {
+          "filename": "x.xyz",
+          "owner_id": 2,
+          "remote_ocr": false,
+          "skip_asn_if_exists": false
+        }
+      },
+      "result_data": {
+        "document_id": 6
+      },
+      "related_document_ids": [
+        6
+      ],
+      "acknowledged": false,
+      "owner": 2
+    },
+    {
+      "id": 16,
+      "task_id": "397f79da-8531-49e8-a005-c4a2752b40ee",
+      "task_type": "consume_file",
+      "task_type_display": "Consume File",
+      "trigger_source": "api_upload",
+      "trigger_source_display": "API Upload",
+      "status": "success",
+      "status_display": "Success",
+      "date_created": "2026-11-09T17:33:40.721962Z",
+      "date_started": "2026-11-09T17:33:40.730177Z",
+      "date_done": "2026-11-09T17:33:41.078265Z",
+      "duration_seconds": 0.348088,
+      "wait_time_seconds": 0.008215,
+      "input_data": {
+        "filename": "broken.pdf",
+        "mime_type": "text/plain",
+        "overrides": {
+          "filename": "broken.pdf",
+          "owner_id": 2,
+          "remote_ocr": false,
+          "skip_asn_if_exists": false
+        }
+      },
+      "result_data": {
+        "document_id": 5
+      },
+      "related_document_ids": [
+        5
+      ],
+      "acknowledged": true,
+      "owner": 2
+    }
+  ]
+}

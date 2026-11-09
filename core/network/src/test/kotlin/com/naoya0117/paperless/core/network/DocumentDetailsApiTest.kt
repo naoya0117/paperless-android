@@ -149,10 +149,9 @@ class DocumentDetailsApiTest {
             assertEquals(listOf(1L), suggestions.tagIds)
             assertEquals(emptyList<LocalDate>(), suggestions.dates)
             assertTrue(history.isNotEmpty())
-            assertEquals(
-                HistoryChange.Values(null, "2"),
-                history.first { "Note Added" in it.changes }.changes["Note Added"],
-            )
+            val noteAdded = history.first { "Note Added" in it.changes }.changes["Note Added"] as HistoryChange.Values
+            assertNull("the server writes \"None\" for no value", noteAdded.old)
+            assertTrue(noteAdded.new!!.toLong() > 0)
             assertEquals(history.sortedByDescending { it.timestamp }, history)
             assertEquals(2L, nextAsn)
             assertEquals(

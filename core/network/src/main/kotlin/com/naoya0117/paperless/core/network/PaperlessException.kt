@@ -90,6 +90,14 @@ public sealed class PaperlessException(
         cause: Throwable? = null,
     ) : PaperlessException("Invalid response: $message", cause)
 
+    /**
+     * The file to upload could not be read, or its content did not match the given length. Not a network
+     * problem: retrying will not help until the file is available again.
+     */
+    public class LocalFile(
+        cause: Throwable,
+    ) : PaperlessException("Reading the file to upload failed: ${cause.message}", cause)
+
     /** The request did not get an HTTP response. */
     public sealed class Network(
         message: String,

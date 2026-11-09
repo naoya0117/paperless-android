@@ -8,14 +8,20 @@ import com.naoya0117.paperless.core.model.DateRange
 import com.naoya0117.paperless.core.model.DocumentOrdering
 import com.naoya0117.paperless.core.model.DocumentQuery
 import com.naoya0117.paperless.core.model.DocumentSearch
+import com.naoya0117.paperless.core.model.DocumentUpload
 import com.naoya0117.paperless.core.model.IdFilter
 import com.naoya0117.paperless.core.model.Matching
 import com.naoya0117.paperless.core.model.MatchingAlgorithm
 import com.naoya0117.paperless.core.model.SelectOption
 import com.naoya0117.paperless.core.model.TagDraft
 import com.naoya0117.paperless.core.model.TagFilter
+import com.naoya0117.paperless.core.model.TaskStatus
 import com.naoya0117.paperless.core.model.toDraft
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -23,6 +29,8 @@ import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import java.time.LocalDate
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Runs against the local server from tools/paperless-dev after `capture_v10.py` created the test users.
@@ -250,6 +258,86 @@ class RealServerSmokeTest {
             assertTrue(admin.documents.history(invoice.id).isNotEmpty())
             assertTrue(admin.documents.nextArchiveSerialNumber() > (invoice.archiveSerialNumber ?: 0))
         }
+
+    @Test
+    fun `upload consume and clean up`() =
+        runBlocking {
+            val session = client().signIn("admin", "admin-password")
+            val admin = session.client
+            val finance = admin.tags.listAll().single { it.name == "Finance" }
+            val pdf = minimalPdf("Smoke upload ${System.nanoTime()}")
+            val progress = mutableListOf<Long>()
+
+            val taskId =
+                admin.documents.upload(
+                    UploadContent("smoke.pdf", "application/pdf", pdf.size.toLong()) { pdf.inputStream() },
+                    DocumentUpload(title = "Smoke upload", tagIds = listOf(finance.id)),
+                ) { sent, _ -> progress += sent }
+            val result = admin.tasks.awaitCompletion(taskId, pollInterval = 500.milliseconds, timeout = 2.minutes)
+
+            assertEquals(pdf.size.toLong(), progress.last())
+            val task = (result as TaskWaitResult.Finished).task
+            assertEquals(TaskStatus.SUCCESS, task.status)
+            val documentId = task.documentId!!
+            try {
+                val document = admin.documents.get(documentId)
+                assertEquals("Smoke upload", document.title)
+                assertTrue(finance.id in document.tagIds)
+            } finally {
+                admin.documents.delete(documentId)
+                emptyTrash(session, documentId)
+            }
+
+            val unsupported =
+                assertFailsWith<PaperlessException.Http.BadRequest> {
+                    admin.documents.upload(UploadContent("random.bin") { ByteArray(512) { it.toByte() }.inputStream() })
+                }
+            assertTrue("document" in unsupported.errors)
+        }
+
+    /** The trash API is not part of the client yet; keep the sample data clean with a direct request. */
+    private fun emptyTrash(
+        session: PaperlessSession,
+        documentId: Long,
+    ) {
+        val request =
+            Request
+                .Builder()
+                .url(
+                    session.client.config.serverUrl.httpUrl
+                        .resolve("api/trash/")!!,
+                ).header("Authorization", "Token ${session.token.value}")
+                .header("Accept", "application/json; version=10")
+                .post(
+                    """{"documents": [$documentId], "action": "empty"}""".toRequestBody(
+                        "application/json".toMediaType(),
+                    ),
+                ).build()
+        testBaseClient.newCall(request).execute().use { assertTrue(it.isSuccessful) }
+    }
+
+    /** A one-page PDF with a text line (Helvetica), like tools/paperless-dev/capture_v10.py creates. */
+    private fun minimalPdf(text: String): ByteArray {
+        val content = "BT /F1 14 Tf 72 720 Td ($text) Tj ET"
+        val objects =
+            listOf(
+                "<< /Type /Catalog /Pages 2 0 R >>",
+                "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+                "<< /Length ${content.length} >>\nstream\n$content\nendstream",
+                "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            )
+        val out = StringBuilder("%PDF-1.4\n")
+        val offsets =
+            objects.mapIndexed { index, obj ->
+                out.length.also { out.append("${index + 1} 0 obj\n$obj\nendobj\n") }
+            }
+        val xref = out.length
+        out.append("xref\n0 ${objects.size + 1}\n0000000000 65535 f \n")
+        offsets.forEach { out.append("%010d 00000 n \n".format(it)) }
+        out.append("trailer\n<< /Size ${objects.size + 1} /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n")
+        return out.toString().toByteArray(Charsets.US_ASCII)
+    }
 
     private companion object {
         /** Created by tools/paperless-dev/capture_v10.py. */

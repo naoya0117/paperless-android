@@ -8,6 +8,7 @@ import com.naoya0117.paperless.core.network.internal.dto.NoteRequestDto
 import com.naoya0117.paperless.core.network.internal.dto.PageDto
 import com.naoya0117.paperless.core.network.internal.dto.SuggestionsDto
 import kotlinx.serialization.json.JsonObject
+import okhttp3.MultipartBody
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -80,4 +81,10 @@ internal interface DocumentService {
 
     @GET("api/documents/next_asn/")
     suspend fun nextAsn(): Long
+
+    /** Returns the consume task's ID as a JSON string. */
+    @POST("api/documents/post_document/")
+    suspend fun upload(
+        @Body body: MultipartBody,
+    ): String
 }
