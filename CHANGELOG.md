@@ -21,3 +21,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Server URL normalization, including installations under a sub path
   - Custom request headers and client certificates (mutual TLS); credentials are only sent to the configured server
   - Typed errors for HTTP, login, and network failures
+- Label APIs: tags (with hierarchy), correspondents, document types, storage paths and custom fields
+  - List (paged or all), get, create, update and delete

@@ -1,0 +1,15 @@
+{
+  "id": 12,
+  "slug": "temporary",
+  "name": "Temporary",
+  "color": "#123456",
+  "text_color": "#ffffff",
+  "match": "",
+  "matching_algorithm": 1,
+  "is_insensitive": true,
+  "is_inbox_tag": false,
+  "owner": 2,
+  "user_can_change": true,
+  "parent": 1,
+  "children": []
+}

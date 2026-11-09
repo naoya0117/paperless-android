@@ -1,0 +1,19 @@
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "slug": "acme-corp",
+      "name": "ACME Corp",
+      "match": "",
+      "matching_algorithm": 6,
+      "is_insensitive": true,
+      "document_count": 0,
+      "last_correspondence": null,
+      "owner": 2,
+      "user_can_change": true
+    }
+  ]
+}

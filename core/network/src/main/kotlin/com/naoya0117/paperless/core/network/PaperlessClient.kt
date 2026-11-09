@@ -2,6 +2,16 @@ package com.naoya0117.paperless.core.network
 
 import com.naoya0117.paperless.core.model.ApiVersion
 import com.naoya0117.paperless.core.model.AuthToken
+import com.naoya0117.paperless.core.model.Correspondent
+import com.naoya0117.paperless.core.model.CorrespondentDraft
+import com.naoya0117.paperless.core.model.CustomField
+import com.naoya0117.paperless.core.model.CustomFieldDraft
+import com.naoya0117.paperless.core.model.DocumentType
+import com.naoya0117.paperless.core.model.DocumentTypeDraft
+import com.naoya0117.paperless.core.model.StoragePath
+import com.naoya0117.paperless.core.model.StoragePathDraft
+import com.naoya0117.paperless.core.model.Tag
+import com.naoya0117.paperless.core.model.TagDraft
 import com.naoya0117.paperless.core.network.internal.api.ApiRegistry
 import okhttp3.OkHttpClient
 
@@ -19,6 +29,11 @@ public class PaperlessClient private constructor(
 
     public val auth: AuthApi get() = apis.auth
     public val server: ServerApi get() = apis.server
+    public val tags: LabelApi<Tag, TagDraft> get() = apis.tags
+    public val correspondents: LabelApi<Correspondent, CorrespondentDraft> get() = apis.correspondents
+    public val documentTypes: LabelApi<DocumentType, DocumentTypeDraft> get() = apis.documentTypes
+    public val storagePaths: LabelApi<StoragePath, StoragePathDraft> get() = apis.storagePaths
+    public val customFields: LabelApi<CustomField, CustomFieldDraft> get() = apis.customFields
 
     public fun withConfig(transform: (PaperlessClientConfig) -> PaperlessClientConfig): PaperlessClient =
         PaperlessClient(transform(config), baseClient, supportedVersions)

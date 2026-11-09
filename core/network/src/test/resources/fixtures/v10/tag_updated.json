@@ -1,0 +1,16 @@
+{
+  "id": 12,
+  "slug": "temporary-renamed",
+  "name": "Temporary renamed",
+  "color": "#123456",
+  "text_color": "#ffffff",
+  "match": "",
+  "matching_algorithm": 1,
+  "is_insensitive": true,
+  "is_inbox_tag": false,
+  "document_count": 0,
+  "owner": 2,
+  "user_can_change": true,
+  "parent": null,
+  "children": []
+}

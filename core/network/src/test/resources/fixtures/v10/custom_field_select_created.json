@@ -1,0 +1,17 @@
+{
+  "id": 9,
+  "name": "Temporary select",
+  "data_type": "select",
+  "extra_data": {
+    "select_options": [
+      {
+        "label": "High",
+        "id": "oLnzNMZwrmQbBsBY"
+      },
+      {
+        "label": "Low",
+        "id": "5altp6TW7BRHUFdd"
+      }
+    ]
+  }
+}
