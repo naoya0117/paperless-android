@@ -5,6 +5,7 @@ import com.naoya0117.paperless.core.model.DocumentDraft
 import com.naoya0117.paperless.core.model.DocumentMetadata
 import com.naoya0117.paperless.core.model.DocumentQuery
 import com.naoya0117.paperless.core.model.DocumentSuggestions
+import com.naoya0117.paperless.core.model.DocumentUpload
 import com.naoya0117.paperless.core.model.HistoryEntry
 import com.naoya0117.paperless.core.model.Note
 import com.naoya0117.paperless.core.model.Page
@@ -60,4 +61,17 @@ public interface DocumentsApi {
 
     /** The archive serial number the next document would get. */
     public suspend fun nextArchiveSerialNumber(): Long
+
+    /**
+     * Uploads a file for consumption. The document is created asynchronously: wait for the returned task
+     * with [TasksApi.awaitCompletion] to get the document ID or the failure.
+     *
+     * @return the consume task's ID
+     * @throws PaperlessException.Http.BadRequest e.g. for an unsupported file type (key `document`)
+     */
+    public suspend fun upload(
+        content: UploadContent,
+        metadata: DocumentUpload = DocumentUpload(),
+        progress: UploadProgress? = null,
+    ): String
 }

@@ -71,6 +71,10 @@ FIXTURES = [
     "document_metadata",
     "document_suggestions",
     "document_history",
+    "tasks_success",
+    "task_failure",
+    "error_unsupported_file_type",
+    "tasks_acknowledged",
 ]
 # Documents uploaded once (looked up by title): title -> (text lines, created, tag names, correspondent).
 DOCUMENTS = {
@@ -260,6 +264,35 @@ def make_pdf(lines):
     return out.encode()
 
 
+def post_document(base, token, file_name, data, fields):
+    """POST /api/documents/post_document/ (multipart); returns (status, headers, body)."""
+    boundary = "----paperless-dev-capture"
+    parts = []
+    for name, value in fields:
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
+    parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="{file_name}"\r\n'
+                 "Content-Type: application/octet-stream\r\n\r\n".encode() + data + b"\r\n")
+    body = b"".join(parts) + f"--{boundary}--\r\n".encode()
+    req = urllib.request.Request(base + "/api/documents/post_document/", data=body, method="POST", headers={
+        "Accept": "application/json; version=10", "Authorization": f"Token {token}",
+        "Content-Type": f"multipart/form-data; boundary={boundary}"})
+    try:
+        with _OPENER.open(req, timeout=60) as resp:
+            return resp.status, dict(resp.headers.items()), resp.read()
+    except urllib.error.HTTPError as e:
+        return e.code, dict(e.headers.items()), e.read()
+
+
+def wait_for_task(base, token, task_id):
+    for _ in range(120):
+        tasks = json_body(request(base, "GET", f"/api/tasks/?task_id={task_id}", token=token), "task status")
+        results = tasks.get("results", tasks) if isinstance(tasks, dict) else tasks
+        if results and results[0]["status"].lower() in ("success", "failure", "revoked"):
+            return results[0]
+        time.sleep(1)
+    raise SystemExit(f"task {task_id} did not finish")
+
+
 def upload(base, token, title, pdf, fields):
     """POST /api/documents/post_document/ (multipart) and wait for the consume task; returns the document ID."""
     boundary = "----paperless-dev-capture"
@@ -331,6 +364,9 @@ def write_fixtures(captured, fixtures):
         body = json.loads((captured / f"{name}.json").read_text())["body"]
         if name == "document_history":
             body = body[:5]  # the log grows on every run; keep the fixture small
+        if name == "task_failure":
+            for task in body["results"]:
+                task["result_data"]["traceback"] = "<omitted>"  # long, and specific to the server install
         text = json.dumps(body, indent=2, ensure_ascii=False).replace("<redacted>", FAKE_TOKEN)
         (fixtures / f"{name}.json").write_text(text + "\n")
         print(f"fixture  {name}.json")
@@ -420,6 +456,20 @@ def main():
            request(base, "GET", f"/api/documents/{invoice}/suggestions/", token=admin_token))
     record(out, "document_history", 200, request(base, "GET", f"/api/documents/{invoice}/history/", token=admin_token))
     record(out, "next_asn", 200, request(base, "GET", "/api/documents/next_asn/", token=admin_token))
+    # Tasks. A corrupt PDF fails during consumption without creating a document.
+    status, _, body = post_document(base, admin_token, "corrupt.pdf", b"%PDF-1.4\n" + bytes(range(256)) * 16, [])
+    if status != 200:
+        raise SystemExit(f"uploading the corrupt PDF failed: HTTP {status} {body[:200]!r}")
+    failed = wait_for_task(base, admin_token, json.loads(body))
+    if failed["status"].lower() != "failure":
+        raise SystemExit(f"expected the corrupt PDF to fail, got {failed['status']}")
+    record(out, "task_failure", 200, request(base, "GET", f"/api/tasks/?task_id={failed['task_id']}", token=admin_token))
+    record(out, "tasks_success", 200,
+           request(base, "GET", "/api/tasks/?status=success&task_type=consume_file&page_size=2", token=admin_token))
+    record(out, "error_unsupported_file_type", 400,
+           post_document(base, admin_token, "random.bin", bytes(range(256)) * 8, []))
+    record(out, "tasks_acknowledged", 200, request(base, "POST", "/api/tasks/acknowledge/", token=admin_token,
+                                                   body={"tasks": [failed["id"]]}))
     record(out, "error_invalid_custom_field_query", 400,
            request(base, "GET", "/api/documents/?custom_field_query=%5B%22nope%22%5D", token=admin_token))
     # Last: exhaust the login throttle (it also counts the logins above).

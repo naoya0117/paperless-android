@@ -5,6 +5,7 @@ import com.naoya0117.paperless.core.model.DocumentDraft
 import com.naoya0117.paperless.core.model.DocumentMetadata
 import com.naoya0117.paperless.core.model.DocumentQuery
 import com.naoya0117.paperless.core.model.DocumentSuggestions
+import com.naoya0117.paperless.core.model.DocumentUpload
 import com.naoya0117.paperless.core.model.HistoryEntry
 import com.naoya0117.paperless.core.model.Note
 import com.naoya0117.paperless.core.model.Page
@@ -12,11 +13,15 @@ import com.naoya0117.paperless.core.network.DocumentFile
 import com.naoya0117.paperless.core.network.DocumentFileKind
 import com.naoya0117.paperless.core.network.DocumentsApi
 import com.naoya0117.paperless.core.network.PaperlessException
+import com.naoya0117.paperless.core.network.UploadContent
+import com.naoya0117.paperless.core.network.UploadProgress
 import com.naoya0117.paperless.core.network.internal.dto.NoteDto
 import com.naoya0117.paperless.core.network.internal.dto.NoteRequestDto
 import com.naoya0117.paperless.core.network.internal.dto.toModel
+import com.naoya0117.paperless.core.network.internal.dto.toMultipart
 import com.naoya0117.paperless.core.network.internal.dto.toPatchBody
 import com.naoya0117.paperless.core.network.internal.dto.toQueryMap
+import com.naoya0117.paperless.core.network.internal.http.UploadRequestBody
 import com.naoya0117.paperless.core.network.internal.http.fileNameFromContentDisposition
 import com.naoya0117.paperless.core.network.internal.service.DocumentService
 
@@ -87,6 +92,16 @@ internal class DocumentsApiImpl(
         parsing { service.history(id).map { it.toModel() } }.sortedByDescending { it.timestamp }
 
     override suspend fun nextArchiveSerialNumber(): Long = service.nextAsn()
+
+    override suspend fun upload(
+        content: UploadContent,
+        metadata: DocumentUpload,
+        progress: UploadProgress?,
+    ): String {
+        val taskId = service.upload(metadata.toMultipart(UploadRequestBody(content, progress), content.fileName))
+        if (taskId.isBlank()) throw PaperlessException.InvalidResponse("empty task ID")
+        return taskId
+    }
 
     private fun List<NoteDto>.toNotes(): List<Note> = map { it.toModel() }.sortedBy { it.created }
 }

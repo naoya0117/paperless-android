@@ -30,6 +30,7 @@ public class PaperlessClient private constructor(
     public val auth: AuthApi get() = apis.auth
     public val server: ServerApi get() = apis.server
     public val documents: DocumentsApi get() = apis.documents
+    public val tasks: TasksApi get() = apis.tasks
     public val tags: LabelApi<Tag, TagDraft> get() = apis.tags
     public val correspondents: LabelApi<Correspondent, CorrespondentDraft> get() = apis.correspondents
     public val documentTypes: LabelApi<DocumentType, DocumentTypeDraft> get() = apis.documentTypes
