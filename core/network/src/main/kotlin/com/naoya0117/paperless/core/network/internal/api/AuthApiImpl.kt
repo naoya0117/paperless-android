@@ -1,4 +1,4 @@
-package com.naoya0117.paperless.core.network.internal
+package com.naoya0117.paperless.core.network.internal.api
 
 import com.naoya0117.paperless.core.model.AuthToken
 import com.naoya0117.paperless.core.network.AuthApi
@@ -13,26 +13,28 @@ internal class AuthApiImpl(
         username: String,
         password: String,
         mfaCode: String?,
-    ): AuthToken =
-        try {
-            val request = TokenRequestDto(username, password, mfaCode?.trim()?.ifEmpty { null })
-            val response = apiCall { service.obtainToken(request) }
-            if (response.token.isBlank()) throw PaperlessException.InvalidResponse("empty token")
-            AuthToken(response.token)
-        } catch (e: PaperlessException.BadRequest) {
-            throw e.toLoginException()
-        }
+    ): AuthToken {
+        val request = TokenRequestDto(username, password, mfaCode?.trim()?.ifEmpty { null })
+        val response =
+            try {
+                service.obtainToken(request)
+            } catch (e: PaperlessException.Http.BadRequest) {
+                throw e.toLoginException()
+            }
+        if (response.token.isBlank()) throw PaperlessException.InvalidResponse("empty token")
+        return AuthToken(response.token)
+    }
 
     /**
      * Paperless reports login failures as 400 `non_field_errors`. The MFA messages are not translated
      * (paperless/serialisers.py), unlike DRF's "Unable to log in with provided credentials.".
      */
-    private fun PaperlessException.BadRequest.toLoginException(): PaperlessException {
+    private fun PaperlessException.Http.BadRequest.toLoginException(): PaperlessException {
         val messages = errors["non_field_errors"].orEmpty()
         return when {
-            MFA_REQUIRED in messages -> PaperlessException.MfaRequired()
-            INVALID_MFA_CODE in messages -> PaperlessException.InvalidMfaCode()
-            messages.isNotEmpty() -> PaperlessException.InvalidCredentials(messages.first())
+            MFA_REQUIRED in messages -> PaperlessException.Auth.MfaRequired()
+            INVALID_MFA_CODE in messages -> PaperlessException.Auth.InvalidMfaCode()
+            messages.isNotEmpty() -> PaperlessException.Auth.InvalidCredentials(messages.first())
             else -> this
         }
     }

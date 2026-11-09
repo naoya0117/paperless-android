@@ -1,4 +1,4 @@
-package com.naoya0117.paperless.core.network.internal
+package com.naoya0117.paperless.core.network.internal.http
 
 import kotlinx.serialization.json.Json
 

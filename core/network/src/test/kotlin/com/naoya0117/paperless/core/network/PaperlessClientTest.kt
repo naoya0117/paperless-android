@@ -150,9 +150,9 @@ class PaperlessClientTest {
         runTest {
             val cases =
                 listOf(
-                    "token_invalid_credentials.json" to PaperlessException.InvalidCredentials::class,
-                    "token_mfa_required.json" to PaperlessException.MfaRequired::class,
-                    "token_invalid_mfa_code.json" to PaperlessException.InvalidMfaCode::class,
+                    "token_invalid_credentials.json" to PaperlessException.Auth.InvalidCredentials::class,
+                    "token_mfa_required.json" to PaperlessException.Auth.MfaRequired::class,
+                    "token_invalid_mfa_code.json" to PaperlessException.Auth.InvalidMfaCode::class,
                 )
             for ((fixtureName, expected) in cases) {
                 server.enqueue(jsonResponse(400, fixtureName))
@@ -167,7 +167,7 @@ class PaperlessClientTest {
             server.enqueue(jsonResponse(400, "token_invalid_credentials.json"))
 
             val e =
-                assertFailsWith<PaperlessException.InvalidCredentials> {
+                assertFailsWith<PaperlessException.Auth.InvalidCredentials> {
                     server.client().auth.obtainToken("alice", "wrong")
                 }
 
@@ -207,7 +207,8 @@ class PaperlessClientTest {
         runTest {
             server.enqueue(jsonResponse(429, "error_throttled.json", "Retry-After" to "42"))
 
-            val e = assertFailsWith<PaperlessException.RateLimited> { server.client().auth.obtainToken("alice", "pw") }
+            val e =
+                assertFailsWith<PaperlessException.Http.RateLimited> { server.client().auth.obtainToken("alice", "pw") }
 
             assertEquals(42.seconds, e.retryAfter)
         }
@@ -217,7 +218,7 @@ class PaperlessClientTest {
         runTest {
             server.enqueue(jsonResponse(401, "error_invalid_token.json"))
 
-            val e = assertFailsWith<PaperlessException.Unauthorized> { server.client().signIn(AuthToken("bad")) }
+            val e = assertFailsWith<PaperlessException.Http.Unauthorized> { server.client().signIn(AuthToken("bad")) }
 
             assertEquals("Invalid token.", e.detail)
         }
@@ -237,11 +238,11 @@ class PaperlessClientTest {
         runTest {
             val cases =
                 mapOf(
-                    403 to PaperlessException.Forbidden::class,
-                    404 to PaperlessException.NotFound::class,
-                    500 to PaperlessException.ServerError::class,
-                    502 to PaperlessException.ServerError::class,
-                    418 to PaperlessException.UnexpectedStatus::class,
+                    403 to PaperlessException.Http.Forbidden::class,
+                    404 to PaperlessException.Http.NotFound::class,
+                    500 to PaperlessException.Http.ServerError::class,
+                    502 to PaperlessException.Http.ServerError::class,
+                    418 to PaperlessException.Http.UnexpectedStatus::class,
                 )
             for ((code, expected) in cases) {
                 // A reverse proxy error page is not JSON; it must not break the mapping.

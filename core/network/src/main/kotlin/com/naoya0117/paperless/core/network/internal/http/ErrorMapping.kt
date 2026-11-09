@@ -1,4 +1,4 @@
-package com.naoya0117.paperless.core.network.internal
+package com.naoya0117.paperless.core.network.internal.http
 
 import com.naoya0117.paperless.core.network.PaperlessException
 import kotlinx.serialization.SerializationException
@@ -7,7 +7,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import retrofit2.HttpException
+import retrofit2.Response
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.ConnectException
@@ -16,58 +16,47 @@ import java.net.UnknownHostException
 import javax.net.ssl.SSLException
 import kotlin.time.Duration.Companion.seconds
 
-/** Runs an API call and converts every failure into a [PaperlessException]. */
-internal suspend fun <T> apiCall(block: suspend () -> T): T =
-    try {
-        block()
-    } catch (e: PaperlessException) {
-        throw e
-    } catch (e: HttpException) {
-        throw e.toPaperlessException()
-    } catch (e: SerializationException) {
-        throw PaperlessException.InvalidResponse(e.message ?: "malformed body", e)
-    } catch (e: IOException) {
-        throw e.toPaperlessException()
-    }
-
-/** Converts a non-2xx Retrofit [retrofit2.Response]. */
-internal fun retrofit2.Response<*>.toPaperlessException(): PaperlessException {
-    val errorBody = errorBody()?.string()
-    return httpError(code(), errorBody, headers()["Retry-After"])
-}
-
-private fun HttpException.toPaperlessException(): PaperlessException =
-    response()?.toPaperlessException() ?: httpError(code(), null, null)
-
-private fun httpError(
-    code: Int,
-    body: String?,
-    retryAfter: String?,
-): PaperlessException {
-    val errors = parseDrfErrors(body)
+/** Converts a non-2xx response. */
+internal fun Response<*>.toPaperlessException(): PaperlessException {
+    val errors =
+        try {
+            parseDrfErrors(errorBody()?.string())
+        } catch (_: IOException) {
+            emptyMap()
+        }
     val detail = errors["detail"]?.firstOrNull()
-    return when (code) {
-        400 -> PaperlessException.BadRequest(errors)
-        401 -> PaperlessException.Unauthorized(detail)
-        403 -> PaperlessException.Forbidden(detail)
-        404 -> PaperlessException.NotFound()
+    return when (val code = code()) {
+        400 -> PaperlessException.Http.BadRequest(errors)
+        401 -> PaperlessException.Http.Unauthorized(detail)
+        403 -> PaperlessException.Http.Forbidden(detail)
+        404 -> PaperlessException.Http.NotFound()
         406 -> PaperlessException.UnsupportedServerVersion(serverMaxApiVersion = null)
-        429 -> PaperlessException.RateLimited(retryAfter?.trim()?.toLongOrNull()?.seconds)
-        in 500..599 -> PaperlessException.ServerError(code)
-        else -> PaperlessException.UnexpectedStatus(code)
+        429 ->
+            PaperlessException.Http.RateLimited(
+                headers()["Retry-After"]
+                    ?.trim()
+                    ?.toLongOrNull()
+                    ?.seconds,
+            )
+        in 500..599 -> PaperlessException.Http.ServerError(code)
+        else -> PaperlessException.Http.UnexpectedStatus(code)
     }
 }
 
-private fun IOException.toPaperlessException(): PaperlessException =
+/** Converts a failure that produced no usable response. Unknown exception types are passed through. */
+internal fun Throwable.toPaperlessException(): Throwable =
     when {
+        this is PaperlessException -> this
+        this is SerializationException -> PaperlessException.InvalidResponse(message ?: "malformed body", this)
+        this !is IOException -> this
         // OkHttp tries every route (e.g. IPv4 and IPv6) and throws the last failure with the earlier
         // ones suppressed. A TLS failure on one route explains more than "connection refused" on another.
-        hasTlsFailure() -> PaperlessException.Tls(this)
-        this is UnknownHostException -> PaperlessException.UnknownHost(this)
-        this is ConnectException || this is NoRouteToHostException -> PaperlessException.ConnectionFailed(this)
+        hasTlsFailure() -> PaperlessException.Network.Tls(this)
+        this is UnknownHostException -> PaperlessException.Network.UnknownHost(this)
+        this is ConnectException || this is NoRouteToHostException -> PaperlessException.Network.ConnectionFailed(this)
         // SocketTimeoutException is an InterruptedIOException, as is OkHttp's call timeout.
-        this is InterruptedIOException -> PaperlessException.Timeout(this)
-        else -> PaperlessException.OtherNetwork(this)
+        this is InterruptedIOException -> PaperlessException.Network.Timeout(this)
+        else -> PaperlessException.Network.Other(this)
     }
 
 /** Coroutine stack trace recovery may wrap the exception, so check the whole cause chain. */

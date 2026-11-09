@@ -1,4 +1,4 @@
-package com.naoya0117.paperless.core.network.internal
+package com.naoya0117.paperless.core.network.internal.http
 
 import com.naoya0117.paperless.core.network.PaperlessClientConfig
 import okhttp3.Interceptor

@@ -23,7 +23,7 @@ class NetworkErrorTest {
                         PaperlessClientConfig(it, AuthToken("abc"), timeouts = Timeouts(read = 200.milliseconds))
                     }
 
-                assertFailsWith<PaperlessException.Timeout> { client.server.fetchServerInfo() }
+                assertFailsWith<PaperlessException.Network.Timeout> { client.server.fetchServerInfo() }
             }
         }
 
@@ -38,7 +38,7 @@ class NetworkErrorTest {
                     testBaseClient,
                 )
 
-            assertFailsWith<PaperlessException.ConnectionFailed> { client.server.fetchServerInfo() }
+            assertFailsWith<PaperlessException.Network.ConnectionFailed> { client.server.fetchServerInfo() }
         }
 
     @Test
@@ -51,7 +51,7 @@ class NetworkErrorTest {
                     testBaseClient,
                 )
 
-            assertFailsWith<PaperlessException.UnknownHost> { client.server.fetchServerInfo() }
+            assertFailsWith<PaperlessException.Network.UnknownHost> { client.server.fetchServerInfo() }
         }
 
     @Test
@@ -68,7 +68,7 @@ class NetworkErrorTest {
                 )
                 server.start()
 
-                assertFailsWith<PaperlessException.Tls> { server.client().server.fetchServerInfo() }
+                assertFailsWith<PaperlessException.Network.Tls> { server.client().server.fetchServerInfo() }
             }
         }
 

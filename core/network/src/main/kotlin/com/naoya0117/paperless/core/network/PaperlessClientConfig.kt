@@ -41,9 +41,9 @@ public data class Timeouts(
 )
 
 /** HTTP logging for debugging. Credentials and custom header values are always redacted. */
-public data class HttpLogging(
-    val level: Level,
-    val logger: (String) -> Unit,
+public class HttpLogging(
+    public val level: Level,
+    public val logger: (String) -> Unit,
 ) {
     public enum class Level { BASIC, HEADERS, BODY }
 }
