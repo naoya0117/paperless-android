@@ -54,14 +54,17 @@ class AccountRepositoryTest {
             .body("""{"token": "$token"}""")
             .build()
 
-    private fun uiSettings(userId: Long = 3) =
-        MockResponse
-            .Builder()
-            .code(200)
-            .addHeader("X-Api-Version", "10")
-            .addHeader("X-Version", "3.4.2")
-            .body("""{"user": {"id": $userId, "username": "alice", "first_name": "Alice"}, "settings": {}}""")
-            .build()
+    private fun uiSettings(
+        userId: Long = 3,
+        lastName: String = "",
+    ) = MockResponse
+        .Builder()
+        .code(200)
+        .addHeader("X-Api-Version", "10")
+        .addHeader("X-Version", "3.4.2")
+        .body(
+            """{"user": {"id": $userId, "username": "alice", "first_name": "Alice", "last_name": "$lastName"}, "settings": {}}""",
+        ).build()
 
     @Test
     fun `signs in stores the account and provides its client`() =
@@ -90,26 +93,32 @@ class AccountRepositoryTest {
         }
 
     @Test
-    fun `signing in again as the same user updates the account`() =
+    fun `signing in again as the same user updates the account and its client`() =
         runTest {
             server.enqueue(tokenResponse("first"))
             server.enqueue(uiSettings())
-            server.enqueue(uiSettings())
+            server.enqueue(uiSettings(lastName = "Smith"))
 
             val first = repository.signIn(serverUrl(), "alice", "pw")
+            val firstClient = repository.activeClient.first()!!
+            assertTrue("clients are shared, not rebuilt per call", firstClient === repository.activeClient.first())
             val second = repository.signInWithToken(serverUrl(), AuthToken("second"))
 
             assertEquals(first.id, second.id)
+            assertEquals("Alice", first.displayName)
+            assertEquals("Alice Smith", second.displayName)
             assertEquals(
                 1,
                 repository.state
                     .first()
                     .accounts.size,
             )
-            repository.activeClient
-                .first()!!
-                .config.token
-                .let { assertEquals(AuthToken("second"), it) }
+            assertEquals(
+                AuthToken("second"),
+                repository.activeClient
+                    .first()!!
+                    .config.token,
+            )
         }
 
     @Test

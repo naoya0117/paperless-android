@@ -2,6 +2,7 @@ package com.naoya0117.paperless.core.datastore
 
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import java.security.InvalidKeyException
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -16,11 +17,27 @@ import javax.crypto.spec.GCMParameterSpec
 class AndroidKeystoreCipher(
     private val keyAlias: String = DEFAULT_ALIAS,
 ) : SecretCipher {
-    override fun encrypt(plain: ByteArray): ByteArray {
+    override fun encrypt(plain: ByteArray): ByteArray =
+        try {
+            encryptWith(key(), plain)
+        } catch (_: InvalidKeyException) {
+            // The key became unusable (e.g. invalidated): start over with a new one. Data encrypted with the
+            // old key cannot be read anymore, which makes those accounts sign in again.
+            deleteKey()
+            encryptWith(key(), plain)
+        }
+
+    private fun encryptWith(
+        key: SecretKey,
+        plain: ByteArray,
+    ): ByteArray {
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, key())
+        cipher.init(Cipher.ENCRYPT_MODE, key)
         return cipher.iv + cipher.doFinal(plain)
     }
+
+    @Synchronized
+    private fun deleteKey() = keyStore().deleteEntry(keyAlias)
 
     override fun decrypt(encrypted: ByteArray): ByteArray {
         require(encrypted.size > IV_SIZE) { "Encrypted data too short" }

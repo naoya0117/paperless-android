@@ -13,6 +13,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.security.GeneralSecurityException
+import java.security.ProviderException
 
 class AccountStoreTest {
     @get:Rule
@@ -20,12 +21,12 @@ class AccountStoreTest {
 
     /** Reversible but not plain text, so the test can check what reaches the disk. */
     private class XorCipher(
-        var broken: Boolean = false,
+        var failure: Exception? = null,
     ) : SecretCipher {
         override fun encrypt(plain: ByteArray) = plain.map { (it.toInt() xor 0x5a).toByte() }.toByteArray()
 
         override fun decrypt(encrypted: ByteArray): ByteArray {
-            if (broken) throw GeneralSecurityException("key lost")
+            failure?.let { throw it }
             return encrypted.map { (it.toInt() xor 0x5a).toByte() }.toByteArray()
         }
     }
@@ -120,16 +121,56 @@ class AccountStoreTest {
             val store = store(folder.root.resolve("accounts.json"), cipher)
             store.save(account("a"), credentials)
 
-            cipher.broken = true
+            for (failure in listOf(
+                GeneralSecurityException("key lost"),
+                ProviderException("Keystore operation failed"),
+            )) {
+                cipher.failure = failure
+                store.setActive("a") // a new emission
+                assertTrue(
+                    failure.toString(),
+                    store.state
+                        .first()
+                        .accounts
+                        .single()
+                        .needsSignIn,
+                )
+                assertNull(store.credentials("a"))
+            }
+        }
 
-            assertTrue(
+    @Test
+    fun `removing another account keeps the active one`() =
+        runTest {
+            val store = store(folder.root.resolve("accounts.json"), XorCipher())
+            store.save(account("a"), credentials)
+            store.save(account("b"), credentials)
+
+            store.remove("a")
+
+            assertEquals("b", store.state.first().activeAccountId)
+        }
+
+    @Test
+    fun `the credentials revision changes with the secrets`() =
+        runTest {
+            val store = store(folder.root.resolve("accounts.json"), XorCipher())
+            store.save(account("a"), credentials)
+            val before =
                 store.state
                     .first()
-                    .accounts
-                    .single()
-                    .needsSignIn,
+                    .credentialsRevisions
+                    .getValue("a")
+
+            store.save(account("a"), AccountCredentials(AuthToken("rotated")))
+
+            assertTrue(
+                before !=
+                    store.state
+                        .first()
+                        .credentialsRevisions
+                        .getValue("a"),
             )
-            assertNull(store.credentials("a"))
         }
 
     @Test

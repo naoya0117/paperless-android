@@ -6,17 +6,25 @@ import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import com.naoya0117.paperless.core.model.Account
 import com.naoya0117.paperless.core.model.ApiVersion
 import com.naoya0117.paperless.core.model.AuthToken
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import java.io.File
-import java.security.GeneralSecurityException
 import java.util.Base64
 
-/** The accounts on this device and which one is active. */
+/**
+ * The accounts on this device and which one is active.
+ *
+ * @property credentialsRevisions per account ID, a value that changes whenever the account's stored
+ *   secrets change (e.g. a new token after signing in again), so clients can be rebuilt
+ */
 data class AccountsState(
     val accounts: List<Account>,
     val activeAccountId: String?,
+    val credentialsRevisions: Map<String, Int> = emptyMap(),
 ) {
     val activeAccount: Account? get() = accounts.firstOrNull { it.id == activeAccountId }
 }
@@ -29,17 +37,23 @@ class AccountStore internal constructor(
     private val dataStore: DataStore<StoredAccounts>,
     private val cipher: SecretCipher,
 ) {
+    /** Decrypts every account's secrets once per change (to tell which need to sign in), off the main thread. */
     val state: Flow<AccountsState> =
-        dataStore.data.map { stored ->
-            AccountsState(stored.accounts.map { it.toAccount() }, stored.activeId)
-        }
+        dataStore.data
+            .map { stored ->
+                AccountsState(
+                    accounts = stored.accounts.map { it.toAccount() },
+                    activeAccountId = stored.activeId,
+                    credentialsRevisions = stored.accounts.associate { it.id to it.credentialsRevision() },
+                )
+            }.flowOn(Dispatchers.Default)
 
     /** Adds or replaces the account (matched by [Account.id]) and makes it active. */
     suspend fun save(
         account: Account,
         credentials: AccountCredentials,
     ) {
-        val stored = account.toStored(credentials)
+        val stored = withContext(Dispatchers.Default) { account.toStored(credentials) }
         dataStore.updateData { current ->
             current.copy(
                 activeId = account.id,
@@ -54,7 +68,7 @@ class AccountStore internal constructor(
             val remaining = current.accounts.filterNot { it.id == accountId }
             current.copy(
                 accounts = remaining,
-                activeId = current.activeId.takeIf { it != accountId } ?: remaining.firstOrNull()?.id,
+                activeId = if (current.activeId == accountId) remaining.firstOrNull()?.id else current.activeId,
             )
         }
     }
@@ -74,20 +88,25 @@ class AccountStore internal constructor(
                 .first()
                 .accounts
                 .firstOrNull { it.id == accountId } ?: return null
-        return stored.decryptCredentials()
+        return withContext(Dispatchers.Default) { stored.decryptCredentials() }
     }
 
+    /**
+     * `null` if the secrets cannot be read. Any failure counts: besides GeneralSecurityException the
+     * Keystore also throws ProviderException and other runtime errors, which must not break the flow.
+     */
+    @Suppress("TooGenericExceptionCaught")
     private fun StoredAccount.decryptCredentials(): AccountCredentials? =
         try {
             AccountCredentials(
                 token = AuthToken(decrypt(encryptedToken)),
                 customHeaders = customHeaders.map { it.name to decrypt(it.encryptedValue) },
             )
-        } catch (_: GeneralSecurityException) {
-            null
-        } catch (_: IllegalArgumentException) {
+        } catch (_: Exception) {
             null
         }
+
+    private fun StoredAccount.credentialsRevision(): Int = 31 * encryptedToken.hashCode() + customHeaders.hashCode()
 
     private fun StoredAccount.toAccount() =
         Account(

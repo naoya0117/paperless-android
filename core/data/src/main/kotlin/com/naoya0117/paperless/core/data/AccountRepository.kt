@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,15 +29,17 @@ class AccountRepository
     ) {
         val state: Flow<AccountsState> = store.state
 
+        private val clients = ConcurrentHashMap<String, Pair<Int, PaperlessClient>>()
+
         /**
          * A client for the active account, or `null` if there is none or it needs to sign in again.
-         * Emits a new client when the active account or its credentials change.
+         * Emits a new client when the active account or its credentials change (e.g. after signing in again).
          */
         val activeClient: Flow<PaperlessClient?> =
             store.state
-                .map { it.activeAccount }
+                .map { state -> state.activeAccount?.let { it to state.credentialsRevisions[it.id] } }
                 .distinctUntilChanged()
-                .map { account -> account?.let { client(it) } }
+                .map { active -> active?.let { (account, revision) -> client(account, revision) } }
 
         /**
          * Signs in and stores the account, which becomes the active one.
@@ -73,19 +76,33 @@ class AccountRepository
          * Forgets the account and its secrets on this device. The token stays valid on the server (Paperless
          * has no API to revoke it); it can be regenerated in the web UI's profile settings.
          */
-        suspend fun signOut(accountId: String) = store.remove(accountId)
+        suspend fun signOut(accountId: String) {
+            store.remove(accountId)
+            clients.remove(accountId)
+        }
 
         /** A client for [account], or `null` if its secrets cannot be read anymore. */
-        suspend fun client(account: Account): PaperlessClient? {
+        suspend fun client(account: Account): PaperlessClient? =
+            client(account, store.state.first().credentialsRevisions[account.id])
+
+        /** Clients are cached per account and credentials revision, so collectors share them. */
+        private suspend fun client(
+            account: Account,
+            revision: Int?,
+        ): PaperlessClient? {
+            clients[account.id]?.let { (cachedRevision, client) -> if (cachedRevision == revision) return client }
             val credentials = store.credentials(account.id) ?: return null
-            return clientFactory.create(
-                PaperlessClientConfig(
-                    serverUrl = ServerUrl.parse(account.serverUrl),
-                    token = credentials.token,
-                    apiVersion = account.apiVersion,
-                    customHeaders = credentials.customHeaders.map { (name, value) -> HttpHeader(name, value) },
-                ),
-            )
+            val client =
+                clientFactory.create(
+                    PaperlessClientConfig(
+                        serverUrl = ServerUrl.parse(account.serverUrl),
+                        token = credentials.token,
+                        apiVersion = account.apiVersion,
+                        customHeaders = credentials.customHeaders.map { (name, value) -> HttpHeader(name, value) },
+                    ),
+                )
+            revision?.let { clients[account.id] = it to client }
+            return client
         }
 
         /** The client of the active account at this moment. */
@@ -118,7 +135,11 @@ class AccountRepository
                     serverUrl = config.serverUrl.toString(),
                     userId = user.id,
                     username = user.username,
-                    displayName = listOfNotNull(user.firstName, user.lastName).joinToString(" ").ifBlank { null },
+                    displayName =
+                        listOfNotNull(user.firstName, user.lastName)
+                            .filter { it.isNotBlank() }
+                            .joinToString(" ")
+                            .ifEmpty { null },
                     apiVersion = config.apiVersion,
                     serverVersion = session.serverInfo.serverVersion,
                     customHeaderNames = customHeaders.map { it.first },
