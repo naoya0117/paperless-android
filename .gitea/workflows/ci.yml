@@ -33,13 +33,20 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: "platforms;android-37.0 build-tools;37.0.0"
+          # build-tools: AGP's default version (installed on demand otherwise).
+          packages: "platforms;android-37.0 build-tools;36.0.0"
 
       - uses: gradle/actions/setup-gradle@v4
 
       # Compile, unit tests, Android Lint, ktlint, debug/release APKs.
+      # The runner host has little free memory, so cap the Gradle heap, run the Kotlin compiler
+      # in-process (no separate Kotlin daemon) and limit parallel workers.
       - name: Build
-        run: ./gradlew build --console=plain
+        run: >-
+          ./gradlew build --console=plain
+          --max-workers=2
+          -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
+          -Pkotlin.compiler.execution.strategy=in-process
 
       # upload-artifact v4 requires Gitea 1.23 or later.
       - name: Upload reports
