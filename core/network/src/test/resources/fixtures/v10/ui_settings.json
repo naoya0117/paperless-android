@@ -1,0 +1,20 @@
+{
+  "user": {
+    "id": 3,
+    "username": "alice",
+    "is_staff": false,
+    "is_superuser": false,
+    "groups": [1],
+    "first_name": "Alice"
+  },
+  "settings": {
+    "update_checking": {"backend_setting": "default"},
+    "trash_delay": 30,
+    "app_title": null,
+    "app_logo": null,
+    "auditlog_enabled": true,
+    "email_enabled": false,
+    "ai_enabled": false
+  },
+  "permissions": ["view_document", "add_document", "change_document", "delete_document"]
+}
