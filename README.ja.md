@@ -4,6 +4,13 @@
 
 Kotlin で実装した [Paperless-ngx](https://github.com/paperless-ngx/paperless-ngx) の Android クライアントです。
 
+## 動作要件
+
+- **Android 10（API レベル 29）以降**
+- **Paperless-ngx 3.0.0 以降**（REST API バージョン 10）
+- HTTPS で接続する場合、サーバー証明書が Android に信頼されている必要があります。
+  プライベート CA で発行した証明書を使う場合は、端末に CA 証明書をインストールしてください。
+
 ## 目標
 
 - **最新の Paperless-ngx REST API**（API バージョン 10）への対応
