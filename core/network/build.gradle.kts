@@ -19,3 +19,9 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.okhttp.tls)
 }
+
+tasks.test {
+    // Opt-in smoke test against a local server (RealServerSmokeTest); not cached, as the server is external.
+    environment("PAPERLESS_DEV_URL", providers.environmentVariable("PAPERLESS_DEV_URL").getOrElse(""))
+    if (providers.environmentVariable("PAPERLESS_DEV_URL").isPresent) outputs.upToDateWhen { false }
+}

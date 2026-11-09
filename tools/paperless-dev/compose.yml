@@ -1,0 +1,24 @@
+# Local Paperless-ngx for checking API responses (see README.md). Development only: fixed, insecure credentials.
+# Keep the image version in sync with core/network/src/test/resources/fixtures/v10/README.md.
+services:
+  broker:
+    image: docker.io/library/redis:8
+  db:
+    image: docker.io/library/postgres:17
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: paperless
+  webserver:
+    image: docker.io/paperlessngx/paperless-ngx:3.4.2
+    depends_on: [db, broker]
+    ports: ["127.0.0.1:8000:8000"]
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBHOST: db
+      PAPERLESS_SECRET_KEY: local-dev-only
+      PAPERLESS_ADMIN_USER: admin
+      PAPERLESS_ADMIN_PASSWORD: admin-password
+      PAPERLESS_URL: http://localhost:8000
+      # Default is 5/min; the capture script logs in more often than that before it tests throttling.
+      PAPERLESS_TOKEN_THROTTLE_RATE: 20/min
