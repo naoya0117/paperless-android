@@ -25,6 +25,7 @@ import struct
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 ADMIN = ("admin", "admin-password")
@@ -49,7 +50,34 @@ FIXTURES = [
     "error_not_acceptable",
     "error_unauthenticated",
     "error_throttled",
+    "tags",
+    "tag_child",
+    "tag_created",
+    "tag_updated",
+    "error_duplicate_name",
+    "correspondents",
+    "document_types",
+    "storage_paths",
+    "custom_fields",
+    "custom_field_select_created",
+    "error_not_found",
 ]
+# Labels the capture script keeps on the server (created once, then patched back to these values).
+LABELS = {
+    "tags": [
+        {"name": "Finance", "color": "#a6cee3", "is_inbox_tag": False, "matching_algorithm": 1, "match": "invoice bill"},
+        {"name": "Tax", "parent": "Finance"},
+        {"name": "Inbox", "is_inbox_tag": True, "color": "#ff0000"},
+    ],
+    "correspondents": [{"name": "ACME Corp", "matching_algorithm": 6}],
+    "document_types": [{"name": "Invoice", "matching_algorithm": 0}],
+    "storage_paths": [{"name": "By year", "path": "{{ created_year }}/{{ title }}"}],
+    "custom_fields": [
+        {"name": "Due date", "data_type": "date"},
+        {"name": "Amount", "data_type": "monetary", "extra_data": {"default_currency": "EUR"}},
+        {"name": "Priority", "data_type": "select", "extra_data": {"select_options": [{"label": "High"}, {"label": "Low"}]}},
+    ],
+}
 HEADERS_OF_INTEREST = ["content-type", "x-api-version", "x-version", "retry-after", "www-authenticate", "location"]
 MFA_REQUIRED = "MFA code is required"
 
@@ -167,6 +195,33 @@ def ensure_mfa(base, username):
     raise SystemExit(f"enabling TOTP failed: HTTP {activation[0]} {activation[2][:300]!r}")
 
 
+def ensure_labels(base, token):
+    """Creates the LABELS once; later runs patch them back so IDs and fixtures stay stable."""
+    ids = {}
+    for endpoint, items in LABELS.items():
+        for item in items:
+            payload = dict(item)
+            if isinstance(payload.get("parent"), str):
+                payload["parent"] = ids[(endpoint, payload["parent"])]
+            lookup = json_body(request(base, "GET", f"/api/{endpoint}/?name__iexact={urllib.parse.quote(item['name'])}", token=token),
+                               f"looking up {endpoint}")
+            if lookup["results"]:
+                existing = lookup["results"][0]["id"]
+                if payload.pop("data_type", None) == "select":
+                    # The server requires the options on every update of a select field; send the existing
+                    # ones with their IDs (options without IDs would be replaced by new ones).
+                    payload["extra_data"] = lookup["results"][0]["extra_data"]
+                status, _, body = request(base, "PATCH", f"/api/{endpoint}/{existing}/", body=payload, token=token)
+                expected, object_id = 200, existing
+            else:
+                status, _, body = request(base, "POST", f"/api/{endpoint}/", body=payload, token=token)
+                expected, object_id = 201, None
+            if status != expected:
+                raise SystemExit(f"saving {endpoint} {item['name']} failed: HTTP {status} {body[:300]!r}")
+            ids[(endpoint, item["name"])] = object_id or json.loads(body)["id"]
+    return ids
+
+
 def redact(text):
     return re.sub(r'"token":\s*"[0-9a-f]{40}"', '"token": "<redacted>"', text)
 
@@ -228,6 +283,27 @@ def main():
     record(out, "error_not_acceptable_token", 406,
            request(base, "POST", "/api/token/", body={"username": "alice", "password": PASSWORD}, version=8))
     record(out, "error_unauthenticated", 401, request(base, "GET", "/api/ui_settings/"))
+
+    # Labels (as admin, who owns them)
+    ids = ensure_labels(base, admin_token)
+    for endpoint in ["tags", "correspondents", "document_types", "storage_paths", "custom_fields"]:
+        record(out, endpoint, 200, request(base, "GET", f"/api/{endpoint}/?page=1&page_size=25", token=admin_token))
+    record(out, "tag_child", 200, request(base, "GET", f"/api/tags/{ids[('tags', 'Tax')]}/", token=admin_token))
+    created = request(base, "POST", "/api/tags/", token=admin_token,
+                      body={"name": "Temporary", "color": "#123456", "parent": ids[("tags", "Finance")]})
+    record(out, "tag_created", 201, created)
+    temporary = json.loads(created[2])["id"]
+    record(out, "tag_updated", 200, request(base, "PATCH", f"/api/tags/{temporary}/", token=admin_token,
+                                            body={"name": "Temporary renamed", "parent": None}))
+    record(out, "tag_deleted", 204, request(base, "DELETE", f"/api/tags/{temporary}/", token=admin_token))
+    record(out, "error_not_found", 404, request(base, "GET", f"/api/tags/{temporary}/", token=admin_token))
+    record(out, "error_duplicate_name", 400, request(base, "POST", "/api/tags/", token=admin_token,
+                                                     body={"name": "Finance"}))
+    select = request(base, "POST", "/api/custom_fields/", token=admin_token, body={
+        "name": "Temporary select", "data_type": "select",
+        "extra_data": {"select_options": [{"label": "High"}, {"label": "Low"}]}})
+    record(out, "custom_field_select_created", 201, select)
+    request(base, "DELETE", f"/api/custom_fields/{json.loads(select[2])['id']}/", token=admin_token)
     # Last: exhaust the login throttle (it also counts the logins above).
     for _ in range(60):
         response = attempt("alice", "wrong")

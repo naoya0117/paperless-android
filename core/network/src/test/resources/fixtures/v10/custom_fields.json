@@ -1,0 +1,41 @@
+{
+  "count": 3,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 3,
+      "name": "Amount",
+      "data_type": "monetary",
+      "extra_data": {
+        "default_currency": "EUR"
+      },
+      "document_count": 0
+    },
+    {
+      "id": 1,
+      "name": "Due date",
+      "data_type": "date",
+      "extra_data": null,
+      "document_count": 0
+    },
+    {
+      "id": 2,
+      "name": "Priority",
+      "data_type": "select",
+      "extra_data": {
+        "select_options": [
+          {
+            "id": "y7aEoGykiU4wo6o7",
+            "label": "High"
+          },
+          {
+            "id": "jcLTQzK9sJBzT1Ld",
+            "label": "Low"
+          }
+        ]
+      },
+      "document_count": 0
+    }
+  ]
+}
