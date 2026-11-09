@@ -2,6 +2,7 @@ package com.naoya0117.paperless.core.network
 
 import com.naoya0117.paperless.core.model.ApiVersion
 import com.naoya0117.paperless.core.model.AuthToken
+import com.naoya0117.paperless.core.model.BulkEdit
 import com.naoya0117.paperless.core.model.CustomFieldDataType
 import com.naoya0117.paperless.core.model.CustomFieldDraft
 import com.naoya0117.paperless.core.model.DateRange
@@ -272,6 +273,48 @@ class RealServerSmokeTest {
 
             val visibility = admin.server.fetchSavedViewVisibility()
             assertEquals(listOf(views.getValue("Invoices").id), visibility.dashboardViewIds)
+        }
+
+    @Test
+    fun `bulk edit and trash round trip`() =
+        runTest {
+            val admin = client().signIn("admin", "admin-password").client
+            val finance = admin.tags.listAll().single { it.name == "Finance" }
+            val renewal =
+                admin.documents
+                    .list(
+                        DocumentQuery(search = DocumentSearch.Title("Contract renewal")),
+                    ).items
+                    .single()
+
+            admin.bulk.edit(listOf(renewal.id), BulkEdit.ModifyTags(add = setOf(finance.id)))
+            try {
+                assertTrue(finance.id in admin.documents.get(renewal.id).tagIds)
+            } finally {
+                admin.bulk.edit(listOf(renewal.id), BulkEdit.ModifyTags(remove = setOf(finance.id)))
+            }
+            assertTrue(finance.id !in admin.documents.get(renewal.id).tagIds)
+
+            admin.bulk.delete(listOf(renewal.id))
+            try {
+                assertEquals(
+                    listOf(renewal.id),
+                    admin.trash
+                        .list()
+                        .items
+                        .map { it.id },
+                )
+                assertFailsWith<PaperlessException.Http.NotFound> { admin.documents.get(renewal.id) }
+            } finally {
+                admin.trash.restore(listOf(renewal.id))
+            }
+            assertEquals(renewal.title, admin.documents.get(renewal.id).title)
+            assertTrue(
+                admin.trash
+                    .list()
+                    .items
+                    .isEmpty(),
+            )
         }
 
     @Test

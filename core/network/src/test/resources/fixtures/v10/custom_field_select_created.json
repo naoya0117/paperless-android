@@ -1,16 +1,16 @@
 {
-  "id": 32,
+  "id": 36,
   "name": "Temporary select",
   "data_type": "select",
   "extra_data": {
     "select_options": [
       {
         "label": "High",
-        "id": "8uXlnjtjpw0oLsSS"
+        "id": "r9WZdyqGgWawkoFR"
       },
       {
         "label": "Low",
-        "id": "dDizQUfICOwBUH4y"
+        "id": "lKUrfyIVdRLnhrnZ"
       }
     ]
   }

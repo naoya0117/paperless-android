@@ -77,6 +77,10 @@ FIXTURES = [
     "tasks_acknowledged",
     "saved_views",
     "ui_settings_saved_views",
+    "bulk_edit_ok",
+    "error_bulk_edit_documents",
+    "trash",
+    "trash_restored",
 ]
 # Documents uploaded once (looked up by title): title -> (text lines, created, tag names, correspondent).
 DOCUMENTS = {
@@ -499,6 +503,26 @@ def main():
         "sidebar_views_visible_ids": [view_ids["Invoices"], view_ids["No correspondent"]]}}})
     record(out, "saved_views", 200, request(base, "GET", "/api/saved_views/?page=1&page_size=25", token=admin_token))
     record(out, "ui_settings_saved_views", 200, request(base, "GET", "/api/ui_settings/", token=admin_token))
+    # Bulk operations and trash. Every change is undone so the sample documents stay as they are.
+    renewal = docs["Contract renewal"]
+    record(out, "bulk_edit_ok", 200, request(base, "POST", "/api/documents/bulk_edit/", token=admin_token, body={
+        "documents": [renewal], "method": "modify_tags",
+        "parameters": {"add_tags": [ids[("tags", "Finance")]], "remove_tags": []}}))
+    request(base, "POST", "/api/documents/bulk_edit/", token=admin_token, body={
+        "documents": [renewal], "method": "modify_tags",
+        "parameters": {"add_tags": [], "remove_tags": [ids[("tags", "Finance")]]}})
+    record(out, "error_bulk_edit_documents", 400, request(base, "POST", "/api/documents/bulk_edit/", token=admin_token,
+                                                          body={"documents": [999999], "method": "modify_tags",
+                                                                "parameters": {"add_tags": [], "remove_tags": []}}))
+    deleted = request(base, "POST", "/api/documents/delete/", token=admin_token, body={"documents": [renewal]})
+    if deleted[0] != 200:
+        raise SystemExit(f"deleting failed: HTTP {deleted[0]} {deleted[2][:200]!r}")
+    try:
+        record(out, "trash", 200, request(base, "GET", "/api/trash/?page=1&page_size=25", token=admin_token))
+    finally:
+        restored = request(base, "POST", "/api/trash/", token=admin_token,
+                           body={"documents": [renewal], "action": "restore"})
+    record(out, "trash_restored", 200, restored)
     record(out, "error_invalid_custom_field_query", 400,
            request(base, "GET", "/api/documents/?custom_field_query=%5B%22nope%22%5D", token=admin_token))
     # Last: exhaust the login throttle (it also counts the logins above).

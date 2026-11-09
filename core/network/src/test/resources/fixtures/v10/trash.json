@@ -1,0 +1,44 @@
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 2,
+      "correspondent": null,
+      "document_type": null,
+      "storage_path": null,
+      "title": "Contract renewal",
+      "content": "Dear customer\nYour electricity contract renewal\nKind regards",
+      "tags": [
+        3
+      ],
+      "created": "2026-09-15",
+      "created_date": "2026-09-15",
+      "modified": "2026-11-09T18:07:19.297657Z",
+      "added": "2026-11-09T16:59:34.001419Z",
+      "deleted_at": "2026-11-09T18:08:24.152499Z",
+      "archive_serial_number": null,
+      "original_file_name": "letter.pdf",
+      "archived_file_name": null,
+      "duplicate_documents": [],
+      "owner": 2,
+      "user_can_change": true,
+      "is_shared_by_requester": false,
+      "notes": [],
+      "custom_fields": [],
+      "page_count": 1,
+      "mime_type": "application/pdf",
+      "root_document": null,
+      "versions": [
+        {
+          "id": 2,
+          "added": "2026-11-09T16:59:34.001419Z",
+          "version_label": null,
+          "checksum": "12336a1dd4c358048aab7d8a07615a796a9f058facea39b1d9d84e62d8678315",
+          "is_root": true
+        }
+      ]
+    }
+  ]
+}
