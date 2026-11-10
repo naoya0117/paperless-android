@@ -41,12 +41,21 @@ android {
         applicationId = "com.naoya0117.paperless"
     }
 
-    // Release signing is configured only when all properties are provided
-    // (e.g. in ~/.gradle/gradle.properties or via ORG_GRADLE_PROJECT_* env vars).
+    // Release signing is configured only when all four values are provided: as Gradle properties
+    // `paperless.signing.<name>` (e.g. in ~/.gradle/gradle.properties), or as environment variables
+    // `PAPERLESS_SIGNING_<NAME>` (e.g. PAPERLESS_SIGNING_STORE_PASSWORD; used by the release workflow).
     // Without them the release APK is unsigned, which is what F-Droid expects.
     val signingProps =
         listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
-            .associateWith { providers.gradleProperty("paperless.signing.$it").orNull }
+            .associateWith { name ->
+                val env = "PAPERLESS_SIGNING_" + name.replace(Regex("([A-Z])"), "_$1").uppercase()
+                // An unset GitHub secret arrives as an empty variable; treat blank values as missing.
+                providers
+                    .gradleProperty("paperless.signing.$name")
+                    .filter { it.isNotBlank() }
+                    .orElse(providers.environmentVariable(env).filter { it.isNotBlank() })
+                    .orNull
+            }
     val releaseSigning =
         if (signingProps.values.all { it != null }) {
             signingConfigs.create("release") {

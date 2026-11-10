@@ -1,0 +1,162 @@
+# Release (CD) on the GitHub mirror: a pushed tag `vX.Y.Z` builds the release APK signed with the release key and
+# creates a draft GitHub release with it (published by hand after checking that APK on a device).
+# Development CI runs on Gitea (.gitea/workflows/); Gitea ignores this directory while .gitea/workflows exists,
+# and the job is also limited to github.com.
+#
+# Secrets (Settings → Secrets and variables → Actions):
+#   SIGNING_KEYSTORE_BASE64  the keystore file, base64-encoded
+#   SIGNING_STORE_PASSWORD   the keystore password
+#   SIGNING_KEY_ALIAS        the key alias
+#   SIGNING_KEY_PASSWORD     the key password (the same as the store password for PKCS12)
+# Put them in the environment "release" with a deployment rule for tags `v*`, so that only tag builds can read them.
+# Variable (optional, recommended):
+#   SIGNING_CERT_SHA256      the certificate's SHA-256 fingerprint; the build fails if the APK is signed otherwise
+# See docs/release.md.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 60
+    permissions:
+      contents: write # create the release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Do not leave the write token in .git/config while the build (third-party plugins) runs.
+          persist-credentials: false
+
+      - name: Check the tag against the version
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          name=$(sed -n 's/^paperless\.versionName=//p' gradle.properties)
+          if [ "$tag" != "v$name" ]; then
+            echo "::error::Tag $tag does not match paperless.versionName=$name in gradle.properties"
+            exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Extract the release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ steps.version.outputs.name }}
+        run: |
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found && /^\[[^]]+\]: / { next }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
+            echo "::error::CHANGELOG.md has no section '## [$VERSION]'"
+            exit 1
+          fi
+
+      - uses: gradle/actions/wrapper-validation@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-37.0 build-tools;36.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          # A release build should not reuse or write a cache that other branches could have influenced.
+          cache-disabled: true
+
+      - name: Write the keystore
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          for name in SIGNING_KEYSTORE_BASE64 SIGNING_STORE_PASSWORD SIGNING_KEY_ALIAS SIGNING_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::The secret $name is not set"
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+
+      - name: Build the release APK
+        env:
+          PAPERLESS_SIGNING_STORE_FILE: ${{ runner.temp }}/release.keystore
+          PAPERLESS_SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          PAPERLESS_SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          PAPERLESS_SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease --console=plain
+
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.keystore"
+
+      - name: Verify the signature
+        env:
+          EXPECTED_SHA256: ${{ vars.SIGNING_CERT_SHA256 }}
+        run: |
+          apk=app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$apk" ]; then
+            echo "::error::$apk was not built; are all four signing secrets set?"
+            exit 1
+          fi
+          certs=$("$ANDROID_HOME"/build-tools/36.0.0/apksigner verify --verbose --print-certs "$apk")
+          echo "$certs"
+          actual=$(echo "$certs" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          if [ -z "$actual" ]; then
+            echo "::error::Could not read the signing certificate's SHA-256 from apksigner"
+            exit 1
+          fi
+          if [ -n "$EXPECTED_SHA256" ]; then
+            # Accepts keytool's "SHA256: AB:CD:…" as well as apksigner's lowercase hex.
+            expected=$(echo "$EXPECTED_SHA256" | sed -E 's/^ *SHA-?256: *//I' | tr -d ': ' | tr 'A-F' 'a-f')
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::The APK is signed with $actual, expected $expected"
+              exit 1
+            fi
+          else
+            echo "::warning::The variable SIGNING_CERT_SHA256 is not set; the signing certificate was not checked"
+          fi
+          echo "CERT_SHA256=$actual" >> "$GITHUB_ENV"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.name }}
+        run: |
+          file="paperless-android-$VERSION.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$file"
+          sha256sum "$file" > "$file.sha256"
+          {
+            cat "$RUNNER_TEMP/notes.md"
+            echo
+            echo "---"
+            echo
+            echo "APK SHA-256: \`$(cut -d' ' -f1 "$file.sha256")\`"
+            echo
+            echo "Signing certificate SHA-256: \`$CERT_SHA256\`"
+          } > "$RUNNER_TEMP/body.md"
+          gh release create "$GITHUB_REF_NAME" "$file" "$file.sha256" \
+            --title "paperless-android $VERSION" \
+            --notes-file "$RUNNER_TEMP/body.md" \
+            --verify-tag \
+            --draft

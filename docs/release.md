@@ -12,6 +12,19 @@ F-Droid は GitHub のミラーからソースを取得してビルドします�
 6. [タグと公開](#6-タグと公開)
 7. [F-Droid への申請](#7-f-droid-への申請)（初回のみ。以降はタグから自動で更新）
 
+## Java（JDK）について
+
+鍵の作成（`keytool`）とターミナルからのビルドには JDK 17 以上が必要です。Android Studio に同梱の JDK が使えるので、
+別にインストールする必要はありません（macOS）。
+
+```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+export PATH="$JAVA_HOME/bin:$PATH"
+java -version
+```
+
+GitHub でのリリースのビルド（[6](#6-タグと公開)）は GitHub Actions 上で行うため、手元の JDK は使いません。
+
 ## 1. 署名鍵
 
 GitHub のリリースに添付する APK に、自分の鍵で署名するために使います。F-Droid で配布する APK は
@@ -63,14 +76,29 @@ paperless.signing.keyAlias=paperless-android
 paperless.signing.keyPassword=...
 ```
 
-ファイルに書かない場合は、環境変数でも渡せます。名前にドットを含むため `export` では設定できず、`env` を使います。
-
-```bash
-env 'ORG_GRADLE_PROJECT_paperless.signing.storePassword=…' 'ORG_GRADLE_PROJECT_paperless.signing.keyPassword=…' \
-  ./gradlew :app:assembleRelease
-```
-
+ファイルに書かない場合は、環境変数 `PAPERLESS_SIGNING_STORE_FILE`・`PAPERLESS_SIGNING_STORE_PASSWORD`・
+`PAPERLESS_SIGNING_KEY_ALIAS`・`PAPERLESS_SIGNING_KEY_PASSWORD` でも渡せます（GitHub でのリリースのビルドはこちら）。
 `-Ppaperless.signing.storePassword=…` でも渡せますが、コマンドの履歴やプロセスの一覧にパスワードが残ります。
+
+### GitHub への登録（リリースの自動化）
+
+[6](#6-タグと公開) のリリースは GitHub Actions（`.github/workflows/release.yml`）が自動で作ります。GitHub のリポジトリの
+Settings → Secrets and variables → Actions に、次を登録します。
+
+| 種類 | 名前 | 値 |
+|---|---|---|
+| Secret | `SIGNING_KEYSTORE_BASE64` | `base64 -i ~/keys/paperless-android-release.jks \| pbcopy` でコピーしたもの |
+| Secret | `SIGNING_STORE_PASSWORD` | ストアのパスワード |
+| Secret | `SIGNING_KEY_ALIAS` | `paperless-android` |
+| Secret | `SIGNING_KEY_PASSWORD` | ストアのパスワードと同じ値 |
+| Variable | `SIGNING_CERT_SHA256` | 証明書の SHA-256 フィンガープリント（`keytool` の表示のまま、コロン区切りでよい） |
+
+- Secrets は Settings → Environments で Environment `release` を作ってそこに登録し、Deployment branches and tags を
+  「Selected branches and tags」にしてタグ `v*` だけを許可します。こうするとタグのビルド以外からは鍵を読めません
+  （リポジトリの Secrets に登録しても動きますが、書き込み権限のある人が別のブランチのワークフローから読めます）。
+- `SIGNING_CERT_SHA256` を登録しておくと、別の鍵で署名された場合にリリースを作らずに失敗します。
+- Secrets を登録できるのはリポジトリの管理者だけです。GitHub の Actions のログにはマスクされて表示されます。
+- 鍵を Secrets に置くことになるため、GitHub のアカウントは 2 要素認証で保護します。
 
 ## 2. バージョンと変更履歴
 
@@ -220,11 +248,28 @@ adb shell am broadcast -a com.android.systemui.demo -e command exit
 git switch main && git pull --ff-only
 git tag -a v0.1.0 -m "paperless-android 0.1.0"
 git push origin v0.1.0
+# GitHub のミラーへ、main とタグを手動で push する
+git push <github のリモート> main v0.1.0
 ```
 
-- GitHub のミラーへ、main とタグを手動で push します（`git push <github のリモート> main v0.1.0`）。
-- GitHub でリリースを作り、署名した APK（`paperless-android-0.1.0.apk` に名前を変える）、
-  `CHANGELOG.md` の該当部分、証明書の SHA-256 フィンガープリント、APK ファイルの SHA-256（`sha256sum`）を載せます。
+GitHub にタグが届くと、GitHub Actions の Release（`.github/workflows/release.yml`）が次を行います
+（Gitea では動きません）。
+
+1. タグと `paperless.versionName` が一致すること、`CHANGELOG.md` に `## [x.y.z]` の節があることを確かめる
+2. Secrets の鍵で署名したリリースの APK をビルドし、署名の証明書が `SIGNING_CERT_SHA256` と一致することを確かめる
+3. GitHub のリリースを**下書き**で作り、`paperless-android-x.y.z.apk` とその SHA-256、`CHANGELOG.md` の該当の節、
+   証明書のフィンガープリントを載せる
+
+公開されるのは GitHub でビルドした APK で、[4](#4-実機での確認) で確認した手元の APK と同一とは限りません。
+下書きのリリースから APK をダウンロードして実機に入れ、起動・ログイン・一覧・ビューアーを軽く確認してから、
+GitHub の画面で「Publish release」を押して公開します。
+
+失敗した場合：
+
+- Secrets の設定漏れなど、タグの中身に関係しない原因なら、直してから「Re-run jobs」で再実行します。
+  リリースの作成の途中で失敗して下書きが残っている場合は、先にその下書きを削除します。
+- バージョンや `CHANGELOG.md` の誤り、コードの不具合はタグの中身なので再実行では直りません。直したうえで、
+  次のパッチバージョンとして出し直します。
 
 ## 7. F-Droid への申請
 
