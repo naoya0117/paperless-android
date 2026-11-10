@@ -4,12 +4,14 @@ import com.naoya0117.paperless.core.datastore.AccountCredentials
 import com.naoya0117.paperless.core.datastore.AccountStore
 import com.naoya0117.paperless.core.datastore.AccountsState
 import com.naoya0117.paperless.core.model.Account
+import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.AuthToken
 import com.naoya0117.paperless.core.network.HttpHeader
 import com.naoya0117.paperless.core.network.PaperlessClient
 import com.naoya0117.paperless.core.network.PaperlessClientConfig
 import com.naoya0117.paperless.core.network.PaperlessSession
 import com.naoya0117.paperless.core.network.ServerUrl
+import com.naoya0117.paperless.core.network.TlsConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -26,14 +28,22 @@ class AccountRepository
     constructor(
         private val store: AccountStore,
         private val clientFactory: PaperlessClientFactory,
+        private val clientCertificates: ClientCertificateSource,
     ) {
         val state: Flow<AccountsState> = store.state
 
-        private val clients = ConcurrentHashMap<String, Pair<Int, PaperlessClient>>()
+        private val clients = ConcurrentHashMap<String, CachedClient>()
+
+        private class CachedClient(
+            val revision: Int,
+            val account: Account,
+            val client: PaperlessClient,
+        )
 
         /**
          * A client for the active account, or `null` if there is none or it needs to sign in again.
-         * Emits a new client when the active account or its credentials change (e.g. after signing in again).
+         * Emits a new client when the active account, its credentials or its TLS settings change (e.g. after
+         * signing in again).
          */
         val activeClient: Flow<PaperlessClient?> =
             store.state
@@ -46,7 +56,8 @@ class AccountRepository
          *
          * @param serverUrl as typed by the user (see [ServerUrl.parse])
          * @param customHeaders extra headers for this server, e.g. for an authenticating proxy
-         * @throws IllegalArgumentException for an invalid server URL or header
+         * @param tls client certificate and additionally trusted certificates, needed already to sign in
+         * @throws IllegalArgumentException for an invalid server URL, header or certificate
          * @throws com.naoya0117.paperless.core.network.PaperlessException if signing in fails
          */
         suspend fun signIn(
@@ -55,9 +66,10 @@ class AccountRepository
             password: String,
             mfaCode: String? = null,
             customHeaders: List<Pair<String, String>> = emptyList(),
+            tls: AccountTls = AccountTls(),
         ): Account {
-            val client = unauthenticatedClient(serverUrl, customHeaders)
-            return save(client.signIn(username, password, mfaCode), customHeaders)
+            val client = unauthenticatedClient(serverUrl, customHeaders, tls)
+            return save(client.signIn(username, password, mfaCode), customHeaders, tls)
         }
 
         /** Like [signIn], with a token created in the Paperless web UI. */
@@ -65,12 +77,26 @@ class AccountRepository
             serverUrl: String,
             token: AuthToken,
             customHeaders: List<Pair<String, String>> = emptyList(),
+            tls: AccountTls = AccountTls(),
         ): Account {
-            val client = unauthenticatedClient(serverUrl, customHeaders)
-            return save(client.signIn(token), customHeaders)
+            val client = unauthenticatedClient(serverUrl, customHeaders, tls)
+            return save(client.signIn(token), customHeaders, tls)
         }
 
         suspend fun switchTo(accountId: String) = store.setActive(accountId)
+
+        /**
+         * Changes the account's TLS settings (e.g. a renewed client certificate); its client is rebuilt.
+         *
+         * @throws IllegalArgumentException if there is no such account or a certificate is invalid
+         */
+        suspend fun setTls(
+            accountId: String,
+            tls: AccountTls,
+        ) {
+            tls.trustedCertificates.forEach(TrustedCertificates::toX509) // rejects invalid ones before storing
+            store.setTls(accountId, tls)
+        }
 
         /**
          * Forgets the account and its secrets on this device. The token stays valid on the server (Paperless
@@ -90,7 +116,7 @@ class AccountRepository
             account: Account,
             revision: Int?,
         ): PaperlessClient? {
-            clients[account.id]?.let { (cachedRevision, client) -> if (cachedRevision == revision) return client }
+            clients[account.id]?.let { if (it.revision == revision && it.account == account) return it.client }
             val credentials = store.credentials(account.id) ?: return null
             val client =
                 clientFactory.create(
@@ -99,9 +125,10 @@ class AccountRepository
                         token = credentials.token,
                         apiVersion = account.apiVersion,
                         customHeaders = credentials.customHeaders.map { (name, value) -> HttpHeader(name, value) },
+                        tls = tlsConfig(account.tls),
                     ),
                 )
-            revision?.let { clients[account.id] = it to client }
+            revision?.let { clients[account.id] = CachedClient(it, account, client) }
             return client
         }
 
@@ -115,17 +142,31 @@ class AccountRepository
         private fun unauthenticatedClient(
             serverUrl: String,
             customHeaders: List<Pair<String, String>>,
+            tls: AccountTls,
         ): PaperlessClient =
             clientFactory.create(
                 PaperlessClientConfig(
                     serverUrl = ServerUrl.parse(serverUrl),
                     customHeaders = customHeaders.map { (name, value) -> HttpHeader(name, value) },
+                    tls = tlsConfig(tls),
                 ),
             )
+
+        /** `null` (platform defaults) when the account has no TLS settings. */
+        private fun tlsConfig(tls: AccountTls): TlsConfig? =
+            if (tls == AccountTls()) {
+                null
+            } else {
+                TlsConfig(
+                    keyManagers = listOfNotNull(tls.clientCertificateAlias?.let(clientCertificates::keyManager)),
+                    additionalTrustedCertificates = tls.trustedCertificates.map(TrustedCertificates::toX509),
+                )
+            }
 
         private suspend fun save(
             session: PaperlessSession,
             customHeaders: List<Pair<String, String>>,
+            tls: AccountTls,
         ): Account {
             val config = session.client.config
             val user = session.serverInfo.user
@@ -144,6 +185,7 @@ class AccountRepository
                     serverVersion = session.serverInfo.serverVersion,
                     customHeaderNames = customHeaders.map { it.first },
                     needsSignIn = false,
+                    tls = tls,
                 )
             store.save(account, AccountCredentials(session.token, customHeaders))
             return account

@@ -32,3 +32,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bulk operations (correspondent, document type, storage path, tags, custom fields, delete, reprocess) and the trash
 - Accounts: several accounts per device, switching, sign-out; tokens and custom header values encrypted with the
   Android Keystore
+- Per-account TLS settings: a client certificate from the Android KeyChain (mutual TLS) and certificates
+  (PEM or DER) trusted in addition to the device's trust store, e.g. a private CA or a self-signed certificate

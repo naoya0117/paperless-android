@@ -39,7 +39,11 @@ class AccountRepositoryTest {
         server.start()
         val store = AccountStore.create(folder.root.resolve("accounts.json"), XorCipher)
         repository =
-            AccountRepository(store, PaperlessClientFactory(OkHttpClient.Builder().proxy(Proxy.NO_PROXY).build()))
+            AccountRepository(
+                store,
+                PaperlessClientFactory(OkHttpClient.Builder().proxy(Proxy.NO_PROXY).build()),
+                { error("no client certificates in this test") },
+            )
     }
 
     @After
