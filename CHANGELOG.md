@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- README: the app on F-Droid will be signed by F-Droid, so it and the APK on GitHub cannot update each other
+
 ## [0.1.1] - 2026-11-10
 
 ### Added
