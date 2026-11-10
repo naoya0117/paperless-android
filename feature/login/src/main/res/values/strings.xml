@@ -55,4 +55,5 @@
         <item quantity="one">Too many attempts. Try again in %1$d second.</item>
         <item quantity="other">Too many attempts. Try again in %1$d seconds.</item>
     </plurals>
+    <string name="login_cancel">Cancel</string>
 </resources>

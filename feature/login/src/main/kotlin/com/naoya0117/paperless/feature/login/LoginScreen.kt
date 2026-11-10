@@ -25,9 +25,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -78,6 +82,8 @@ fun LoginScreen(
     onSignedIn: (Account) -> Unit,
     onRemoveAccount: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** Leaves without signing in (e.g. adding an account, or using another one); `null` if there is nowhere to go. */
+    onCancel: (() -> Unit)? = null,
     viewModel: LoginViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -110,6 +116,7 @@ fun LoginScreen(
                 removeTrustedCertificate = viewModel::removeTrustedCertificate,
                 submit = viewModel::submit,
                 removeAccount = { reSignInAccountId?.let(onRemoveAccount) },
+                cancel = onCancel,
             ),
         modifier = modifier,
     )
@@ -131,6 +138,7 @@ internal class LoginActions(
     val removeTrustedCertificate: (TrustedCertificate) -> Unit = {},
     val submit: () -> Unit = {},
     val removeAccount: () -> Unit = {},
+    val cancel: (() -> Unit)? = null,
 )
 
 @Composable
@@ -142,6 +150,8 @@ internal fun LoginContent(
     val enabled = !state.inProgress
     // Back from the code entry goes to the credentials rather than closing the app.
     BackHandler(enabled = state.step == LoginStep.MFA_CODE && enabled, onBack = actions.cancelMfa)
+    val cancel = actions.cancel
+    BackHandler(enabled = cancel != null && state.step == LoginStep.CREDENTIALS && enabled) { cancel?.invoke() }
     if (state.signedIn != null) {
         // Signed in: the app switches to its next screen in a moment.
         val description = stringResource(R.string.login_in_progress)
@@ -162,7 +172,18 @@ internal fun LoginContent(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         val title = if (state.reSignInAccountId != null) R.string.login_title_again else R.string.login_title
-        Text(text = stringResource(title), style = MaterialTheme.typography.headlineSmall)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(title),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.weight(1f),
+            )
+            if (cancel != null) {
+                IconButton(onClick = cancel, enabled = enabled) {
+                    Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.login_cancel))
+                }
+            }
+        }
         if (state.step == LoginStep.MFA_CODE) {
             MfaStep(state, actions, enabled, submitOnDone)
         } else {

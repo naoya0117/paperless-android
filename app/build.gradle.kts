@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.paperless.android.application)
+    alias(libs.plugins.paperless.robolectric)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
 }
@@ -66,4 +67,8 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
+
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.androidx.test.core)
 }

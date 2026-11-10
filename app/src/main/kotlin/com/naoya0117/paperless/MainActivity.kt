@@ -107,9 +107,10 @@ private fun App(
     viewModel: AppViewModel = hiltViewModel(),
 ) {
     val screen by viewModel.screen.collectAsStateWithLifecycle()
+    val accounts by viewModel.accountList.collectAsStateWithLifecycle()
     // Without an account the files cannot be uploaded; say so rather than dropping them silently.
     val context = LocalContext.current
-    if (screen is AppScreen.Login && sharedFiles.isNotEmpty()) {
+    if ((screen is AppScreen.Login || screen is AppScreen.AddAccount) && sharedFiles.isNotEmpty()) {
         LaunchedEffect(sharedFiles) {
             Toast.makeText(context, R.string.share_sign_in_first, Toast.LENGTH_LONG).show()
             onSharedFilesHandled()
@@ -126,6 +127,16 @@ private fun App(
                 reSignInAccountId = current.reSignInAccountId,
                 onSignedIn = {},
                 onRemoveAccount = viewModel::signOut,
+                onCancel = current.otherAccountId?.let { other -> { viewModel.switchTo(other) } },
+            )
+        // A login form of its own (not the first sign-in's), fresh for each attempt.
+        is AppScreen.AddAccount ->
+            LoginScreen(
+                reSignInAccountId = null,
+                onSignedIn = { viewModel.addAccountDone() },
+                onRemoveAccount = {},
+                onCancel = viewModel::addAccountDone,
+                viewModel = hiltViewModel(key = "add-account-${current.attempt}"),
             )
         is AppScreen.Home ->
             // A fresh shell per account; its view models live in a store the app view model clears.
@@ -138,6 +149,9 @@ private fun App(
                         account = current.account,
                         sharedFiles = sharedFiles,
                         onSharedFilesHandled = onSharedFilesHandled,
+                        accounts = accounts,
+                        onSwitchAccount = viewModel::switchTo,
+                        onAddAccount = viewModel::addAccount,
                         onSignOut = { viewModel.signOut(current.account.id) },
                     )
                 }

@@ -54,4 +54,5 @@
     <plurals name="login_error_rate_limited_seconds">
         <item quantity="other">試行回数が多すぎます。%1$d 秒後にやり直してください。</item>
     </plurals>
+    <string name="login_cancel">キャンセル</string>
 </resources>

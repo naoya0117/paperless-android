@@ -27,4 +27,6 @@
     <string name="share_no_files">アップロードできるファイルが共有されませんでした</string>
     <string name="drawer_labels">ラベル</string>
     <string name="drawer_views">ビュー</string>
+    <string name="drawer_accounts">アカウント</string>
+    <string name="drawer_add_account">アカウントを追加</string>
 </resources>

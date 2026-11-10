@@ -32,4 +32,6 @@
     <string name="share_no_files">No files to upload were shared</string>
     <string name="drawer_labels">Labels</string>
     <string name="drawer_views">Views</string>
+    <string name="drawer_accounts">Accounts</string>
+    <string name="drawer_add_account">Add account</string>
 </resources>
