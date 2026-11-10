@@ -19,8 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Monetary custom fields were rounded to whole numbers when the device's language uses a currency without
   decimals (e.g. Japanese: `EUR18.75` was shown as `€19`)
-- The build declares only the `google()` and `mavenCentral()` repositories, as F-Droid requires (the mirror the
-  CI uses for Robolectric is added there only)
+- The build declares only the `google()` and `mavenCentral()` dependency repositories, as F-Droid requires (the
+  mirror the CI uses for Robolectric is added there only)
+
+### Changed
+
+- README: installation from the GitHub releases, and the signing certificate's SHA-256 for checking the APK
 
 ## [0.1.0] - 2026-11-10
 
