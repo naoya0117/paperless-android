@@ -17,6 +17,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     api(libs.paging.common)
     api(libs.work.runtime)
+    implementation(libs.androidx.core.ktx)
 
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)

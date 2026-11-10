@@ -13,6 +13,7 @@ import androidx.room.Update
 import androidx.sqlite.SQLiteDriver
 import com.naoya0117.paperless.core.model.DocumentUpload
 import com.naoya0117.paperless.core.model.Upload
+import com.naoya0117.paperless.core.model.UploadError
 import com.naoya0117.paperless.core.model.UploadState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -47,10 +48,10 @@ class UploadQueue private constructor(
     ) = dao.insert(upload.toEntity(filePath))
 
     /** Replaces the stored state of an existing upload (matched by [Upload.id]); `false` if it is gone. */
-    suspend fun update(upload: Upload): Boolean {
-        val filePath = dao.get(upload.id)?.filePath ?: return false
-        return dao.update(upload.toEntity(filePath)) > 0
-    }
+    suspend fun update(upload: Upload): Boolean = dao.update(upload.toStatus()) > 0
+
+    /** Uploads not finished yet (e.g. to make sure they are scheduled). */
+    suspend fun unfinished(): List<Upload> = dao.unfinished().map { it.toModel() }
 
     /** Only updates the progress, so frequent calls stay cheap. */
     suspend fun setSentBytes(
@@ -110,9 +111,30 @@ internal data class UploadEntity(
     val taskId: String?,
     val documentId: Long?,
     val duplicateOfDocumentId: Long?,
+    val errorKind: String?,
     val error: String?,
     /** Epoch milliseconds. */
     val createdAt: Long,
+)
+
+/** The columns of [UploadEntity] that change while an upload runs. */
+internal data class UploadStatus(
+    val id: String,
+    val title: String?,
+    val created: String?,
+    val correspondentId: Long?,
+    val documentTypeId: Long?,
+    val storagePathId: Long?,
+    val tagIdsJson: String,
+    val archiveSerialNumber: Long?,
+    val customFieldsJson: String,
+    val state: String,
+    val sentBytes: Long,
+    val taskId: String?,
+    val documentId: Long?,
+    val duplicateOfDocumentId: Long?,
+    val errorKind: String?,
+    val error: String?,
 )
 
 @Dao
@@ -132,8 +154,12 @@ internal abstract class UploadDao {
     @Insert
     abstract suspend fun insert(upload: UploadEntity)
 
-    @Update
-    abstract suspend fun update(upload: UploadEntity): Int
+    /** Everything but the file. */
+    @Update(entity = UploadEntity::class)
+    abstract suspend fun update(status: UploadStatus): Int
+
+    @Query("SELECT * FROM uploads WHERE state NOT IN ('DONE', 'FAILED')")
+    abstract suspend fun unfinished(): List<UploadEntity>
 
     @Query("UPDATE uploads SET sentBytes = :sentBytes WHERE id = :id")
     abstract suspend fun setSentBytes(
@@ -171,9 +197,32 @@ private fun Upload.toEntity(filePath: String) =
         taskId = taskId,
         documentId = documentId,
         duplicateOfDocumentId = duplicateOfDocumentId,
+        errorKind = errorKind?.name,
         error = error,
         createdAt = createdAt.toEpochMilli(),
     )
+
+private fun Upload.toStatus() =
+    toEntity("").let {
+        UploadStatus(
+            it.id,
+            it.title,
+            it.created,
+            it.correspondentId,
+            it.documentTypeId,
+            it.storagePathId,
+            it.tagIdsJson,
+            it.archiveSerialNumber,
+            it.customFieldsJson,
+            it.state,
+            it.sentBytes,
+            it.taskId,
+            it.documentId,
+            it.duplicateOfDocumentId,
+            it.errorKind,
+            it.error,
+        )
+    }
 
 private fun UploadEntity.toModel() =
     Upload(
@@ -199,6 +248,11 @@ private fun UploadEntity.toModel() =
         taskId = taskId,
         documentId = documentId,
         duplicateOfDocumentId = duplicateOfDocumentId,
+        errorKind =
+            errorKind?.let { kind ->
+                UploadError.entries.firstOrNull { it.name == kind }
+                    ?: UploadError.UNEXPECTED
+            },
         error = error,
         createdAt = Instant.ofEpochMilli(createdAt),
     )

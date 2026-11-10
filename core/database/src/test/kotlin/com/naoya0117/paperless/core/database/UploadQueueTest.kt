@@ -6,6 +6,7 @@ import com.naoya0117.paperless.core.model.CustomFieldValue
 import com.naoya0117.paperless.core.model.DocumentUpload
 import com.naoya0117.paperless.core.model.FieldValue
 import com.naoya0117.paperless.core.model.Upload
+import com.naoya0117.paperless.core.model.UploadError
 import com.naoya0117.paperless.core.model.UploadState
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -52,6 +53,7 @@ class UploadQueueTest {
         taskId = null,
         documentId = null,
         duplicateOfDocumentId = null,
+        errorKind = null,
         error = null,
         createdAt = Instant.ofEpochMilli(createdAt),
     )
@@ -74,11 +76,15 @@ class UploadQueueTest {
         runTest {
             queue.add(upload("1"), "/files/1")
             val done = upload("1").copy(state = UploadState.DONE, taskId = "t", documentId = 12, sentBytes = 10)
+            val failed = upload("1").copy(state = UploadState.FAILED, errorKind = UploadError.DUPLICATE, error = "dup")
 
             queue.update(done)
             queue.setSentBytes("1", 7)
 
             assertEquals(done.copy(sentBytes = 7), queue.get("1"))
+            assertEquals(emptyList<Upload>(), queue.unfinished())
+            queue.update(failed)
+            assertEquals(failed, queue.get("1"))
             assertEquals("/files/1", queue.filePath("1"))
             queue.remove("1")
             assertNull(queue.get("1"))

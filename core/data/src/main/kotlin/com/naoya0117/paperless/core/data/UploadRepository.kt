@@ -3,6 +3,7 @@ package com.naoya0117.paperless.core.data
 import com.naoya0117.paperless.core.database.UploadQueue
 import com.naoya0117.paperless.core.model.DocumentUpload
 import com.naoya0117.paperless.core.model.Upload
+import com.naoya0117.paperless.core.model.UploadError
 import com.naoya0117.paperless.core.model.UploadState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -41,8 +42,16 @@ class UploadStorage(
 
 /** Runs uploads in the background (WorkManager in the app). */
 interface UploadScheduler {
-    /** Runs the upload when a network connection is available; replaces a pending run of the same upload. */
-    fun schedule(uploadId: String)
+    /**
+     * Runs the upload when a network connection is available.
+     *
+     * @param replace whether to replace a pending or running run of the same upload; otherwise an existing
+     *   one is kept (e.g. to make sure an upload is scheduled at all)
+     */
+    fun schedule(
+        uploadId: String,
+        replace: Boolean = true,
+    )
 
     fun cancel(uploadId: String)
 }
@@ -86,14 +95,17 @@ class UploadRepository internal constructor(
         val id = UUID.randomUUID().toString()
         val file = File(storage.directory, id)
         val size =
-            withContext(Dispatchers.IO) {
-                storage.directory.mkdirs()
-                try {
+            try {
+                withContext(Dispatchers.IO) {
+                    storage.directory.mkdirs()
                     source.open().use { input -> file.outputStream().use { input.copyTo(it) } }
-                } catch (e: java.io.IOException) {
-                    file.delete()
-                    throw e
                 }
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Throwable,
+            ) {
+                // Including cancellation: never leave a partial copy behind.
+                withContext(NonCancellable + Dispatchers.IO) { file.delete() }
+                throw e
             }
         val upload =
             Upload(
@@ -108,6 +120,7 @@ class UploadRepository internal constructor(
                 taskId = null,
                 documentId = null,
                 duplicateOfDocumentId = null,
+                errorKind = null,
                 error = null,
                 // Stored in milliseconds.
                 createdAt = clock.instant().truncatedTo(ChronoUnit.MILLIS),
@@ -120,32 +133,79 @@ class UploadRepository internal constructor(
             withContext(NonCancellable + Dispatchers.IO) { file.delete() }
             throw e
         }
+        // Signed out while copying: the sign-out already cleared the account's uploads.
+        if (accounts.state
+                .first()
+                .accounts
+                .none { it.id == account.id }
+        ) {
+            remove(id)
+            throw NotSignedInException()
+        }
         scheduler.schedule(id)
         return upload
     }
 
     /**
-     * Sends a failed upload again from the start. Does nothing for uploads that did not fail.
+     * Tries a failed upload again: if the server already has the file (the failure came after sending, e.g. a
+     * lost session), only its processing is checked again; otherwise the file is sent again. An upload that is
+     * not failed is only scheduled again (in case its work was lost).
      *
-     * @return `false` if the upload is gone or its file was already deleted
+     * @return `false` if the upload is gone, or its file was already deleted and it would have to be sent
      */
     suspend fun retry(id: String): Boolean {
         val upload = queue.get(id) ?: return false
-        if (upload.state != UploadState.FAILED) return true
-        val path = queue.filePath(id) ?: return false
-        if (!withContext(Dispatchers.IO) { File(path).exists() }) return false
-        queue.update(
-            upload.copy(
-                state = UploadState.QUEUED,
-                sentBytes = 0,
-                taskId = null,
-                documentId = null,
-                duplicateOfDocumentId = null,
-                error = null,
-            ),
-        )
+        if (upload.state != UploadState.FAILED) {
+            scheduler.schedule(id, replace = false)
+            return true
+        }
+        val processingKnown =
+            upload.taskId != null &&
+                upload.errorKind != UploadError.PROCESSING_FAILED &&
+                upload.errorKind != UploadError.DUPLICATE
+        val retried =
+            if (processingKnown) {
+                upload.copy(state = UploadState.PROCESSING, errorKind = null, error = null)
+            } else {
+                val path = queue.filePath(id) ?: return false
+                if (!withContext(Dispatchers.IO) { File(path).exists() }) return false
+                upload.copy(
+                    state = UploadState.QUEUED,
+                    sentBytes = 0,
+                    taskId = null,
+                    documentId = null,
+                    duplicateOfDocumentId = null,
+                    errorKind = null,
+                    error = null,
+                )
+            }
+        queue.update(retried)
         scheduler.schedule(id)
         return true
+    }
+
+    /**
+     * Repairs the queue after the process was killed, e.g. at app start: makes sure unfinished uploads are
+     * scheduled, drops uploads of accounts that no longer exist, and deletes stored files no upload refers to.
+     */
+    suspend fun reconcile() {
+        val accountIds =
+            accounts.state
+                .first()
+                .accounts
+                .mapTo(mutableSetOf()) { it.id }
+        for (upload in queue.unfinished()) {
+            if (upload.accountId in accountIds) scheduler.schedule(upload.id, replace = false) else remove(upload.id)
+        }
+        val referenced = queue.allFilePaths()
+        val cutoff = clock.millis() - ORPHAN_AGE_MILLIS
+        withContext(Dispatchers.IO) {
+            // Recent files may belong to an enqueue that has not stored its upload yet.
+            storage.directory
+                .listFiles()
+                ?.filter { it.path !in referenced && it.lastModified() < cutoff }
+                ?.forEach { it.delete() }
+        }
     }
 
     /** Cancels the upload if it is still pending and forgets it, deleting the stored file. */
@@ -156,8 +216,15 @@ class UploadRepository internal constructor(
         path?.let { withContext(Dispatchers.IO) { File(it).delete() } }
     }
 
-    /** Cancels and deletes every upload of the account, e.g. after signing out. */
+    /**
+     * Cancels and deletes every upload of the account, e.g. after signing out. A file being sent at that
+     * moment may still reach the server.
+     */
     suspend fun clear(accountId: String) {
         queue.forAccount(accountId).forEach { remove(it.id) }
+    }
+
+    private companion object {
+        const val ORPHAN_AGE_MILLIS = 60 * 60 * 1000L
     }
 }

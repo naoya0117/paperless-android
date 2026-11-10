@@ -8,6 +8,7 @@ import com.naoya0117.paperless.core.datastore.SecretCipher
 import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.AuthToken
 import com.naoya0117.paperless.core.model.DocumentUpload
+import com.naoya0117.paperless.core.model.UploadError
 import com.naoya0117.paperless.core.model.UploadState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -32,6 +33,10 @@ import org.robolectric.RobolectricTestRunner
 import java.io.File
 import java.io.IOException
 import java.net.Proxy
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration.Companion.milliseconds
@@ -49,6 +54,18 @@ class UploadRepositoryTest {
     private lateinit var storageDir: File
 
     private val scheduled = CopyOnWriteArrayList<String>()
+    private val clock = MutableClock()
+
+    private class MutableClock(
+        var now: Instant = Instant.parse("2026-11-10T00:00:00Z"),
+    ) : Clock() {
+        override fun getZone(): ZoneId = ZoneOffset.UTC
+
+        override fun withZone(zone: ZoneId?): Clock = this
+
+        override fun instant(): Instant = now
+    }
+
     private val cancelled = CopyOnWriteArrayList<String>()
 
     /** Responses by "METHOD path", served once each; requests without one get the defaults below. */
@@ -123,15 +140,18 @@ class UploadRepositoryTest {
         storageDir = folder.newFolder("uploads")
         val scheduler =
             object : UploadScheduler {
-                override fun schedule(uploadId: String) {
-                    scheduled += uploadId
+                override fun schedule(
+                    uploadId: String,
+                    replace: Boolean,
+                ) {
+                    scheduled += if (replace) uploadId else "keep:$uploadId"
                 }
 
                 override fun cancel(uploadId: String) {
                     cancelled += uploadId
                 }
             }
-        uploads = UploadRepository(accounts, queue, scheduler, UploadStorage(storageDir))
+        uploads = UploadRepository(accounts, queue, scheduler, UploadStorage(storageDir), clock)
         processor = UploadProcessor(accounts, queue, processingWait = 300.milliseconds)
     }
 
@@ -142,7 +162,10 @@ class UploadRepositoryTest {
         accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls()).id
 
     /** In real time: the processor's timeouts must not run on the test's virtual clock. */
-    private suspend fun process(id: String) = withContext(Dispatchers.IO) { processor.process(id) }
+    private suspend fun process(
+        id: String,
+        attempt: Int = 0,
+    ) = withContext(Dispatchers.IO) { processor.process(id, attempt) }
 
     private suspend fun enqueue(content: String = "%PDF-1.7 hello") =
         uploads.enqueue(
@@ -219,6 +242,7 @@ class UploadRepositoryTest {
             assertEquals(UploadProcessor.Outcome.FINISHED, process(upload.id))
             val failed = queue.get(upload.id)!!
             assertEquals(UploadState.FAILED, failed.state)
+            assertEquals(UploadError.REJECTED, failed.errorKind)
             assertTrue(failed.error.orEmpty(), failed.error.orEmpty().isNotEmpty())
 
             scheduled.clear()
@@ -245,6 +269,7 @@ class UploadRepositoryTest {
             val failed = queue.get(upload.id)!!
             assertEquals(UploadState.FAILED, failed.state)
             assertEquals(7L, failed.duplicateOfDocumentId)
+            assertEquals(UploadError.DUPLICATE, failed.errorKind)
             assertEquals("Not consuming scan.pdf: It is a duplicate.", failed.error)
             assertTrue("kept for a retry", File(storageDir, upload.id).exists())
         }
@@ -287,5 +312,95 @@ class UploadRepositoryTest {
             assertTrue(unreadable.exceptionOrNull() is IOException)
             assertEquals(emptyList<Any>(), uploads.uploads.first())
             assertEquals(emptyList<String>(), storageDir.list()!!.toList())
+        }
+
+    @Test
+    fun `an unexpected failure is recorded instead of leaving the upload running`() =
+        runTest {
+            signIn()
+            val upload = enqueue()
+            respond("POST /api/documents/post_document/", json(200, "not json"))
+
+            assertEquals(UploadProcessor.Outcome.FINISHED, process(upload.id))
+
+            val failed = queue.get(upload.id)!!
+            assertEquals(UploadState.FAILED, failed.state)
+            assertTrue(failed.errorKind == UploadError.UNEXPECTED)
+        }
+
+    @Test
+    fun `retrying after a failure that came after sending does not send again`() =
+        runTest {
+            signIn()
+            val upload = enqueue()
+            respond("GET /api/tasks/", json(401, """{"detail": "Invalid token."}"""))
+            process(upload.id)
+            assertEquals(UploadError.SIGN_IN_REQUIRED, queue.get(upload.id)?.errorKind)
+
+            assertTrue(uploads.retry(upload.id))
+            assertEquals(UploadState.PROCESSING, queue.get(upload.id)?.state)
+            respond("GET /api/tasks/", task("success", """{"document_id": 12}"""))
+            process(upload.id)
+
+            assertEquals(12L, queue.get(upload.id)?.documentId)
+            assertEquals(1, uploadBodies.size)
+        }
+
+    @Test
+    fun `a file sent again after a crash counts as done when the server already has it`() =
+        runTest {
+            signIn()
+            val upload = enqueue()
+            // As if the process died after the server took the file but before the task was stored.
+            queue.update(upload.copy(state = UploadState.UPLOADING))
+            respond(
+                "GET /api/tasks/",
+                task("failure", """{"error_message": "It is a duplicate.", "duplicate_of": 7}"""),
+            )
+
+            process(upload.id)
+
+            val done = queue.get(upload.id)!!
+            assertEquals(UploadState.DONE, done.state)
+            assertEquals(7L, done.documentId)
+        }
+
+    @Test
+    fun `an upload whose processing is never reported fails after the last attempt`() =
+        runTest {
+            signIn()
+            val upload = enqueue()
+
+            assertEquals(
+                UploadProcessor.Outcome.FINISHED,
+                process(upload.id, attempt = UploadProcessor.MAX_ATTEMPTS - 1),
+            )
+
+            val failed = queue.get(upload.id)!!
+            assertEquals(UploadState.FAILED, failed.state)
+            assertEquals(UploadError.NOT_REPORTED, failed.errorKind)
+            assertEquals("task-1", failed.taskId)
+        }
+
+    @Test
+    fun `reconciling reschedules unfinished uploads and deletes leftovers`() =
+        runTest {
+            signIn()
+            val upload = enqueue()
+            val orphan = File(storageDir, "orphan").apply { writeText("x") }
+            orphan.setLastModified(0)
+            val recent = File(storageDir, "recent").apply { writeText("x") }
+            recent.setLastModified(clock.millis())
+            val elsewhere = upload.copy(id = "gone", accountId = "removed-account")
+            queue.add(elsewhere, File(storageDir, "gone").apply { writeText("x") }.path)
+            scheduled.clear()
+
+            uploads.reconcile()
+
+            assertEquals(listOf("keep:${upload.id}"), scheduled)
+            assertFalse(orphan.exists())
+            assertTrue("may belong to an enqueue in progress", recent.exists())
+            assertNull(queue.get("gone"))
+            assertTrue(File(storageDir, upload.id).exists())
         }
 }
