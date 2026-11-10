@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -407,12 +408,13 @@ private fun DocumentRow(
 internal fun ThumbnailImage(
     accountId: String?,
     document: Document,
-    modifier: Modifier = Modifier.size(width = THUMBNAIL_WIDTH.dp, height = THUMBNAIL_HEIGHT.dp),
+    size: DpSize = DpSize(THUMBNAIL_WIDTH.dp, THUMBNAIL_HEIGHT.dp),
 ) {
     val shape = RoundedCornerShape(8.dp)
     Box(
         modifier =
-            modifier
+            Modifier
+                .size(size)
                 .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceContainer)
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape),

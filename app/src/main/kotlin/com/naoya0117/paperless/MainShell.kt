@@ -434,7 +434,7 @@ fun MainShell(
                                 },
                                 snackbar = snackbar,
                                 modifier = Modifier.padding(padding),
-                                // The inbox count is shown on the documents tab only.
+                                // The inbox count is shown on the home and documents tabs (home refreshes it itself).
                                 onRefresh = { if (path == DOCUMENTS_ROUTE) inbox.refresh(force = true) },
                             )
                         }
@@ -578,7 +578,7 @@ private fun TabBar(
                 onClick =
                     dropUnlessResumed {
                         navController.navigate(item.route) {
-                            // The documents tab is the root; the others come back to it on Back.
+                            // The home tab is the root; the others come back to it on Back.
                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                             launchSingleTop = true
                             restoreState = true

@@ -109,4 +109,5 @@
     <string name="home_view_failed">Could not load the documents</string>
     <string name="home_view_empty">No documents</string>
     <string name="home_no_views">Saved views shown on the dashboard appear here. Choose them in the web interface (Settings → Saved views → Show on dashboard).</string>
+    <string name="home_load_failed">The dashboard could not be loaded. Check the connection and pull to refresh.</string>
 </resources>

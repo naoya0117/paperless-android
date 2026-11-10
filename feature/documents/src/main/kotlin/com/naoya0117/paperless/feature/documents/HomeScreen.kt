@@ -29,12 +29,16 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -77,7 +81,8 @@ fun HomeScreen(
                     Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) { CircularProgressIndicator() }
-            views.isEmpty() -> NoViews()
+            views.isEmpty() && state.loadFailed -> NoViews(stringResource(R.string.home_load_failed))
+            views.isEmpty() -> NoViews(stringResource(R.string.home_no_views))
             else ->
                 LazyColumn(
                     contentPadding = PaddingValues(vertical = 8.dp),
@@ -110,8 +115,15 @@ private fun ViewSection(
     onOpenView: () -> Unit,
 ) {
     val pages = remember(view) { viewModel.pages(view) }.collectAsLazyPagingItems()
-    // A pull to refresh refreshes the views' documents too (not when first shown: they load anyway).
-    LaunchedEffect(refreshCount) { if (refreshCount > 0) pages.refresh() }
+    // A pull to refresh refreshes the views' documents too: each pull once (not again when the section comes
+    // back into view; when first shown they load anyway).
+    var handled by rememberSaveable(view.id) { mutableIntStateOf(refreshCount) }
+    LaunchedEffect(refreshCount) {
+        if (refreshCount > handled) {
+            handled = refreshCount
+            pages.refresh()
+        }
+    }
     Column {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -164,7 +176,7 @@ private fun DocumentCard(
                 ).clickable(onClickLabel = stringResource(R.string.documents_open), onClick = onClick),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        ThumbnailImage(accountId, document, Modifier.size(width = CARD_WIDTH, height = CARD_IMAGE_HEIGHT))
+        ThumbnailImage(accountId, document, DpSize(CARD_WIDTH, CARD_IMAGE_HEIGHT))
         Text(
             document.title,
             style = MaterialTheme.typography.bodyMedium,
@@ -184,9 +196,9 @@ private fun SectionMessage(text: String) {
     )
 }
 
-/** No view on the dashboard: how to add some (scrollable, so that pull to refresh works). */
+/** No view on the dashboard (how to add some), or not loaded; scrollable, so that pull to refresh works. */
 @Composable
-private fun NoViews() {
+private fun NoViews(text: String) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -199,7 +211,7 @@ private fun NoViews() {
             modifier = Modifier.padding(top = 48.dp).size(48.dp),
         )
         Text(
-            stringResource(R.string.home_no_views),
+            text,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

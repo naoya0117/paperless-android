@@ -15,13 +15,17 @@ import com.naoya0117.paperless.core.network.toDocumentQuery
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -31,6 +35,8 @@ data class HomeState(
     /** The views on the dashboard, in its order; `null` until known (from the server or saved before). */
     val views: List<SavedView>? = null,
     val refreshing: Boolean = false,
+    /** The dashboard setting could not be loaded (offline, and not known from before). */
+    val loadFailed: Boolean = false,
 )
 
 /**
@@ -48,15 +54,19 @@ class HomeViewModel
     ) : ViewModel() {
         private val dashboardIds = MutableStateFlow<List<Long>?>(null)
         private val refreshing = MutableStateFlow(false)
+        private val loadFailed = MutableStateFlow(false)
         private val refreshes = MutableStateFlow(0)
 
+        /** Whether the dashboard setting came from the server (not only saved from before). */
+        private var fetched = false
+
         val state: StateFlow<HomeState> =
-            combine(labels.savedViews.items, dashboardIds, refreshing) { views, ids, refreshing ->
+            combine(labels.savedViews.items, dashboardIds, refreshing, loadFailed) { views, ids, refreshing, failed ->
                 val byId = views.associateBy { it.id }
-                HomeState(ids?.mapNotNull(byId::get), refreshing)
+                HomeState(ids?.distinct()?.mapNotNull(byId::get), refreshing, failed)
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeState())
 
-        /** Counts pulls to refresh: the views' lists refresh then too. */
+        /** Counts pulls to refresh: the views' lists refresh then too (each pull once). */
         val refreshCount: StateFlow<Int> = refreshes.asStateFlow()
 
         /** For thumbnails ([DocumentThumbnail]), which are cached per account. */
@@ -65,7 +75,8 @@ class HomeViewModel
                 .map { it.activeAccountId }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
-        private val pages = HashMap<SavedView, Flow<PagingData<Document>>>()
+        /** Per view ID: the view the flow is for, and the flow (replaced when the view changes). */
+        private val pages = HashMap<Long, Pair<SavedView, Flow<PagingData<Document>>>>()
 
         init {
             viewModelScope.launch {
@@ -76,16 +87,39 @@ class HomeViewModel
                     ?.let { dashboardIds.value = savedIds(it) }
                 load()
             }
+            // Not fetched yet (e.g. started offline): again once the views were refreshed (e.g. back online).
+            viewModelScope.launch {
+                labels.savedViews.refreshedAt.distinctUntilChanged().collect {
+                    if (!fetched && !refreshing.value) load()
+                }
+            }
         }
 
-        /** The documents of [view] (its first page is shown), kept while the screen lives. */
-        fun pages(view: SavedView): Flow<PagingData<Document>> =
-            pages.getOrPut(view) { documents.documents(view.toDocumentQuery()).cachedIn(viewModelScope) }
+        /** The documents of [view] (its first ones are shown), kept while the screen lives. */
+        @OptIn(ExperimentalCoroutinesApi::class)
+        fun pages(view: SavedView): Flow<PagingData<Document>> {
+            pages[view.id]?.takeIf { it.first == view }?.let { return it.second }
+            // Like the view's list (DocumentListViewModel): a sort by a deleted custom field falls back.
+            val flow =
+                combine(labels.customFields.items, labels.customFields.refreshedAt) { fields, refreshedAt ->
+                    view.toDocumentQuery(existingCustomFieldIds = refreshedAt?.let { fields.map { it.id }.toSet() })
+                }.distinctUntilChanged()
+                    .flatMapLatest { query ->
+                        try {
+                            documents.documents(query)
+                        } catch (_: IllegalArgumentException) {
+                            // Conditions this app cannot combine: nothing rather than a crash.
+                            flowOf(PagingData.empty())
+                        }
+                    }.cachedIn(viewModelScope)
+            pages[view.id] = view to flow
+            return flow
+        }
 
         fun refresh() {
-            if (refreshing.value) return
+            // The views' lists refresh in any case; the dashboard setting once at a time.
             refreshes.value++
-            viewModelScope.launch { load() }
+            if (!refreshing.value) viewModelScope.launch { load() }
         }
 
         private suspend fun load() {
@@ -101,23 +135,28 @@ class HomeViewModel
             }
             try {
                 val session = accounts.currentSession()
-                val ids =
-                    session
-                        ?.client
-                        ?.server
-                        ?.fetchSavedViewVisibility()
-                        ?.dashboardViewIds
-                if (session != null && ids != null) {
+                if (session == null) {
+                    if (dashboardIds.value == null) dashboardIds.value = emptyList()
+                } else {
+                    val ids =
+                        session.client.server
+                            .fetchSavedViewVisibility()
+                            .dashboardViewIds
                     dashboardIds.value = ids
                     saveIds(session.account.id, ids)
+                    fetched = true
+                    loadFailed.value = false
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (
                 @Suppress("TooGenericExceptionCaught") _: Exception,
             ) {
-                // Offline: as saved before (or none).
-                if (dashboardIds.value == null) dashboardIds.value = emptyList()
+                // Offline: as saved before (or none, then said so).
+                if (dashboardIds.value == null) {
+                    dashboardIds.value = emptyList()
+                    loadFailed.value = true
+                }
             } finally {
                 refreshing.value = false
             }
@@ -134,6 +173,12 @@ class HomeViewModel
         ) = preferences.edit { putString(KEY_PREFIX + accountId, ids.joinToString(",")) }
 
         companion object {
+            /** Forgets the account's saved dashboard setting (when it signs out). */
+            fun clear(
+                context: Context,
+                accountId: String,
+            ) = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE).edit { remove(KEY_PREFIX + accountId) }
+
             private const val PREFERENCES = "home"
             private const val KEY_PREFIX = "dashboard_views."
             private const val STOP_TIMEOUT_MILLIS = 5_000L

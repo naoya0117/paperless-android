@@ -107,4 +107,5 @@
     <string name="home_view_failed">文書を読み込めませんでした</string>
     <string name="home_view_empty">文書はありません</string>
     <string name="home_no_views">ダッシュボードに表示する保存済みビューがここに並びます。Web 画面の「設定 → 保存済みビュー → ダッシュボードに表示」で選べます。</string>
+    <string name="home_load_failed">ダッシュボードを読み込めませんでした。接続を確認して、引っ張って更新してください。</string>
 </resources>
