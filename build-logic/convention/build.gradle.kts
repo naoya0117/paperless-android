@@ -31,6 +31,10 @@ gradlePlugin {
             id = libs.plugins.paperless.android.library.get().pluginId
             implementationClass = "com.naoya0117.paperless.buildlogic.AndroidLibraryConventionPlugin"
         }
+        register("robolectric") {
+            id = libs.plugins.paperless.robolectric.get().pluginId
+            implementationClass = "com.naoya0117.paperless.buildlogic.RobolectricConventionPlugin"
+        }
         register("jvmLibrary") {
             id = libs.plugins.paperless.jvm.library.get().pluginId
             implementationClass = "com.naoya0117.paperless.buildlogic.JvmLibraryConventionPlugin"

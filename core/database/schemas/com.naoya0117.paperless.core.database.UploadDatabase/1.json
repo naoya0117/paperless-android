@@ -1,0 +1,145 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "4d53daa0b76562f8f8f76d180e091e6f",
+    "entities": [
+      {
+        "tableName": "uploads",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `accountId` TEXT NOT NULL, `fileName` TEXT NOT NULL, `mimeType` TEXT, `size` INTEGER NOT NULL, `filePath` TEXT NOT NULL, `title` TEXT, `created` TEXT, `correspondentId` INTEGER, `documentTypeId` INTEGER, `storagePathId` INTEGER, `tagIdsJson` TEXT NOT NULL, `archiveSerialNumber` INTEGER, `customFieldsJson` TEXT NOT NULL, `state` TEXT NOT NULL, `sentBytes` INTEGER NOT NULL, `taskId` TEXT, `documentId` INTEGER, `duplicateOfDocumentId` INTEGER, `errorKind` TEXT, `error` TEXT, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fileName",
+            "columnName": "fileName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mimeType",
+            "columnName": "mimeType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "size",
+            "columnName": "size",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "filePath",
+            "columnName": "filePath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "created",
+            "columnName": "created",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "correspondentId",
+            "columnName": "correspondentId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "documentTypeId",
+            "columnName": "documentTypeId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "storagePathId",
+            "columnName": "storagePathId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "tagIdsJson",
+            "columnName": "tagIdsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archiveSerialNumber",
+            "columnName": "archiveSerialNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "customFieldsJson",
+            "columnName": "customFieldsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sentBytes",
+            "columnName": "sentBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "taskId",
+            "columnName": "taskId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "documentId",
+            "columnName": "documentId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "duplicateOfDocumentId",
+            "columnName": "duplicateOfDocumentId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "errorKind",
+            "columnName": "errorKind",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "error",
+            "columnName": "error",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4d53daa0b76562f8f8f76d180e091e6f')"
+    ]
+  }
+}

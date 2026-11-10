@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <lint>
-    <!-- Pinned to the androidx.sqlite version Room depends on; see gradle/libs.versions.toml. -->
+    <!--
+        Pinned on purpose (see gradle/libs.versions.toml):
+        - sqlite-bundled-jvm: the androidx.sqlite version Room depends on
+        - android-all-instrumented: exactly the jar Robolectric expects for its SDK
+    -->
     <issue id="GradleDependency">
         <ignore regexp="androidx\.sqlite:sqlite-bundled-jvm" />
+        <ignore regexp="org\.robolectric:android-all-instrumented" />
+    </issue>
+    <issue id="NewerVersionAvailable">
+        <ignore regexp="org\.robolectric:android-all-instrumented" />
     </issue>
 </lint>

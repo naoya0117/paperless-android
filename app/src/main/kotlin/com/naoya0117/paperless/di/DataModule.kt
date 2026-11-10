@@ -1,18 +1,28 @@
 package com.naoya0117.paperless.di
 
 import android.content.Context
+import androidx.work.WorkManager
 import com.naoya0117.paperless.core.data.AccountDataCleaner
 import com.naoya0117.paperless.core.data.ClientCertificateSource
 import com.naoya0117.paperless.core.data.KeyChainClientCertificateSource
+import com.naoya0117.paperless.core.data.UploadProcessor
+import com.naoya0117.paperless.core.data.UploadRepository
+import com.naoya0117.paperless.core.data.UploadScheduler
+import com.naoya0117.paperless.core.data.UploadStorage
+import com.naoya0117.paperless.core.data.UploadWorkerFactory
+import com.naoya0117.paperless.core.data.WorkManagerUploadScheduler
 import com.naoya0117.paperless.core.database.OfflineCache
+import com.naoya0117.paperless.core.database.UploadQueue
 import com.naoya0117.paperless.core.datastore.AccountStore
 import com.naoya0117.paperless.core.datastore.AndroidKeystoreCipher
+import dagger.Lazy
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import java.io.File
+import javax.inject.Provider
 import javax.inject.Singleton
 
 @Module
@@ -36,6 +46,36 @@ object DataModule {
         @ApplicationContext context: Context,
     ): OfflineCache = OfflineCache.create(context)
 
+    /** Lazy: the upload repository itself depends on the accounts, which use this cleaner. */
     @Provides
-    fun accountDataCleaner(cache: OfflineCache): AccountDataCleaner = AccountDataCleaner { cache.clear(it) }
+    fun accountDataCleaner(
+        cache: OfflineCache,
+        uploads: Lazy<UploadRepository>,
+    ): AccountDataCleaner =
+        AccountDataCleaner { accountId ->
+            uploads.get().clear(accountId)
+            cache.clear(accountId)
+        }
+
+    @Provides
+    @Singleton
+    fun uploadQueue(
+        @ApplicationContext context: Context,
+    ): UploadQueue = UploadQueue.create(context)
+
+    @Provides
+    fun uploadStorage(
+        @ApplicationContext context: Context,
+    ): UploadStorage = UploadStorage(File(context.filesDir, "uploads"))
+
+    @Provides
+    @Singleton
+    fun uploadScheduler(
+        @ApplicationContext context: Context,
+    ): UploadScheduler = WorkManagerUploadScheduler(WorkManager.getInstance(context))
+
+    @Provides
+    @Singleton
+    fun uploadWorkerFactory(processor: Provider<UploadProcessor>): UploadWorkerFactory =
+        UploadWorkerFactory { processor.get() }
 }

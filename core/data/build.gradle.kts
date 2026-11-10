@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.paperless.android.library)
+    alias(libs.plugins.paperless.robolectric)
 }
 
 android {
@@ -16,12 +17,14 @@ dependencies {
     implementation(libs.javax.inject)
     implementation(libs.kotlinx.coroutines.core)
     api(libs.paging.common)
+    api(libs.work.runtime)
+    implementation(libs.androidx.core.ktx)
 
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.okhttp.tls)
     testImplementation(libs.androidx.test.core)
-    testImplementation(libs.robolectric)
     testImplementation(libs.sqlite.bundled.jvm)
     testImplementation(libs.paging.testing)
+    testImplementation(libs.work.testing)
 }

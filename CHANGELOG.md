@@ -39,3 +39,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cache of an account is deleted when signing out
 - Document lists paged from the offline cache (Paging 3): shown at once, refreshed from the server and loaded
   further while scrolling; edited documents are updated and deleted ones removed in every cached list
+- Upload queue (WorkManager): files are copied into app storage and sent when a network is available, with
+  progress, the server's processing result (document, duplicate or error), retry and removal
