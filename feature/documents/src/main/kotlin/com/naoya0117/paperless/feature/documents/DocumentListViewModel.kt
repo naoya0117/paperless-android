@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -57,22 +58,36 @@ class DocumentListViewModel
         /** The search text as typed (for [DocumentListMode.ALL]). */
         val searchText: StateFlow<String> = searchInput.asStateFlow()
 
-        /** All documents (or the inbox); search results while search text is entered (all documents only). */
-        @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+        /** All documents, or the inbox. Kept while searching, so that clearing the search returns to it at once. */
         val documentPages: Flow<PagingData<Document>> =
-            when (mode) {
-                DocumentListMode.INBOX -> documents.documents(DocumentQuery(inInbox = true))
-                DocumentListMode.ALL ->
-                    searchInput
-                        .map { it.trim() }
-                        .distinctUntilChanged()
-                        // Not a request per keystroke; clearing the search shows all documents at once.
-                        .debounce { if (it.isEmpty()) 0L else SEARCH_DEBOUNCE_MILLIS }
-                        .flatMapLatest { text ->
-                            val search = if (text.isEmpty()) null else DocumentSearch.Text(text)
-                            documents.documents(DocumentQuery(search = search))
-                        }
-            }.cachedIn(viewModelScope)
+            documents
+                .documents(if (mode == DocumentListMode.INBOX) DocumentQuery(inInbox = true) else DocumentQuery())
+                .cachedIn(viewModelScope)
+
+        /** The entered search text once typing pauses; empty when not searching (all documents only). */
+        @OptIn(FlowPreview::class)
+        val activeSearch: StateFlow<String> =
+            searchInput
+                .map { it.trim() }
+                .distinctUntilChanged()
+                // Not a request per keystroke; clearing the search applies at once.
+                .debounce { if (it.isEmpty()) 0L else SEARCH_DEBOUNCE_MILLIS }
+                .distinctUntilChanged()
+                .stateIn(viewModelScope, SharingStarted.Eagerly, searchInput.value.trim())
+
+        /** Full-text search results for [activeSearch]; empty while not searching. */
+        @OptIn(ExperimentalCoroutinesApi::class)
+        val searchPages: Flow<PagingData<Document>> =
+            activeSearch
+                .flatMapLatest { text ->
+                    if (text.isEmpty()) {
+                        flowOf(
+                            PagingData.empty(),
+                        )
+                    } else {
+                        documents.documents(DocumentQuery(search = DocumentSearch.Text(text)))
+                    }
+                }.cachedIn(viewModelScope)
 
         /** For thumbnails ([DocumentThumbnail]), which are cached per account. */
         val accountId: StateFlow<String?> =

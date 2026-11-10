@@ -43,6 +43,12 @@ class DocumentListViewModelTest {
     val folder = TemporaryFolder()
 
     private val server = MockWebServer()
+    private val inboxRequests =
+        java.util.concurrent.atomic
+            .AtomicInteger()
+    private val offline =
+        java.util.concurrent.atomic
+            .AtomicBoolean(false)
     private val cache = OfflineCache.inMemory(ApplicationProvider.getApplicationContext(), BundledSQLiteDriver())
     private lateinit var accounts: AccountRepository
 
@@ -80,6 +86,14 @@ class DocumentListViewModelTest {
                         "/api/document_types/" -> page("""{"id": 3, "name": "Invoice"}""")
                         "/api/documents/" ->
                             if (request.url.queryParameter("is_in_inbox") == "true") {
+                                inboxRequests.incrementAndGet()
+                                if (offline.get()) {
+                                    return MockResponse
+                                        .Builder()
+                                        .code(503)
+                                        .body("{}")
+                                        .build()
+                                }
                                 json("""{"count": 3, "next": "http://x/?page=2", "results": []}""")
                             } else {
                                 page()
@@ -177,4 +191,107 @@ class DocumentListViewModelTest {
     fun `without an account the inbox count stays 0`() {
         assertEquals(0, InboxViewModel(DocumentRepository(accounts, cache)).count.value)
     }
+
+    private class MutableClock(
+        var now: java.time.Instant = java.time.Instant.parse("2026-11-10T00:00:00Z"),
+    ) : java.time.Clock() {
+        override fun getZone(): java.time.ZoneId = java.time.ZoneOffset.UTC
+
+        override fun withZone(zone: java.time.ZoneId?): java.time.Clock = this
+
+        override fun instant(): java.time.Instant = now
+    }
+
+    private suspend fun InboxViewModel.awaitCount(predicate: (Int) -> Boolean): Int =
+        withContext(Dispatchers.Default) { withTimeout(10_000) { count.first(predicate) } }
+
+    @Test
+    fun `returning to the list refreshes the inbox count at most every 30 seconds`() =
+        runTest {
+            accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls())
+            Dispatchers.setMain(Dispatchers.Unconfined)
+            val clock = MutableClock()
+            val inbox = InboxViewModel(DocumentRepository(accounts, cache), clock)
+            inbox.awaitCount { it == 3 }
+
+            inbox.refresh()
+            assertEquals("throttled", 1, inboxRequests.get())
+            inbox.refresh(force = true)
+            withContext(Dispatchers.Default) {
+                withTimeout(10_000) {
+                    while (inboxRequests.get() <
+                        2
+                    ) {
+                        kotlinx.coroutines.delay(10)
+                    }
+                }
+            }
+            clock.now = clock.now.plusSeconds(31)
+            inbox.refresh()
+            withContext(Dispatchers.Default) {
+                withTimeout(10_000) {
+                    while (inboxRequests.get() <
+                        3
+                    ) {
+                        kotlinx.coroutines.delay(10)
+                    }
+                }
+            }
+        }
+
+    @Test
+    fun `offline the cached inbox keeps the button`() =
+        runTest {
+            val account = accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls())
+            val document =
+                com.naoya0117.paperless.core.model.Document(
+                    id = 1,
+                    title = "Scan",
+                    content = "",
+                    created = java.time.LocalDate.of(2026, 1, 1),
+                    added = java.time.Instant.EPOCH,
+                    modified = java.time.Instant.EPOCH,
+                    correspondentId = null,
+                    documentTypeId = null,
+                    storagePathId = null,
+                    tagIds = listOf(1),
+                    archiveSerialNumber = null,
+                    originalFileName = null,
+                    archivedFileName = null,
+                    mimeType = null,
+                    pageCount = null,
+                    customFields = emptyList(),
+                    notes = null,
+                    owner = null,
+                    userCanChange = true,
+                    deletedAt = null,
+                    searchHit = null,
+                )
+            val inboxKey =
+                DocumentRepository.listKey(
+                    com.naoya0117.paperless.core.model
+                        .DocumentQuery(inInbox = true),
+                )
+            cache.documents.replaceList(account.id, inboxKey, listOf(document), null, java.time.Instant.now())
+            offline.set(true)
+            Dispatchers.setMain(Dispatchers.Unconfined)
+
+            val inbox = InboxViewModel(DocumentRepository(accounts, cache))
+
+            assertEquals(1, inbox.awaitCount { it > 0 })
+        }
+
+    @Test
+    fun `clearing the search applies at once`() =
+        runTest {
+            val viewModel = viewModel(DocumentListMode.ALL)
+            viewModel.setSearchText("invoice")
+            withContext(
+                Dispatchers.Default,
+            ) { withTimeout(10_000) { viewModel.activeSearch.first { it == "invoice" } } }
+
+            viewModel.setSearchText("  ")
+
+            assertEquals("", viewModel.activeSearch.value)
+        }
 }

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="home_sign_out">サインアウト</string>
-    <string name="tab_documents">文書</string>
-    <string name="tab_inbox">受信箱</string>
+    <string name="title_documents">文書</string>
+    <string name="title_inbox">受信箱</string>
     <string name="menu_open">メニューを開く</string>
     <string name="drawer_server_version">Paperless-ngx %1$s</string>
     <string name="sign_out_title">サインアウトしますか？</string>

@@ -10,42 +10,62 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
 import javax.inject.Inject
 
 /** How many documents wait in the inbox, for the inbox button (shown only when there are any). */
 @HiltViewModel
-class InboxViewModel
+class InboxViewModel internal constructor(
+    private val documents: DocumentRepository,
+    private val clock: Clock,
+) : ViewModel() {
     @Inject
-    constructor(
-        private val documents: DocumentRepository,
-    ) : ViewModel() {
-        private val mutableCount = MutableStateFlow(0)
+    constructor(documents: DocumentRepository) : this(documents, Clock.systemUTC())
 
-        /** 0 when the inbox is empty, not set up, or the count is unknown (e.g. offline). */
-        val count: StateFlow<Int> = mutableCount.asStateFlow()
+    private val mutableCount = MutableStateFlow(0)
 
-        private var job: Job? = null
+    /**
+     * 0 when the inbox is empty or not set up. When the server cannot be reached, the number of cached inbox
+     * documents, so that the inbox can still be opened offline.
+     */
+    val count: StateFlow<Int> = mutableCount.asStateFlow()
 
-        init {
-            refresh()
-        }
+    private var job: Job? = null
+    private var lastRefresh: Instant? = null
 
-        /** E.g. when the list is shown again or refreshed. */
-        fun refresh() {
-            if (job?.isActive == true) return
-            job =
-                viewModelScope.launch {
-                    mutableCount.value =
-                        try {
-                            documents.inboxCount()
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (
-                            @Suppress("TooGenericExceptionCaught") _: Exception,
-                        ) {
-                            // Unknown: keep the last count rather than hiding a full inbox while offline.
-                            mutableCount.value
-                        }
-                }
-        }
+    init {
+        refresh(force = true)
     }
+
+    /**
+     * Fetches the count again; the newest request wins. Without [force] (e.g. the list was shown again) at
+     * most every [MIN_INTERVAL], so that browsing documents does not ask each time.
+     */
+    fun refresh(force: Boolean = false) {
+        val now = clock.instant()
+        val last = lastRefresh
+        if (!force && last != null && Duration.between(last, now) < MIN_INTERVAL) return
+        lastRefresh = now
+        job?.cancel()
+        job =
+            viewModelScope.launch {
+                mutableCount.value =
+                    try {
+                        documents.inboxCount()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (
+                        @Suppress("TooGenericExceptionCaught") _: Exception,
+                    ) {
+                        // Unknown: keep a known count, else offer the cached inbox.
+                        mutableCount.value.takeIf { it > 0 } ?: documents.cachedInboxCount()
+                    }
+            }
+    }
+
+    private companion object {
+        val MIN_INTERVAL: Duration = Duration.ofSeconds(30)
+    }
+}

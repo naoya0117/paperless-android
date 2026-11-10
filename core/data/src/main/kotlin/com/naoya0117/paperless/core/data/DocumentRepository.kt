@@ -21,6 +21,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -127,6 +128,12 @@ class DocumentRepository internal constructor(
         return session.client.documents
             .list(DocumentQuery(inInbox = true, pageSize = 1, truncateContent = true))
             .count
+    }
+
+    /** The inbox documents cached for the active account (e.g. to offer the inbox while offline); 0 if none. */
+    suspend fun cachedInboxCount(): Int {
+        val account = accounts.state.first().activeAccount ?: return 0
+        return cache.itemCount(account.id, listKey(DocumentQuery(inInbox = true)))
     }
 
     /**
@@ -292,7 +299,7 @@ class DocumentRepository internal constructor(
          *
          * @throws IllegalArgumentException if the query cannot be sent
          */
-        internal fun listKey(query: DocumentQuery): String {
+        fun listKey(query: DocumentQuery): String {
             val canonical =
                 query
                     .toQueryParameters()

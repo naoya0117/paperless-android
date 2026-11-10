@@ -66,7 +66,11 @@ fun DocumentListScreen(
     onRefresh: () -> Unit = {},
     viewModel: DocumentListViewModel = hiltViewModel(),
 ) {
-    val pages = viewModel.documentPages.collectAsLazyPagingItems()
+    val allPages = viewModel.documentPages.collectAsLazyPagingItems()
+    val searchPages = viewModel.searchPages.collectAsLazyPagingItems()
+    val activeSearch by viewModel.activeSearch.collectAsStateWithLifecycle()
+    // Searching shows the results; the list itself stays loaded (and scrolled) underneath.
+    val pages = if (activeSearch.isEmpty()) allPages else searchPages
     val labels by viewModel.labelNames.collectAsStateWithLifecycle()
     val searchText by viewModel.searchText.collectAsStateWithLifecycle()
     val accountId by viewModel.accountId.collectAsStateWithLifecycle()
@@ -86,7 +90,7 @@ fun DocumentListScreen(
             pages = pages,
             labels = labels,
             mode = viewModel.mode,
-            searchText = searchText,
+            searchText = activeSearch,
             accountId = accountId,
             onRefresh = {
                 viewModel.refreshLabels()

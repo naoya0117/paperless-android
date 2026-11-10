@@ -37,6 +37,12 @@ internal abstract class DocumentDao {
         id: Long,
     ): Flow<DocumentEntity?>
 
+    @Query("SELECT COUNT(*) FROM document_list_items WHERE accountId = :accountId AND listKey = :listKey")
+    abstract suspend fun itemCount(
+        accountId: String,
+        listKey: String,
+    ): Int
+
     @Query("SELECT * FROM document_lists WHERE accountId = :accountId AND listKey = :listKey")
     abstract suspend fun listState(
         accountId: String,
