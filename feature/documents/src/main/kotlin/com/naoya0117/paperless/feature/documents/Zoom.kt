@@ -35,10 +35,6 @@ class ZoomState {
         size: IntSize,
     ) {
         val newScale = (scale * zoom).coerceIn(1f, MAX_SCALE)
-        if (newScale <= 1f + SNAP) {
-            reset()
-            return
-        }
         val factor = newScale / scale
         val moved = centroid - (centroid - offset) * factor + pan
         // The content covers the view at every scale: no empty space beside it.
@@ -48,6 +44,11 @@ class ZoomState {
                 moved.y.coerceIn(size.height * (1 - newScale), 0f),
             )
         scale = newScale
+    }
+
+    /** At the end of a gesture: barely zoomed counts as not zoomed (not during it, or slow pinches never start). */
+    fun settle() {
+        if (scale <= 1f + SNAP) reset()
     }
 
     fun reset() {
@@ -80,6 +81,7 @@ fun Modifier.zoomable(state: ZoomState): Modifier =
                         event.changes.forEach { it.consume() }
                     }
                 } while (event.changes.any { it.pressed })
+                state.settle()
             }
         }.graphicsLayer {
             scaleX = state.scale

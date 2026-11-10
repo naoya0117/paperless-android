@@ -2,12 +2,12 @@ package com.naoya0117.paperless.feature.documents
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.naoya0117.paperless.core.data.NotSignedInException
 import com.naoya0117.paperless.core.data.TrashRepository
 import com.naoya0117.paperless.core.model.Document
 import com.naoya0117.paperless.core.network.PaperlessException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +21,8 @@ import javax.inject.Inject
 data class TrashState(
     /** `null` until loaded (or when loading failed). */
     val documents: List<Document>? = null,
+    /** How many documents are in the trash (more than [documents] if not all could be loaded). */
+    val total: Int = 0,
     val loading: Boolean = false,
     val loadFailed: Boolean = false,
     /** A restore or deletion is running; the actions wait. */
@@ -37,9 +39,19 @@ sealed interface TrashEvent {
 
     data class Failed(
         val action: TrashAction,
-        /** The server refused (e.g. no permission), rather than the connection failing. */
-        val refused: Boolean,
+        val reason: TrashFailure,
     ) : TrashEvent
+}
+
+enum class TrashFailure {
+    /** Not allowed (only the owner may restore or delete a document). */
+    REFUSED,
+
+    /** The document is not in the trash any more (e.g. restored or deleted elsewhere). */
+    GONE,
+
+    /** The connection or the server failed, or the account must sign in again. */
+    FAILED,
 }
 
 /** The trash: deleted documents to restore or delete permanently (online only). */
@@ -59,28 +71,33 @@ class TrashViewModel
             load()
         }
 
+        private var loadJob: Job? = null
+
+        /** Loads the trash; a load still running is replaced (it may be from before an action). */
         fun load() {
-            if (mutableState.value.loading) return
+            loadJob?.cancel()
             mutableState.update { it.copy(loading = true, loadFailed = false) }
-            viewModelScope.launch {
-                val documents =
-                    try {
-                        trash.documents()
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (
-                        @Suppress("TooGenericExceptionCaught") _: Exception,
-                    ) {
-                        null
+            loadJob =
+                viewModelScope.launch {
+                    val contents =
+                        try {
+                            trash.contents()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (
+                            @Suppress("TooGenericExceptionCaught") _: Exception,
+                        ) {
+                            null
+                        }
+                    mutableState.update {
+                        it.copy(
+                            documents = contents?.documents ?: it.documents,
+                            total = contents?.total ?: it.total,
+                            loading = false,
+                            loadFailed = contents == null,
+                        )
                     }
-                mutableState.update {
-                    it.copy(
-                        documents = documents ?: it.documents,
-                        loading = false,
-                        loadFailed = documents == null,
-                    )
                 }
-            }
         }
 
         fun restore(id: Long) = run(TrashAction.RESTORE) { trash.restore(listOf(id)) }
@@ -109,13 +126,7 @@ class TrashViewModel
                     } catch (
                         @Suppress("TooGenericExceptionCaught") e: Exception,
                     ) {
-                        TrashEvent.Failed(
-                            action,
-                            refused =
-                                e is PaperlessException.Http &&
-                                    e !is PaperlessException.Http.ServerError ||
-                                    e is NotSignedInException,
-                        )
+                        TrashEvent.Failed(action, failure(e))
                     } finally {
                         mutableState.update { it.copy(busy = false) }
                     }
@@ -123,4 +134,11 @@ class TrashViewModel
                 load()
             }
         }
+
+        private fun failure(error: Exception): TrashFailure =
+            when (error) {
+                is PaperlessException.Http.Forbidden -> TrashFailure.REFUSED
+                is PaperlessException.Http.BadRequest, is PaperlessException.Http.NotFound -> TrashFailure.GONE
+                else -> TrashFailure.FAILED
+            }
     }

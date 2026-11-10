@@ -78,7 +78,6 @@
     <string name="trash_refused">Not allowed (only the owner can restore or delete a document)</string>
     <string name="trash_failed">That did not work. Check the connection and try again.</string>
     <string name="trash_empty_title">Empty the trash?</string>
-    <string name="trash_empty_message">All documents in the trash are deleted permanently. This cannot be undone.</string>
     <string name="trash_delete_title">Delete permanently?</string>
     <string name="trash_delete_message">“%1$s” is deleted permanently. This cannot be undone.</string>
     <string name="trash_delete_permanently">Delete permanently</string>
@@ -88,5 +87,11 @@
     <plurals name="trash_deleted">
         <item quantity="one">%1$d document deleted permanently</item>
         <item quantity="other">%1$d documents deleted permanently</item>
+    </plurals>
+    <string name="trash_gone">That document is no longer in the trash</string>
+    <string name="trash_partial">Showing %1$d of %2$d documents</string>
+    <plurals name="trash_empty_message">
+        <item quantity="one">Its document is deleted permanently. This cannot be undone.</item>
+        <item quantity="other">All %1$d documents in it are deleted permanently. This cannot be undone.</item>
     </plurals>
 </resources>

@@ -14,24 +14,33 @@ class TrashRepository
     constructor(
         private val accounts: AccountRepository,
     ) {
+        /** What is in the trash: [documents] (at most [MAX_DOCUMENTS]) of [total], most recently deleted first. */
+        data class Contents(
+            val documents: List<Document>,
+            val total: Int,
+        )
+
         /**
-         * The documents in the trash, most recently deleted first (at most [MAX_DOCUMENTS]).
+         * The documents in the trash. Beyond [MAX_DOCUMENTS] only some are loaded (the server has no order).
          *
          * @throws NotSignedInException
          * @throws com.naoya0117.paperless.core.network.PaperlessException
          */
-        suspend fun documents(): List<Document> {
+        suspend fun contents(): Contents {
             val trash = session().client.trash
             val documents = mutableListOf<Document>()
+            var total = 0
             var page = 1
             while (documents.size < MAX_DOCUMENTS) {
                 val result = trash.list(page = page, pageSize = PAGE_SIZE)
                 documents += result.items
+                total = result.count
                 if (!result.hasNext || result.items.isEmpty()) break
                 page++
             }
             // Pages may shift while loading (no order on the server): each document once.
-            return documents.distinctBy { it.id }.sortedByDescending { it.deletedAt }
+            val unique = documents.distinctBy { it.id }.sortedByDescending { it.deletedAt }
+            return Contents(unique, maxOf(total, unique.size))
         }
 
         /** @return the IDs the server restored */

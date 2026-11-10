@@ -2,9 +2,12 @@ package com.naoya0117.paperless.feature.documents
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -40,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,13 +77,27 @@ fun TrashScreen(
                                 resources.getQuantityString(R.plurals.trash_deleted, event.count, event.count)
                         }
                     is TrashEvent.Failed ->
-                        resources.getString(if (event.refused) R.string.trash_refused else R.string.trash_failed)
+                        resources.getString(
+                            when (event.reason) {
+                                TrashFailure.REFUSED -> R.string.trash_refused
+                                TrashFailure.GONE -> R.string.trash_gone
+                                TrashFailure.FAILED -> R.string.trash_failed
+                            },
+                        )
                 }
             snackbar.showSnackbar(message)
         }
     }
     /** The document to delete permanently (after confirming); `EMPTY_ALL` for the whole trash. */
     var confirm by rememberSaveable { mutableStateOf<Long?>(null) }
+    val dateTime =
+        remember {
+            DateTimeFormatter
+                .ofLocalizedDateTime(
+                    FormatStyle.MEDIUM,
+                    FormatStyle.SHORT,
+                ).withZone(ZoneId.systemDefault())
+        }
     Scaffold(
         modifier = modifier,
         snackbarHost = { SnackbarHost(snackbar) },
@@ -120,6 +138,16 @@ fun TrashScreen(
                 documents.isEmpty() -> Message(stringResource(R.string.trash_none))
                 else ->
                     LazyColumn(Modifier.fillMaxSize()) {
+                        if (state.total > documents.size) {
+                            item(key = "partial") {
+                                Text(
+                                    stringResource(R.string.trash_partial, documents.size, state.total),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                            }
+                        }
                         if (state.loadFailed) {
                             item(key = "failed") {
                                 Text(
@@ -133,6 +161,7 @@ fun TrashScreen(
                         items(documents, key = { it.id }) { document ->
                             TrashRow(
                                 document = document,
+                                dateTime = dateTime,
                                 enabled = !state.busy,
                                 onRestore = { viewModel.restore(document.id) },
                                 onDelete = { confirm = document.id },
@@ -145,6 +174,11 @@ fun TrashScreen(
     }
     confirm?.let { target ->
         val title = state.documents?.firstOrNull { it.id == target }?.title
+        // Only for a document still listed (e.g. not after a reload without it): the user must see what goes.
+        if (target != EMPTY_ALL && title == null) {
+            LaunchedEffect(target, state.documents) { if (state.documents != null) confirm = null }
+            return@let
+        }
         AlertDialog(
             onDismissRequest = { confirm = null },
             title = {
@@ -163,7 +197,7 @@ fun TrashScreen(
             text = {
                 Text(
                     if (target == EMPTY_ALL) {
-                        stringResource(R.string.trash_empty_message)
+                        pluralStringResource(R.plurals.trash_empty_message, state.total, state.total)
                     } else {
                         stringResource(R.string.trash_delete_message, title.orEmpty())
                     },
@@ -171,6 +205,8 @@ fun TrashScreen(
             },
             confirmButton = {
                 TextButton(
+                    // Not while another action runs (it would be ignored).
+                    enabled = !state.busy,
                     onClick = {
                         confirm = null
                         if (target == EMPTY_ALL) viewModel.empty() else viewModel.delete(target)
@@ -192,18 +228,11 @@ private const val EMPTY_ALL = -1L
 @Composable
 private fun TrashRow(
     document: Document,
+    dateTime: DateTimeFormatter,
     enabled: Boolean,
     onRestore: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val dateTime =
-        remember {
-            DateTimeFormatter
-                .ofLocalizedDateTime(
-                    FormatStyle.MEDIUM,
-                    FormatStyle.SHORT,
-                ).withZone(ZoneId.systemDefault())
-        }
     ListItem(
         headlineContent = { Text(document.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         supportingContent = {
@@ -235,17 +264,24 @@ private fun Message(
     text: String,
     action: @Composable () -> Unit = {},
 ) {
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            text,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        action()
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // At least as high as the screen, so that the text is centered (and still scrollable).
+        Column(
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight)
+                .fillMaxWidth()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            action()
+        }
     }
 }

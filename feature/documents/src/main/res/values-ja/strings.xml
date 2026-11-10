@@ -78,7 +78,6 @@
     <string name="trash_refused">権限がありません（文書の所有者だけが元に戻したり削除したりできます）</string>
     <string name="trash_failed">できませんでした。接続を確認して、もう一度お試しください。</string>
     <string name="trash_empty_title">ごみ箱を空にしますか？</string>
-    <string name="trash_empty_message">ごみ箱の文書をすべて完全に削除します。元に戻せません。</string>
     <string name="trash_delete_title">完全に削除しますか？</string>
     <string name="trash_delete_message">「%1$s」を完全に削除します。元に戻せません。</string>
     <string name="trash_delete_permanently">完全に削除</string>
@@ -87,5 +86,10 @@
     <string name="trash_delete_named">「%1$s」を完全に削除</string>
     <plurals name="trash_deleted">
         <item quantity="other">%1$d 件の文書を完全に削除しました</item>
+    </plurals>
+    <string name="trash_gone">その文書はもうごみ箱にありません</string>
+    <string name="trash_partial">%2$d 件のうち %1$d 件を表示しています</string>
+    <plurals name="trash_empty_message">
+        <item quantity="other">ごみ箱の文書 %1$d 件をすべて完全に削除します。元に戻せません。</item>
     </plurals>
 </resources>

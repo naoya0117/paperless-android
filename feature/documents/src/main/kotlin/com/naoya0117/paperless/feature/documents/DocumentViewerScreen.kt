@@ -186,17 +186,12 @@ fun DocumentViewerScreen(
                     .background(MaterialTheme.colorScheme.surfaceContainer),
             contentAlignment = Alignment.Center,
         ) {
+            // Pinch to zoom; reset for other content.
+            val zoom = remember(state.content) { ZoomState() }
             when (val content = state.content) {
                 ViewerContent.Loading -> CircularProgressIndicator()
-                // Pinch to zoom; reset for another document.
-                is ViewerContent.Pdf -> {
-                    val zoom = remember(content) { ZoomState() }
-                    PdfPagesView(content.pages, onTap = viewModel::toggleInfo, modifier = Modifier.zoomable(zoom))
-                }
-                is ViewerContent.Image -> {
-                    val zoom = remember(content) { ZoomState() }
-                    ImageView(content, onTap = viewModel::toggleInfo, modifier = Modifier.zoomable(zoom))
-                }
+                is ViewerContent.Pdf -> PdfPagesView(content.pages, viewModel::toggleInfo, Modifier.zoomable(zoom))
+                is ViewerContent.Image -> ImageView(content, viewModel::toggleInfo, Modifier.zoomable(zoom))
                 is ViewerContent.Unsupported ->
                     Message(stringResource(R.string.viewer_unsupported, content.fileName.orEmpty()))
                 ViewerContent.Failed ->

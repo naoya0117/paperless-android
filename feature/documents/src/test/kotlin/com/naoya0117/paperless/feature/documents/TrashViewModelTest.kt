@@ -164,6 +164,7 @@ class TrashViewModelTest {
             inTrash = listOf(2L, 3L)
             viewModel.delete(2)
             assertEquals(TrashEvent.Done(TrashAction.DELETE, 1), viewModel.events.await { true })
+            viewModel.state.await { it.documents?.map { d -> d.id } == listOf(3L) && !it.loading }
             viewModel.empty()
             assertEquals(TrashEvent.Done(TrashAction.EMPTY, 1), viewModel.events.await { true })
             viewModel.state.await { it.documents?.isEmpty() == true && !it.busy }
@@ -187,7 +188,7 @@ class TrashViewModelTest {
 
             viewModel.restore(1)
 
-            assertEquals(TrashEvent.Failed(TrashAction.RESTORE, refused = true), viewModel.events.await { true })
+            assertEquals(TrashEvent.Failed(TrashAction.RESTORE, TrashFailure.REFUSED), viewModel.events.await { true })
         }
 
     @Test
@@ -206,6 +207,13 @@ class TrashViewModelTest {
         assertEquals(ZoomState.MAX_SCALE, zoom.scale)
 
         zoom.transform(0.1f, Offset.Zero, Offset.Zero, size)
+        assertEquals(1f, zoom.scale)
+        // A slow pinch (small steps) still zooms in; snapping back only happens when the gesture ends.
+        repeat(10) { zoom.transform(1.01f, Offset.Zero, Offset.Zero, size) }
+        assertTrue(zoom.scale > 1.05f)
+        zoom.reset()
+        zoom.transform(1.01f, Offset.Zero, Offset.Zero, size)
+        zoom.settle()
         assertEquals(1f, zoom.scale)
         assertTrue(zoom.offset == Offset.Zero)
     }
