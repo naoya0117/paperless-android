@@ -93,9 +93,11 @@ Settings → Secrets and variables → Actions に、次を登録します。
 | Secret | `SIGNING_KEY_PASSWORD` | ストアのパスワードと同じ値 |
 | Variable | `SIGNING_CERT_SHA256` | 証明書の SHA-256 フィンガープリント（`keytool` の表示のまま、コロン区切りでよい） |
 
+鍵ファイルを base64 にしてクリップボードにコピーし（macOS）、元のファイルに戻せることを確かめます（`OK` と表示されれば正しい）。
+
 ```bash
-base64 -i ~/keys/paperless-android-release.jks | pbcopy   # macOS
-pbpaste | head -c 40                                     # 英数字と + / だけが並んでいれば正しい
+base64 -i ~/keys/paperless-android-release.jks | pbcopy
+pbpaste | base64 -D | cmp - ~/keys/paperless-android-release.jks && echo OK
 ```
 
 - Secrets は Settings → Environments で Environment `release` を作ってそこに登録し、Deployment branches and tags を
@@ -127,15 +129,15 @@ pbpaste | head -c 40                                     # 英数字と + / だ�
 | あり | `app/build/outputs/apk/release/app-release.apk` |
 | なし | `app/build/outputs/apk/release/app-release-unsigned.apk` |
 
-確認：
+確認（1 行目で build-tools の最新版を選び、2 行目で署名とフィンガープリント、3 行目でバージョンを表示します）：
 
 ```bash
 BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-# 署名とフィンガープリント（1 で控えたものと一致すること）
 "$BT"/apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
-# バージョン
 "$BT"/aapt2 dump badging app/build/outputs/apk/release/app-release.apk | head -1
 ```
+
+- フィンガープリントが [1](#1-署名鍵) で控えたものと一致すること。
 
 - `package: name='com.naoya0117.paperless' versionCode='…' versionName='…'` で、debug の接尾辞（`.debug` / `-debug`）がないこと。
 - apksigner はフィンガープリントを小文字・コロンなしで、keytool は大文字・コロン区切りで表示します。比べるときは書式を揃えます。
@@ -147,9 +149,11 @@ BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
 （シリアライズ、Retrofit、Room、Hilt、WorkManager など）。**リリースの APK** で、少なくとも
 Android 10（API 29）の端末と最新の Android の端末で確認します。
 
+インストールし、クラッシュを監視します（2 行目は別のターミナルで動かしたままにします）。
+
 ```bash
 adb install -r app/build/outputs/apk/release/app-release.apk
-adb logcat -s AndroidRuntime:E   # クラッシュの監視
+adb logcat -s AndroidRuntime:E
 ```
 
 debug 版（`com.naoya0117.paperless.debug`）とは別のアプリとして入ります。
@@ -249,12 +253,14 @@ adb shell am broadcast -a com.android.systemui.demo -e command exit
 タグはミラーにも公開され、F-Droid の更新のきっかけになるため、
 **付けたタグは動かしません**（間違えたら次のパッチバージョンを出します）。
 
+タグを付けて Gitea に push し、GitHub のミラーへも main とタグを手動で push します（`github` は GitHub のミラーを指す
+リモートの名前です。違う名前なら置き換えます。`git remote -v` で確認できます）。
+
 ```bash
 git switch main && git pull --ff-only
 git tag -a v0.1.0 -m "paperless-android 0.1.0"
 git push origin v0.1.0
-# GitHub のミラーへ、main とタグを手動で push する
-git push <github のリモート> main v0.1.0
+git push github main v0.1.0
 ```
 
 GitHub にタグが届くと、GitHub Actions の Release（`.github/workflows/release.yml`）が次を行います
