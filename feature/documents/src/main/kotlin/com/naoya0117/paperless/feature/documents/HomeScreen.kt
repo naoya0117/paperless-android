@@ -31,7 +31,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -117,7 +116,8 @@ private fun ViewSection(
     val pages = remember(view) { viewModel.pages(view) }.collectAsLazyPagingItems()
     // A pull to refresh refreshes the views' documents too: each pull once (not again when the section comes
     // back into view; when first shown they load anyway).
-    var handled by rememberSaveable(view.id) { mutableIntStateOf(refreshCount) }
+    // Not saved: after process death the view model counts from 0 again.
+    var handled by remember(view.id) { mutableIntStateOf(refreshCount) }
     LaunchedEffect(refreshCount) {
         if (refreshCount > handled) {
             handled = refreshCount

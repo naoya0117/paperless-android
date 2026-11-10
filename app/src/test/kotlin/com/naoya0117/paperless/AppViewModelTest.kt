@@ -1,6 +1,10 @@
 package com.naoya0117.paperless
 
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.naoya0117.paperless.core.data.AccountRepository
 import com.naoya0117.paperless.core.data.PaperlessClientFactory
 import com.naoya0117.paperless.core.datastore.AccountStore
@@ -77,8 +81,18 @@ class AppViewModelTest {
             )
     }
 
+    /** Cleared after each test, so that none keeps collecting into the next one (which sets Main again). */
+    private val store = ViewModelStore()
+
+    private fun appViewModel(savedState: SavedStateHandle): AppViewModel =
+        ViewModelProvider.create(
+            store,
+            viewModelFactory { initializer { AppViewModel(accounts, savedState) } },
+        )["vm${store.keys().size}", AppViewModel::class]
+
     @After
     fun tearDown() {
+        store.clear()
         Dispatchers.resetMain()
         server.close()
     }
@@ -93,7 +107,7 @@ class AppViewModelTest {
     fun `adding an account shows a login that can be cancelled, and signing in ends it`() =
         runTest {
             val alice = signIn("alice")
-            val viewModel = AppViewModel(accounts, SavedStateHandle())
+            val viewModel = appViewModel(SavedStateHandle())
             viewModel.screen.await { it is AppScreen.Home }
 
             viewModel.addAccount()
@@ -117,7 +131,7 @@ class AppViewModelTest {
         runTest {
             val alice = signIn("alice")
             signIn("bob")
-            val viewModel = AppViewModel(accounts, SavedStateHandle())
+            val viewModel = appViewModel(SavedStateHandle())
             viewModel.screen.await { it is AppScreen.Home && it.account.username == "bob" }
 
             viewModel.switchTo(alice.id)
@@ -130,9 +144,9 @@ class AppViewModelTest {
         runTest {
             signIn("alice")
             val savedState = SavedStateHandle()
-            AppViewModel(accounts, savedState).addAccount()
+            appViewModel(savedState).addAccount()
 
-            val restored = AppViewModel(accounts, savedState)
+            val restored = appViewModel(savedState)
 
             restored.screen.await { (it as? AppScreen.Home)?.addingAccount != null }
         }
@@ -141,7 +155,7 @@ class AppViewModelTest {
     fun `adding ends when the account signs out`() =
         runTest {
             val alice = signIn("alice")
-            val viewModel = AppViewModel(accounts, SavedStateHandle())
+            val viewModel = appViewModel(SavedStateHandle())
             viewModel.addAccount()
             viewModel.screen.await { (it as? AppScreen.Home)?.addingAccount != null }
 

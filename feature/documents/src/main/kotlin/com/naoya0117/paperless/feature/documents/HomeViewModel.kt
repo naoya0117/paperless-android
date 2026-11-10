@@ -60,6 +60,9 @@ class HomeViewModel
         /** Whether the dashboard setting came from the server (not only saved from before). */
         private var fetched = false
 
+        /** When the views were refreshed as [load] last saw it (its own refresh does not start another). */
+        private var seenRefresh: java.time.Instant? = null
+
         val state: StateFlow<HomeState> =
             combine(labels.savedViews.items, dashboardIds, refreshing, loadFailed) { views, ids, refreshing, failed ->
                 val byId = views.associateBy { it.id }
@@ -89,8 +92,9 @@ class HomeViewModel
             }
             // Not fetched yet (e.g. started offline): again once the views were refreshed (e.g. back online).
             viewModelScope.launch {
-                labels.savedViews.refreshedAt.distinctUntilChanged().collect {
-                    if (!fetched && !refreshing.value) load()
+                labels.savedViews.refreshedAt.distinctUntilChanged().collect { refreshedAt ->
+                    // Only for a refresh by someone else (e.g. the lists once back online), not this one's own.
+                    if (!fetched && !refreshing.value && refreshedAt != null && refreshedAt != seenRefresh) load()
                 }
             }
         }
@@ -133,6 +137,7 @@ class HomeViewModel
             ) {
                 // Offline: the cached views.
             }
+            seenRefresh = labels.savedViews.refreshedAt.first()
             try {
                 val session = accounts.currentSession()
                 if (session == null) {
