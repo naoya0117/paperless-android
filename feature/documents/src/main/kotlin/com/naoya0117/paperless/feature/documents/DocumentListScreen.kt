@@ -139,6 +139,15 @@ fun DocumentListScreen(
         }
     // Only for a document still listed: the user must see what goes.
     val toDelete = confirmDelete?.let { id -> pages.itemSnapshotList.items.firstOrNull { it.id == id } }
+    // Gone from the loaded list: forgotten, so that the dialog does not come up on its own later.
+    LaunchedEffect(confirmDelete, toDelete, pages.loadState.refresh) {
+        if (confirmDelete != null &&
+            toDelete == null &&
+            pages.loadState.refresh is LoadState.NotLoading
+        ) {
+            confirmDelete = null
+        }
+    }
     toDelete?.let { document ->
         AlertDialog(
             onDismissRequest = { confirmDelete = null },

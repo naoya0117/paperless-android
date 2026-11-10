@@ -176,7 +176,8 @@ fun DocumentViewerScreen(
             viewModel.events.collect { event ->
                 when (event) {
                     is ViewerEvent.SendFile ->
-                        if (!context.sendFile(event)) {
+                        // Not long after it was asked for (e.g. back from the editor minutes later).
+                        if (!event.stale && !context.sendFile(event)) {
                             snackbar.showSnackbar(resources.getString(R.string.viewer_no_app))
                         }
                     is ViewerEvent.Saved ->
