@@ -14,6 +14,7 @@ import com.naoya0117.paperless.core.model.StoragePath
 import com.naoya0117.paperless.core.model.StoragePathDraft
 import com.naoya0117.paperless.core.model.Tag
 import com.naoya0117.paperless.core.model.TagDraft
+import com.naoya0117.paperless.core.model.descendantsAndSelf
 import com.naoya0117.paperless.core.network.LabelApi
 import com.naoya0117.paperless.core.network.PaperlessClient
 import com.naoya0117.paperless.core.network.PaperlessException
@@ -276,13 +277,7 @@ internal object TagHierarchy : CacheChanges<Tag> {
         cached: List<Tag>,
         id: Long,
     ): CacheChanges.Change<Tag> {
-        val childrenOf = cached.groupBy { it.parentId }
-        val deleted = mutableSetOf<Long>()
-        val pending = ArrayDeque(listOf(id))
-        while (pending.isNotEmpty()) {
-            val next = pending.removeFirst()
-            if (deleted.add(next)) childrenOf[next]?.forEach { pending += it.id }
-        }
+        val deleted = cached.descendantsAndSelf(id)
         val parent =
             cached.firstOrNull { it.id == id }?.parentId?.let { parentId ->
                 cached.firstOrNull {

@@ -11,13 +11,18 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.AlertDialog
@@ -64,8 +69,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -83,6 +90,11 @@ import com.naoya0117.paperless.feature.documents.DocumentListViewModel
 import com.naoya0117.paperless.feature.documents.DocumentViewerScreen
 import com.naoya0117.paperless.feature.documents.DocumentViewerViewModel
 import com.naoya0117.paperless.feature.documents.InboxViewModel
+import com.naoya0117.paperless.feature.labels.LabelEditScreen
+import com.naoya0117.paperless.feature.labels.LabelEditViewModel
+import com.naoya0117.paperless.feature.labels.LabelKind
+import com.naoya0117.paperless.feature.labels.LabelListScreen
+import com.naoya0117.paperless.feature.labels.LabelListViewModel
 import com.naoya0117.paperless.feature.uploads.EnqueueResult
 import com.naoya0117.paperless.feature.uploads.UploadsScreen
 import com.naoya0117.paperless.feature.uploads.UploadsViewModel
@@ -93,6 +105,9 @@ private const val DOCUMENTS_ROUTE = "documents"
 private const val SEARCH_ROUTE = "search"
 private const val INBOX_ROUTE = "inbox"
 private const val UPLOADS_ROUTE = "uploads"
+private const val LABELS_ROUTE = "labels/{${LabelListViewModel.KIND_ARGUMENT}}"
+private const val LABEL_EDIT_ROUTE =
+    "labels/{${LabelListViewModel.KIND_ARGUMENT}}/edit?${LabelEditViewModel.LABEL_ID_ARGUMENT}={${LabelEditViewModel.LABEL_ID_ARGUMENT}}"
 
 /** The bottom tabs: only what is used most; everything else is in the drawer (hamburger menu). */
 private enum class Tab(
@@ -210,6 +225,10 @@ fun MainShell(
                     scope.launch { drawerState.close() }
                     navController.navigate(UPLOADS_ROUTE) { launchSingleTop = true }
                 },
+                onLabels = { kind ->
+                    scope.launch { drawerState.close() }
+                    navController.navigate("labels/${kind.key}") { launchSingleTop = true }
+                },
                 onSignOut = {
                     scope.launch { drawerState.close() }
                     confirmSignOut = true
@@ -322,6 +341,33 @@ fun MainShell(
                 ) {
                     DocumentEditScreen(onClose = { navController.popBackStack() })
                 }
+                composable(
+                    LABELS_ROUTE,
+                    arguments = listOf(navArgument(LabelListViewModel.KIND_ARGUMENT) { type = NavType.StringType }),
+                ) { entry ->
+                    LabelListScreen(
+                        // Once only (e.g. not again when tapped twice during the exit animation).
+                        onBack = dropUnlessResumed { navController.navigateUp() },
+                        onOpen = { kind, id ->
+                            if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                navController.navigate("labels/${kind.key}/edit?id=${id ?: NEW_LABEL}")
+                            }
+                        },
+                    )
+                }
+                composable(
+                    LABEL_EDIT_ROUTE,
+                    arguments =
+                        listOf(
+                            navArgument(LabelListViewModel.KIND_ARGUMENT) { type = NavType.StringType },
+                            navArgument(LabelEditViewModel.LABEL_ID_ARGUMENT) {
+                                type = NavType.LongType
+                                defaultValue = NEW_LABEL
+                            },
+                        ),
+                ) {
+                    LabelEditScreen(onClose = dropUnlessResumed { navController.navigateUp() })
+                }
                 composable(UPLOADS_ROUTE) {
                     UploadsScreen(viewModel = uploads, onOpenDocument = { id ->
                         navController.navigate("document/$id")
@@ -380,45 +426,65 @@ private const val MAX_BADGE = 99
 private fun Drawer(
     account: Account,
     onUploads: () -> Unit,
+    onLabels: (LabelKind) -> Unit,
     onSignOut: () -> Unit,
 ) {
     ModalDrawerSheet {
-        Column(modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp)) {
-            Text(
-                stringResource(R.string.app_name),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(account.displayName ?: account.username, style = MaterialTheme.typography.titleMedium)
-            Text(
-                account.serverUrl,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            account.serverVersion?.let {
+        // Scrolls on small screens (e.g. in landscape).
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            Column(modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp)) {
                 Text(
-                    stringResource(R.string.drawer_server_version, it),
+                    stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(account.displayName ?: account.username, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    account.serverUrl,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                account.serverVersion?.let {
+                    Text(
+                        stringResource(R.string.drawer_server_version, it),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
+            HorizontalDivider()
+            NavigationDrawerItem(
+                label = { Text(stringResource(R.string.drawer_uploads)) },
+                icon = { Icon(Icons.Outlined.CloudUpload, contentDescription = null) },
+                selected = false,
+                onClick = onUploads,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+            HorizontalDivider()
+            Text(
+                stringResource(R.string.drawer_labels),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp),
+            )
+            LABEL_ITEMS.forEach { (kind, icon) ->
+                NavigationDrawerItem(
+                    label = { Text(stringResource(kind.title)) },
+                    icon = { Icon(icon, contentDescription = null) },
+                    selected = false,
+                    onClick = { onLabels(kind) },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+            }
+            HorizontalDivider(Modifier.padding(top = 8.dp))
+            NavigationDrawerItem(
+                label = { Text(stringResource(R.string.home_sign_out)) },
+                icon = { Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null) },
+                selected = false,
+                onClick = onSignOut,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            )
         }
-        HorizontalDivider()
-        NavigationDrawerItem(
-            label = { Text(stringResource(R.string.drawer_uploads)) },
-            icon = { Icon(Icons.Outlined.CloudUpload, contentDescription = null) },
-            selected = false,
-            onClick = onUploads,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-        )
-        HorizontalDivider()
-        NavigationDrawerItem(
-            label = { Text(stringResource(R.string.home_sign_out)) },
-            icon = { Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null) },
-            selected = false,
-            onClick = onSignOut,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-        )
     }
 }
 
@@ -441,6 +507,17 @@ private fun SignOutDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
+
+/** A new label in the label editor (no ID). */
+private const val NEW_LABEL = -1L
+
+private val LABEL_ITEMS =
+    listOf(
+        LabelKind.TAGS to Icons.AutoMirrored.Outlined.Label,
+        LabelKind.CORRESPONDENTS to Icons.Outlined.Person,
+        LabelKind.DOCUMENT_TYPES to Icons.Outlined.Description,
+        LabelKind.STORAGE_PATHS to Icons.Outlined.FolderOpen,
+    )
 
 /** What Paperless-ngx can consume; the same as the share targets in the manifest. */
 private val UPLOAD_MIME_TYPES =

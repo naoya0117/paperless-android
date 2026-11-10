@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="labels_tags">Tags</string>
+    <string name="labels_correspondents">Correspondents</string>
+    <string name="labels_document_types">Document types</string>
+    <string name="labels_storage_paths">Storage paths</string>
+    <string name="labels_new_tag">New tag</string>
+    <string name="labels_edit_tag">Edit tag</string>
+    <string name="labels_new_correspondent">New correspondent</string>
+    <string name="labels_edit_correspondent">Edit correspondent</string>
+    <string name="labels_new_document_type">New document type</string>
+    <string name="labels_edit_document_type">Edit document type</string>
+    <string name="labels_new_storage_path">New storage path</string>
+    <string name="labels_edit_storage_path">Edit storage path</string>
+    <string name="labels_back">Back</string>
+    <string name="labels_close">Close</string>
+    <string name="labels_save">Save</string>
+    <string name="labels_delete">Delete</string>
+    <string name="labels_cancel">Cancel</string>
+    <string name="labels_search">Search by name</string>
+    <string name="labels_refresh_failed">Could not refresh; showing saved data</string>
+    <string name="labels_empty">Nothing here yet</string>
+    <string name="labels_no_match">No matches</string>
+    <string name="labels_inbox_tag">Inbox tag</string>
+    <string name="labels_inbox_tag_description">Added to every new document; documents with it are in the inbox</string>
+    <string name="labels_read_only">Read only</string>
+    <string name="labels_read_only_notice">You do not have permission to change this.</string>
+    <string name="labels_missing">This item no longer exists.</string>
+    <string name="labels_discard_message">Discard your changes?</string>
+    <string name="labels_discard">Discard</string>
+    <string name="labels_keep_editing">Keep editing</string>
+    <string name="labels_delete_title">Delete?</string>
+    <string name="labels_delete_message">“%1$s” will be deleted.</string>
+    <string name="labels_name">Name</string>
+    <string name="labels_color">Color</string>
+    <string name="labels_color_hex">Color (#rrggbb)</string>
+    <string name="labels_color_selected">Selected</string>
+    <string name="labels_parent">Parent tag</string>
+    <string name="labels_parent_none">None</string>
+    <string name="labels_path">Path</string>
+    <string name="labels_path_hint">Template for the file path, e.g. {{ created_year }}/{{ correspondent }}/{{ title }}</string>
+    <string name="labels_matching">Automatic matching</string>
+    <string name="labels_matching_hint">How new documents get this assigned automatically</string>
+    <string name="labels_matching_none">None</string>
+    <string name="labels_matching_any">Any word</string>
+    <string name="labels_matching_all">All words</string>
+    <string name="labels_matching_literal">Exact text</string>
+    <string name="labels_matching_regex">Regular expression</string>
+    <string name="labels_matching_fuzzy">Fuzzy word</string>
+    <string name="labels_matching_auto">Auto (learned)</string>
+    <string name="labels_matching_other">Other (%1$d)</string>
+    <string name="labels_matching_pattern">Match</string>
+    <string name="labels_matching_insensitive">Case insensitive</string>
+    <string name="labels_error_invalid">Please check the input</string>
+    <string name="labels_error_forbidden">You do not have permission to do this</string>
+    <string name="labels_error_sign_in">Sign in again to continue</string>
+    <string name="labels_error_connection">Could not reach the server. Check the connection and try again.</string>
+    <string name="labels_error_server">The server had a problem. Try again later.</string>
+    <string name="labels_error_other">Something went wrong</string>
+    <plurals name="labels_document_count">
+        <item quantity="one">%1$d document</item>
+        <item quantity="other">%1$d documents</item>
+    </plurals>
+    <plurals name="labels_delete_message_used">
+        <item quantity="one">“%1$s” will be deleted. It is removed from %2$d document.</item>
+        <item quantity="other">“%1$s” will be deleted. It is removed from %2$d documents.</item>
+    </plurals>
+    <plurals name="labels_delete_sub_tags">
+        <item quantity="one">Its sub-tag is deleted too.</item>
+        <item quantity="other">Its %1$d sub-tags are deleted too.</item>
+    </plurals>
+</resources>

@@ -61,3 +61,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opens its document. Files are added with a button on the documents tab or shared from other apps
 - Viewer actions: share the document's file with another app, open it in another app, save it to Downloads,
   and delete the document (moved to the trash, after a confirmation)
+- Label management (from the menu): tags, correspondents, document types and storage paths; search, create,
+  edit (name, automatic matching, tag color, inbox tag and parent, storage path template) and delete
