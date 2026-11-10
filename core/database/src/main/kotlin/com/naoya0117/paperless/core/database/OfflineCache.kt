@@ -95,6 +95,8 @@ class OfflineCache private constructor(
     val savedViews: CachedLabels<SavedView> =
         labels(database.savedViews(), "saved_views", SavedView::name, SavedView::toEntity, SavedViewEntity::toModel)
 
+    val documents: CachedDocuments = CachedDocuments(database, ::transaction)
+
     /** Deletes everything cached for the account, e.g. after signing out. */
     suspend fun clear(accountId: String) =
         transaction {
@@ -105,6 +107,7 @@ class OfflineCache private constructor(
             database.customFields().deleteAll(accountId)
             database.savedViews().deleteAll(accountId)
             database.cacheMeta().deleteAll(accountId)
+            documents.clear(accountId)
         }
 
     /** For tests. */

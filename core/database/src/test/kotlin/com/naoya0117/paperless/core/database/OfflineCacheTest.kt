@@ -1,15 +1,24 @@
 package com.naoya0117.paperless.core.database
 
+import androidx.paging.PagingConfig
+import androidx.paging.PagingSource
+import androidx.paging.testing.TestPager
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import com.naoya0117.paperless.core.model.Correspondent
 import com.naoya0117.paperless.core.model.CustomField
 import com.naoya0117.paperless.core.model.CustomFieldDataType
+import com.naoya0117.paperless.core.model.CustomFieldValue
+import com.naoya0117.paperless.core.model.Document
 import com.naoya0117.paperless.core.model.DocumentType
+import com.naoya0117.paperless.core.model.FieldValue
 import com.naoya0117.paperless.core.model.FilterRule
 import com.naoya0117.paperless.core.model.Matching
 import com.naoya0117.paperless.core.model.MatchingAlgorithm
+import com.naoya0117.paperless.core.model.Note
+import com.naoya0117.paperless.core.model.NoteAuthor
 import com.naoya0117.paperless.core.model.SavedView
+import com.naoya0117.paperless.core.model.SearchHit
 import com.naoya0117.paperless.core.model.SelectOption
 import com.naoya0117.paperless.core.model.StoragePath
 import com.naoya0117.paperless.core.model.Tag
@@ -17,6 +26,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -191,5 +201,115 @@ class OfflineCacheTest {
                     .first()
                     .map { it.name },
             )
+        }
+
+    private fun document(
+        id: Long,
+        title: String = "Doc $id",
+    ) = Document(
+        id = id,
+        title = title,
+        content = "short",
+        created = LocalDate.of(2026, 1, 2),
+        added = Instant.parse("2026-01-02T03:04:05Z"),
+        modified = Instant.parse("2026-01-03T03:04:05Z"),
+        correspondentId = 2,
+        documentTypeId = null,
+        storagePathId = 4,
+        tagIds = listOf(1, 3),
+        archiveSerialNumber = 17,
+        originalFileName = "scan.pdf",
+        archivedFileName = null,
+        mimeType = "application/pdf",
+        pageCount = 2,
+        customFields =
+            listOf(
+                CustomFieldValue(1, FieldValue.Text("EUR12.00")),
+                CustomFieldValue(2, FieldValue.Integer(5)),
+                CustomFieldValue(3, FieldValue.Decimal(1.5)),
+                CustomFieldValue(4, FieldValue.Bool(true)),
+                CustomFieldValue(5, FieldValue.DocumentLinks(listOf(8, 9))),
+                CustomFieldValue(6, FieldValue.Unknown("""{"x":1}""")),
+                CustomFieldValue(7, FieldValue.Empty),
+            ),
+        notes = listOf(Note(1, "note", Instant.parse("2026-01-04T00:00:00Z"), NoteAuthor(3, "alice", "Alice", null))),
+        owner = 3,
+        userCanChange = true,
+        deletedAt = null,
+        searchHit = SearchHit(1.5, 1, "<b>Doc</b>"),
+    )
+
+    private suspend fun page(
+        accountId: String,
+        listKey: String,
+    ): List<Document> {
+        val result = TestPager(PagingConfig(pageSize = 50), cache.documents.list(accountId, listKey)).refresh()
+        return (result as PagingSource.LoadResult.Page).data
+    }
+
+    @Test
+    fun `documents round trip with their search hit per list`() =
+        runTest {
+            cache.documents.replaceList("a", "search", listOf(document(1)), nextPage = 2, refreshedAt = now)
+            cache.documents.replaceList(
+                "a",
+                "all",
+                listOf(document(1).copy(searchHit = null)),
+                nextPage = null,
+                refreshedAt = now,
+            )
+
+            assertEquals(listOf(document(1)), page("a", "search"))
+            assertEquals(listOf(document(1).copy(searchHit = null)), page("a", "all"))
+            assertEquals(DocumentListState(2, now), cache.documents.listState("a", "search"))
+        }
+
+    @Test
+    fun `appending skips documents already in the list`() =
+        runTest {
+            cache.documents.replaceList("a", "all", listOf(document(1), document(2)), nextPage = 2, refreshedAt = now)
+
+            assertTrue(cache.documents.appendToList("a", "all", listOf(document(2), document(3)), nextPage = null))
+
+            assertEquals(listOf(1L, 2L, 3L), page("a", "all").map { it.id })
+            assertEquals(null, cache.documents.listState("a", "all")?.nextPage)
+            assertEquals(false, cache.documents.appendToList("a", "unknown", listOf(document(4)), nextPage = null))
+        }
+
+    @Test
+    fun `old lists and documents no list contains are dropped`() =
+        runTest {
+            for (i in 0..CachedDocuments.MAX_LISTS) {
+                cache.documents.replaceList(
+                    "a",
+                    "list$i",
+                    listOf(document(i.toLong())),
+                    null,
+                    now.plusSeconds(i.toLong()),
+                )
+            }
+
+            assertEquals(null, cache.documents.listState("a", "list0"))
+            assertEquals(null, cache.documents.observe("a", 0).first())
+            assertEquals(emptyList<Document>(), page("a", "list0"))
+            assertEquals(listOf(1L), page("a", "list1").map { it.id })
+        }
+
+    @Test
+    fun `document updates and deletions apply to every list`() =
+        runTest {
+            cache.documents.replaceList("a", "one", listOf(document(1), document(2)), null, now)
+            cache.documents.replaceList("a", "two", listOf(document(1)), null, now)
+
+            cache.documents.update("a", document(1, "Renamed").copy(searchHit = null))
+            cache.documents.update("a", document(99))
+            cache.documents.delete("a", 2)
+
+            assertEquals(listOf("Renamed"), page("a", "two").map { it.title })
+            assertEquals(listOf(1L), page("a", "one").map { it.id })
+            assertEquals("not cached documents are not added", null, cache.documents.observe("a", 99).first())
+            cache.clear("a")
+            assertEquals(null, cache.documents.observe("a", 1).first())
+            assertEquals(null, cache.documents.listState("a", "one"))
         }
 }

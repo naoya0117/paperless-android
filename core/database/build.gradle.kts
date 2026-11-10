@@ -18,13 +18,16 @@ room {
 
 dependencies {
     api(projects.core.model)
+    api(libs.paging.common)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.room.paging)
     implementation(libs.room.runtime)
     ksp(libs.room.compiler)
 
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.paging.testing)
     testImplementation(libs.robolectric)
     // SQLite with its own native library: Robolectric's native SQLite does not run on every host (e.g. Linux aarch64).
     testImplementation(libs.sqlite.bundled.jvm)
