@@ -38,27 +38,33 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # Compile, unit tests, Android Lint, ktlint, debug/release APKs.
-      # The runner host has little free memory, so cap the Gradle heap, run the Kotlin compiler
-      # in-process (no separate Kotlin daemon) and limit parallel workers. The work is split
-      # into two Gradle invocations with a daemon restart in between: a single `build` ran
-      # out of Metaspace during Lint and the daemon was killed.
-      - name: Build and unit test
-        run: >-
-          ./gradlew assemble test --console=plain
-          --max-workers=2
-          -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
-          -Pkotlin.compiler.execution.strategy=in-process
+      # The runner host has little free memory and the Gradle daemon was OOM-killed during
+      # R8 / Lint. Keep a single worker, a small heap with SerialGC, compile Kotlin in-process
+      # (no separate Kotlin daemon), and split the build into stages with a fresh daemon each.
+      - name: Configure Gradle for low memory
+        run: |
+          mkdir -p ~/.gradle
+          cat >> ~/.gradle/gradle.properties <<'PROPS'
+          org.gradle.jvmargs=-Xmx1536m -XX:MaxMetaspaceSize=1g -XX:+UseSerialGC -Dfile.encoding=UTF-8
+          org.gradle.workers.max=1
+          org.gradle.parallel=false
+          kotlin.compiler.execution.strategy=in-process
+          PROPS
+          free -m
 
-      - name: Stop Gradle daemon
-        run: ./gradlew --stop
+      - name: Debug build and unit tests
+        run: ./gradlew assembleDebug test --console=plain && ./gradlew --stop
 
+      - name: Release build
+        run: ./gradlew assembleRelease --console=plain && ./gradlew --stop
+
+      # `build` = assemble + check (Lint, ktlint); the earlier outputs are up to date.
       - name: Lint and remaining checks
-        run: >-
-          ./gradlew build --console=plain
-          --max-workers=2
-          -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
-          -Pkotlin.compiler.execution.strategy=in-process
+        run: ./gradlew build --console=plain
+
+      - name: Show memory
+        if: always()
+        run: free -m
 
       # upload-artifact v4 requires Gitea 1.23 or later.
       - name: Upload reports
