@@ -49,9 +49,11 @@ android {
         listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
             .associateWith { name ->
                 val env = "PAPERLESS_SIGNING_" + name.replace(Regex("([A-Z])"), "_$1").uppercase()
+                // An unset GitHub secret arrives as an empty variable; treat blank values as missing.
                 providers
                     .gradleProperty("paperless.signing.$name")
-                    .orElse(providers.environmentVariable(env))
+                    .filter { it.isNotBlank() }
+                    .orElse(providers.environmentVariable(env).filter { it.isNotBlank() })
                     .orNull
             }
     val releaseSigning =

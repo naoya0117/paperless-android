@@ -91,8 +91,11 @@ Settings → Secrets and variables → Actions に、次を登録します。
 | Secret | `SIGNING_STORE_PASSWORD` | ストアのパスワード |
 | Secret | `SIGNING_KEY_ALIAS` | `paperless-android` |
 | Secret | `SIGNING_KEY_PASSWORD` | ストアのパスワードと同じ値 |
-| Variable | `SIGNING_CERT_SHA256` | 証明書の SHA-256 フィンガープリント（コロン区切りのままでよい） |
+| Variable | `SIGNING_CERT_SHA256` | 証明書の SHA-256 フィンガープリント（`keytool` の表示のまま、コロン区切りでよい） |
 
+- Secrets は Settings → Environments で Environment `release` を作ってそこに登録し、Deployment branches and tags を
+  「Selected branches and tags」にしてタグ `v*` だけを許可します。こうするとタグのビルド以外からは鍵を読めません
+  （リポジトリの Secrets に登録しても動きますが、書き込み権限のある人が別のブランチのワークフローから読めます）。
 - `SIGNING_CERT_SHA256` を登録しておくと、別の鍵で署名された場合にリリースを作らずに失敗します。
 - Secrets を登録できるのはリポジトリの管理者だけです。GitHub の Actions のログにはマスクされて表示されます。
 - 鍵を Secrets に置くことになるため、GitHub のアカウントは 2 要素認証で保護します。
@@ -254,11 +257,19 @@ GitHub にタグが届くと、GitHub Actions の Release（`.github/workflows/r
 
 1. タグと `paperless.versionName` が一致すること、`CHANGELOG.md` に `## [x.y.z]` の節があることを確かめる
 2. Secrets の鍵で署名したリリースの APK をビルドし、署名の証明書が `SIGNING_CERT_SHA256` と一致することを確かめる
-3. GitHub のリリースを作り、`paperless-android-x.y.z.apk` とその SHA-256、`CHANGELOG.md` の該当の節、
+3. GitHub のリリースを**下書き**で作り、`paperless-android-x.y.z.apk` とその SHA-256、`CHANGELOG.md` の該当の節、
    証明書のフィンガープリントを載せる
 
-失敗した場合は Actions のログで原因を直し、タグはそのままで「Re-run jobs」で再実行します（コードを直す必要があるときは、
-次のパッチバージョンとして出し直します）。
+公開されるのは GitHub でビルドした APK で、[4](#4-実機での確認) で確認した手元の APK と同一とは限りません。
+下書きのリリースから APK をダウンロードして実機に入れ、起動・ログイン・一覧・ビューアーを軽く確認してから、
+GitHub の画面で「Publish release」を押して公開します。
+
+失敗した場合：
+
+- Secrets の設定漏れなど、タグの中身に関係しない原因なら、直してから「Re-run jobs」で再実行します。
+  リリースの作成の途中で失敗して下書きが残っている場合は、先にその下書きを削除します。
+- バージョンや `CHANGELOG.md` の誤り、コードの不具合はタグの中身なので再実行では直りません。直したうえで、
+  次のパッチバージョンとして出し直します。
 
 ## 7. F-Droid への申請
 

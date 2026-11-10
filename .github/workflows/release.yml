@@ -1,12 +1,14 @@
 # Release (CD) on the GitHub mirror: a pushed tag `vX.Y.Z` builds the release APK signed with the release key and
-# publishes it as a GitHub release. Development CI runs on Gitea (.gitea/workflows/); Gitea ignores this directory
-# while .gitea/workflows exists, and the job is also limited to github.com.
+# creates a draft GitHub release with it (published by hand after checking that APK on a device).
+# Development CI runs on Gitea (.gitea/workflows/); Gitea ignores this directory while .gitea/workflows exists,
+# and the job is also limited to github.com.
 #
 # Secrets (Settings → Secrets and variables → Actions):
 #   SIGNING_KEYSTORE_BASE64  the keystore file, base64-encoded
 #   SIGNING_STORE_PASSWORD   the keystore password
 #   SIGNING_KEY_ALIAS        the key alias
 #   SIGNING_KEY_PASSWORD     the key password (the same as the store password for PKCS12)
+# Put them in the environment "release" with a deployment rule for tags `v*`, so that only tag builds can read them.
 # Variable (optional, recommended):
 #   SIGNING_CERT_SHA256      the certificate's SHA-256 fingerprint; the build fails if the APK is signed otherwise
 # See docs/release.md.
@@ -27,11 +29,15 @@ jobs:
   release:
     if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 60
     permissions:
       contents: write # create the release
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Do not leave the write token in .git/config while the build (third-party plugins) runs.
+          persist-credentials: false
 
       - name: Check the tag against the version
         id: version
@@ -51,6 +57,7 @@ jobs:
           awk -v v="$VERSION" '
             index($0, "## [" v "]") == 1 { found = 1; next }
             found && /^## \[/ { exit }
+            found && /^\[[^]]+\]: / { next }
             found { print }
           ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
           if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
@@ -77,13 +84,19 @@ jobs:
 
       - name: Write the keystore
         env:
-          KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::The secret SIGNING_KEYSTORE_BASE64 is not set"
-            exit 1
-          fi
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          for name in SIGNING_KEYSTORE_BASE64 SIGNING_STORE_PASSWORD SIGNING_KEY_ALIAS SIGNING_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::The secret $name is not set"
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
 
       - name: Build the release APK
         env:
@@ -109,8 +122,13 @@ jobs:
           certs=$("$ANDROID_HOME"/build-tools/36.0.0/apksigner verify --verbose --print-certs "$apk")
           echo "$certs"
           actual=$(echo "$certs" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          if [ -z "$actual" ]; then
+            echo "::error::Could not read the signing certificate's SHA-256 from apksigner"
+            exit 1
+          fi
           if [ -n "$EXPECTED_SHA256" ]; then
-            expected=$(echo "$EXPECTED_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')
+            # Accepts keytool's "SHA256: AB:CD:…" as well as apksigner's lowercase hex.
+            expected=$(echo "$EXPECTED_SHA256" | sed -E 's/^ *SHA-?256: *//I' | tr -d ': ' | tr 'A-F' 'a-f')
             if [ "$actual" != "$expected" ]; then
               echo "::error::The APK is signed with $actual, expected $expected"
               exit 1
@@ -140,4 +158,5 @@ jobs:
           gh release create "$GITHUB_REF_NAME" "$file" "$file.sha256" \
             --title "paperless-android $VERSION" \
             --notes-file "$RUNNER_TEMP/body.md" \
-            --verify-tag
+            --verify-tag \
+            --draft
