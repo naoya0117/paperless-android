@@ -1,6 +1,10 @@
 package com.naoya0117.paperless.feature.documents
 
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.paging.testing.asSnapshot
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
@@ -19,6 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -141,11 +146,22 @@ class DocumentListViewModelTest {
 
     @After
     fun tearDown() {
+        store.clear()
+        applicationScope.cancel()
         Dispatchers.resetMain()
         server.close()
     }
 
-    private fun viewModel(savedState: SavedStateHandle) =
+    /** Cleared after each test, so that none keeps collecting into the next one (which sets Main again). */
+    private val store = ViewModelStore()
+
+    private fun viewModel(savedState: SavedStateHandle): DocumentListViewModel =
+        ViewModelProvider.create(
+            store,
+            viewModelFactory { initializer { newViewModel(savedState) } },
+        )["vm${store.keys().size}", DocumentListViewModel::class]
+
+    private fun newViewModel(savedState: SavedStateHandle) =
         DocumentListViewModel(
             DocumentRepository(accounts, cache),
             LabelRepository(accounts, cache),
