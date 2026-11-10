@@ -30,3 +30,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Document upload with metadata and progress; task list, lookup by task ID, waiting for completion, acknowledging
 - Saved views: CRUD, conversion of their filter rules to a document query like the web UI, dashboard/sidebar visibility
 - Bulk operations (correspondent, document type, storage path, tags, custom fields, delete, reprocess) and the trash
+- Accounts: several accounts per device, switching, sign-out; tokens and custom header values encrypted with the
+  Android Keystore
