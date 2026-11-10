@@ -21,6 +21,9 @@ sealed interface SearchMatch {
         val before: String,
         val match: String,
         val after: String,
+        /** Whether there is more text before [before] / after [after]. */
+        val cutBefore: Boolean = false,
+        val cutAfter: Boolean = false,
     ) : SearchMatch
 }
 
@@ -33,6 +36,8 @@ data class SearchState(
     val matches: List<SearchMatch> = emptyList(),
     /** The match shown (an index into [matches]). */
     val current: Int = 0,
+    /** Counts moves between matches, so that each brings the current match into view (even the same one). */
+    val moves: Int = 0,
 ) {
     val currentMatch: SearchMatch? get() = matches.getOrNull(current)
 }
@@ -50,11 +55,15 @@ internal fun searchText(
         val start = text.indexOf(query, from, ignoreCase = true)
         if (start < 0) break
         val end = start + query.length
+        val from0 = (start - context).coerceAtLeast(0)
+        val to = (end + context).coerceAtMost(text.length)
         matches +=
             SearchMatch.InText(
-                before = text.substring((start - context).coerceAtLeast(0), start).oneLine(),
+                before = text.substring(from0, start).oneLine(),
                 match = text.substring(start, end),
-                after = text.substring(end, (end + context).coerceAtMost(text.length)).oneLine(),
+                after = text.substring(end, to).oneLine(),
+                cutBefore = from0 > 0,
+                cutAfter = to < text.length,
             )
         from = end
     }
@@ -64,4 +73,6 @@ internal fun searchText(
 private fun String.oneLine() = replace(Regex("""\s+"""), " ")
 
 private const val SNIPPET_CONTEXT = 60
-private const val MAX_TEXT_MATCHES = 500
+
+/** More are not useful to step through (and each is drawn). */
+internal const val MAX_TEXT_MATCHES = 500

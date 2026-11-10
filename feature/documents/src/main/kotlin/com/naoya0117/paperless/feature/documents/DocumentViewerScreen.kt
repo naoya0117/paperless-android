@@ -389,19 +389,21 @@ private fun PdfPagesView(
     val pageMatches =
         remember(search.matches) { search.matches.filterIsInstance<SearchMatch.InPage>().groupBy { it.page } }
     val current = search.currentMatch as? SearchMatch.InPage
+    val padding = with(LocalDensity.current) { PAGE_PADDING.toPx() }
     // The current match comes into view: its page, scrolled so that the match is in the upper third.
-    LaunchedEffect(current) {
+    LaunchedEffect(current, search.moves) {
         val match = current ?: return@LaunchedEffect
         val viewport = listState.layoutInfo.viewportSize
         val aspect = pages.knownAspectRatio(match.page) ?: PdfPages.A4_ASPECT
-        val top = (match.bounds.minOfOrNull { it.top } ?: 0f) * viewport.width * aspect
+        val pageWidth = viewport.width - 2 * padding
+        val top = (match.bounds.minOfOrNull { it.top } ?: 0f) * pageWidth * aspect
         listState.animateScrollToItem(match.page, (top - viewport.height / 3).toInt().coerceAtLeast(0))
     }
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize().tapWhenNotScrolling({ listState.isScrollInProgress }, onTap),
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(PAGE_PADDING),
+        verticalArrangement = Arrangement.spacedBy(PAGE_PADDING),
     ) {
         items(count = pages.pageCount, key = { it }) { index ->
             PdfPage(pages, index, highlights = pageMatches[index].orEmpty(), current = current)
@@ -449,6 +451,8 @@ private fun PdfPage(
         }
     }
 }
+
+private val PAGE_PADDING = 12.dp
 
 /** The search matches on a page; the current one stands out. */
 @Composable
@@ -519,21 +523,15 @@ private fun SearchBar(
                     search.matches.isEmpty() -> stringResource(R.string.viewer_search_none)
                     else -> stringResource(R.string.viewer_search_position, search.current + 1, search.matches.size)
                 }
-            if (search.searching) {
-                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else if (count != null) {
-                Text(
-                    count,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier =
-                        Modifier.semantics {
-                            liveRegion =
-                                LiveRegionMode.Polite
-                        },
-                )
-            }
-            val enabled =
-                search.matches.size > 1 || (search.matches.size == 1 && search.currentMatch is SearchMatch.InPage)
+            if (search.searching) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            // Always there (a live region is announced when it changes, not when it appears).
+            Text(
+                if (search.searching) "" else count.orEmpty(),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+            // A single match on a page: the buttons bring it back into view.
+            val enabled = search.matches.size > 1 || search.currentMatch is SearchMatch.InPage
             IconButton(onClick = onPrevious, enabled = enabled) {
                 Icon(
                     Icons.Outlined.KeyboardArrowUp,
@@ -559,7 +557,7 @@ private fun TextMatchCard(match: SearchMatch.InText) {
             )
             Text(
                 buildAnnotatedString {
-                    append("…")
+                    if (match.cutBefore) append("…")
                     append(match.before)
                     withStyle(
                         SpanStyle(
@@ -570,7 +568,7 @@ private fun TextMatchCard(match: SearchMatch.InText) {
                         append(match.match)
                     }
                     append(match.after)
-                    append("…")
+                    if (match.cutAfter) append("…")
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 4,
@@ -834,7 +832,7 @@ private fun InfoRow(
 ) = InfoRow(stringResource(label), value)
 
 /**
- * Taps toggle the details, but not a tap that stops a fling (it was scrolling when the finger went down).
+ * Taps switch to full screen, but not a tap that stops a fling (it was scrolling when the finger went down).
  */
 private fun Modifier.tapWhenNotScrolling(
     scrolling: () -> Boolean,

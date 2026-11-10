@@ -157,7 +157,9 @@ class DocumentListViewModelTest {
             val labels =
                 withContext(Dispatchers.Default.limitedParallelism(1)) {
                     withTimeout(10_000) {
-                        viewModel.labelNames.first { it.tags.isNotEmpty() && it.documentTypes.isNotEmpty() }
+                        viewModel.labelNames.first {
+                            it.tags.isNotEmpty() && it.documentTypes.isNotEmpty() && it.correspondents.isNotEmpty()
+                        }
                     }
                 }
 

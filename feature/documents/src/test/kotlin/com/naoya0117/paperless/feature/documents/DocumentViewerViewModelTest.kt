@@ -373,6 +373,9 @@ class DocumentViewerViewModelTest {
         viewModel.openSearch()
         assertFalse(viewModel.fullscreen.value)
         assertTrue(viewModel.search.value.open)
+        // While searching a tap does not leave the search.
+        viewModel.toggleFullscreen()
+        assertFalse(viewModel.fullscreen.value)
     }
 
     @Test
@@ -389,7 +392,10 @@ class DocumentViewerViewModelTest {
                 withContext(Dispatchers.Default.limitedParallelism(1)) {
                     withTimeout(10_000) { viewModel.search.first { it.matches.isNotEmpty() && !it.searching } }
                 }
-            assertEquals(SearchMatch.InText("full ", "text", ""), search.currentMatch)
+            assertEquals(
+                SearchMatch.InText("full ", "text", "", cutBefore = false, cutAfter = false),
+                search.currentMatch,
+            )
 
             viewModel.closeSearch()
             assertEquals(SearchState(), viewModel.search.value)
@@ -399,7 +405,7 @@ class DocumentViewerViewModelTest {
     fun `text matches come with the text around them`() {
         val matches = searchText("Invoice for ACME.\nTotal: 12 EUR. Paid to acme bank.", "acme", context = 6)
         assertEquals(2, matches.size)
-        assertEquals(SearchMatch.InText("e for ", "ACME", ". Tota"), matches[0])
+        assertEquals(SearchMatch.InText("e for ", "ACME", ". Tota", cutBefore = true, cutAfter = true), matches[0])
         assertEquals("acme", matches[1].match)
         assertEquals(emptyList<SearchMatch>(), searchText("text", " "))
     }

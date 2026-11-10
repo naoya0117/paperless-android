@@ -77,12 +77,15 @@ class PdfPages private constructor(
     suspend fun search(query: String): List<SearchMatch.InPage> {
         val matches = mutableListOf<SearchMatch.InPage>()
         for (index in 0 until pageCount) {
+            if (matches.size >= MAX_TEXT_MATCHES) break
             currentCoroutineContext().ensureActive()
             matches +=
                 lock.withLock {
                     withContext(Dispatchers.IO) {
                         check(!closed) { "closed" }
                         renderer.openPage(index).use { page ->
+                            // Known now, so that scrolling to a match on a page not shown yet is right.
+                            aspectRatios[index] = validAspect(page.width, page.height)
                             val width = page.width.toFloat().takeIf { it > 0 } ?: 1f
                             val height = page.height.toFloat().takeIf { it > 0 } ?: 1f
                             page.searchText(query).map { match ->
@@ -103,7 +106,7 @@ class PdfPages private constructor(
                     }
                 }
         }
-        return matches
+        return matches.take(MAX_TEXT_MATCHES)
     }
 
     /**
