@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -41,7 +42,6 @@ import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PersonAdd
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
@@ -70,6 +70,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -112,6 +113,8 @@ import com.naoya0117.paperless.feature.documents.DocumentEditViewModel
 import com.naoya0117.paperless.feature.documents.DocumentListMode
 import com.naoya0117.paperless.feature.documents.DocumentListScreen
 import com.naoya0117.paperless.feature.documents.DocumentListViewModel
+import com.naoya0117.paperless.feature.documents.DocumentSearchBar
+import com.naoya0117.paperless.feature.documents.DocumentSearchButton
 import com.naoya0117.paperless.feature.documents.DocumentViewerScreen
 import com.naoya0117.paperless.feature.documents.DocumentViewerViewModel
 import com.naoya0117.paperless.feature.documents.HomeScreen
@@ -130,7 +133,6 @@ import kotlinx.coroutines.launch
 
 private const val HOME_ROUTE = "home"
 private const val DOCUMENTS_ROUTE = "documents"
-private const val SEARCH_ROUTE = "search"
 private const val INBOX_ROUTE = "inbox"
 private const val UPLOADS_ROUTE = "uploads"
 private const val TRASH_ROUTE = "trash"
@@ -149,7 +151,6 @@ private enum class Tab(
 ) {
     HOME(HOME_ROUTE, null, Icons.Outlined.Home, R.string.title_home),
     DOCUMENTS(DOCUMENTS_ROUTE, DocumentListMode.ALL, Icons.Outlined.Description, R.string.title_documents),
-    SEARCH(SEARCH_ROUTE, DocumentListMode.SEARCH, Icons.Outlined.Search, R.string.title_search),
 }
 
 /** The document lists: one per tab, and the inbox (opened from the documents tab). */
@@ -162,7 +163,7 @@ private const val DOCUMENT_ROUTE = "document/{${DocumentViewerViewModel.DOCUMENT
 private const val EDIT_ROUTE = "document/{${DocumentEditViewModel.DOCUMENT_ID_ARGUMENT}}/edit"
 
 /**
- * The signed-in app: bottom tabs (documents, search) under a top bar with the drawer (hamburger menu) and, on
+ * The signed-in app: bottom tabs (home, documents) under a top bar with the drawer (hamburger menu) and, on
  * the documents tab, the inbox button; and the screens opened from them.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -316,30 +317,24 @@ fun MainShell(
         }
 
         /** The bar of a tab: the menu and, on the documents tab, the inbox. */
-        val tabBar: @Composable (Tab) -> Unit = { shown ->
-            CenterAlignedTopAppBar(
-                title = { Text(stringResource(shown.label)) },
-                navigationIcon = {
-                    IconButton(onClick = dropUnlessResumed { scope.launch { drawerState.open() } }) {
-                        Icon(Icons.Outlined.Menu, contentDescription = stringResource(R.string.menu_open))
-                    }
-                },
-                actions = {
-                    // The inbox belongs to the home and documents tabs.
-                    if ((shown == Tab.HOME || shown == Tab.DOCUMENTS) && inboxCount > 0) {
-                        InboxButton(
-                            inboxCount,
-                            dropUnlessResumed {
-                                navController.navigate(INBOX_ROUTE) {
-                                    launchSingleTop =
-                                        true
-                                }
-                            },
-                        )
-                    }
-                },
-            )
+        val menuButton: @Composable () -> Unit = {
+            IconButton(onClick = dropUnlessResumed { scope.launch { drawerState.open() } }) {
+                Icon(Icons.Outlined.Menu, contentDescription = stringResource(R.string.menu_open))
+            }
         }
+
+        /** Beside the search field of the home and documents tabs: the inbox, while documents wait in it. */
+        val inboxAction: @Composable RowScope.() -> Unit = {
+            if (inboxCount > 0) {
+                InboxButton(
+                    inboxCount,
+                    dropUnlessResumed { navController.navigate(INBOX_ROUTE) { launchSingleTop = true } },
+                )
+            }
+        }
+
+        /** Bumped when the home screen's search field is tapped: the documents tab's field takes the cursor. */
+        var searchFocusRequests by rememberSaveable { mutableIntStateOf(0) }
 
         // Each screen has its bars (in a Scaffold of its own), so that they move with it, e.g. while the back
         // gesture shows the screen underneath.
@@ -375,7 +370,22 @@ fun MainShell(
             ) {
                 composable(HOME_ROUTE) {
                     ListScaffold(
-                        topBar = { tabBar(Tab.HOME) },
+                        topBar = {
+                            // Searching happens on the documents tab.
+                            DocumentSearchButton(
+                                onClick =
+                                    dropUnlessResumed {
+                                        searchFocusRequests++
+                                        navController.navigate(DOCUMENTS_ROUTE) {
+                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                navigationIcon = menuButton,
+                                actions = inboxAction,
+                            )
+                        },
                         bottomBar = { TabBar(Tab.HOME, navController) },
                     ) { padding ->
                         HomeScreen(
@@ -398,12 +408,19 @@ fun MainShell(
                             ),
                     ) {
                         val shown = Tab.entries.firstOrNull { it.route == path }
+                        val listViewModel: DocumentListViewModel = hiltViewModel()
                         // Not from a list that is leaving (e.g. a tap during a transition).
                         val entryLifecycle = LocalLifecycleOwner.current.lifecycle
                         ListScaffold(
                             topBar = {
                                 when {
-                                    shown != null -> tabBar(shown)
+                                    shown == Tab.DOCUMENTS ->
+                                        DocumentSearchBar(
+                                            viewModel = listViewModel,
+                                            navigationIcon = menuButton,
+                                            actions = inboxAction,
+                                            focusRequests = searchFocusRequests,
+                                        )
                                     path == INBOX_ROUTE -> backBar(stringResource(R.string.title_inbox))
                                     else -> error("No bar for $path")
                                 }
@@ -423,6 +440,7 @@ fun MainShell(
                             },
                         ) { padding ->
                             DocumentListScreen(
+                                viewModel = listViewModel,
                                 onOpenDocument = { navController.navigate("document/${it.id}") },
                                 onEditDocument = { id ->
                                     if (entryLifecycle.currentState.isAtLeast(

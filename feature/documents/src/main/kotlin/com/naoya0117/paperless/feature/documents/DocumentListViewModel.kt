@@ -21,6 +21,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +32,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -115,20 +117,42 @@ class DocumentListViewModel
                 ?: DocumentListMode.ALL
 
         private val searchInput = MutableStateFlow(savedState.get<String>(SEARCH_KEY).orEmpty())
+        private val submitted = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
-        /** The search text as typed (for [DocumentListMode.SEARCH]). */
+        private val mutableFilter = MutableStateFlow(DocumentFilter.restore(savedState))
+
+        /** For dates relative to today (e.g. "this year"); checked again with each refresh. */
+        private val today = MutableStateFlow(java.time.LocalDate.now())
+
+        /** The conditions and order of the list ([DocumentListMode.ALL]). */
+        val filter: StateFlow<DocumentFilter> = mutableFilter.asStateFlow()
+
+        fun setFilter(filter: DocumentFilter) {
+            mutableFilter.value = filter
+            filter.save(savedState)
+        }
+
+        /** The search text as typed ([DocumentListMode.ALL] and [DocumentListMode.SEARCH]). */
         val searchText: StateFlow<String> = searchInput.asStateFlow()
 
         /** The entered search text once typing pauses ([DocumentListMode.SEARCH]); empty when none. */
         @OptIn(FlowPreview::class)
         val activeSearch: StateFlow<String> =
-            searchInput
-                .map { it.trim() }
-                .distinctUntilChanged()
-                // Not a request per keystroke; clearing the search applies at once.
-                .debounce { if (it.isEmpty()) 0L else SEARCH_DEBOUNCE_MILLIS }
-                .distinctUntilChanged()
+            merge(
+                searchInput
+                    .map { it.trim() }
+                    .distinctUntilChanged()
+                    // Not a request per keystroke; clearing the search applies at once.
+                    .debounce { if (it.isEmpty()) 0L else SEARCH_DEBOUNCE_MILLIS },
+                // Submitted (the keyboard's search key): at once.
+                submitted,
+            ).distinctUntilChanged()
                 .stateIn(viewModelScope, SharingStarted.Eagerly, searchInput.value.trim())
+
+        /** Searches for the text at once (without waiting for typing to pause). */
+        fun submitSearch() {
+            submitted.tryEmit(searchInput.value.trim())
+        }
 
         private val viewId: Long? = savedState.get<Long>(VIEW_ID_ARGUMENT)
 
@@ -166,7 +190,11 @@ class DocumentListViewModel
         @OptIn(ExperimentalCoroutinesApi::class)
         val documentPages: Flow<PagingData<Document>> =
             when (mode) {
-                DocumentListMode.ALL -> documents.documents(DocumentQuery())
+                // The search field and the filter chips above the list.
+                DocumentListMode.ALL ->
+                    combine(activeSearch, mutableFilter, today) { text, filter, day -> filter.toQuery(text, day) }
+                        .distinctUntilChanged()
+                        .flatMapLatest { query -> documents.documents(query) }
                 DocumentListMode.INBOX -> documents.documents(DocumentQuery(inInbox = true))
                 DocumentListMode.VIEW ->
                     viewQuery.flatMapLatest { query ->
@@ -202,6 +230,7 @@ class DocumentListViewModel
 
         /** Labels change rarely; refreshed with the list (pull to refresh) and when the screen opens. */
         fun refreshLabels() {
+            today.value = java.time.LocalDate.now()
             viewModelScope.launch {
                 try {
                     labels.refreshAll()

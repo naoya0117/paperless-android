@@ -334,16 +334,34 @@ class DocumentListViewModelTest {
         }
 
     @Test
-    fun `all documents never search, even with search text`() =
+    fun `the documents list is searched, narrowed and ordered as chosen`() =
         runTest {
             accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls())
-            val viewModel = viewModel(DocumentListMode.ALL)
+            val savedState = SavedStateHandle(mapOf(DocumentListViewModel.MODE_ARGUMENT to DocumentListMode.ALL.name))
+            val viewModel = viewModel(savedState)
             viewModel.setSearchText("invoice")
+            val filter =
+                DocumentFilter(
+                    tagIds = setOf(1),
+                    correspondentIds = setOf(2),
+                    sort =
+                        DocumentSort(
+                            com.naoya0117.paperless.core.model.DocumentOrdering.Field.TITLE,
+                            descending = false,
+                        ),
+                )
+            viewModel.setFilter(filter)
+            withContext(
+                Dispatchers.Default,
+            ) { withTimeout(10_000) { viewModel.activeSearch.first { it == "invoice" } } }
 
             viewModel.documentPages.asSnapshot()
 
-            assertTrue(documentQueries.toString(), documentQueries.isNotEmpty())
-            assertTrue(documentQueries.toString(), documentQueries.none { "text=" in it })
+            val query = documentQueries.last()
+            assertTrue(query, "text=invoice" in query && "tags__id__all=1" in query)
+            assertTrue(query, "correspondent__id__in=2" in query && "ordering=title" in query)
+            // Kept across process death.
+            assertEquals(filter, viewModel(savedState).filter.value)
         }
 
     @Test
