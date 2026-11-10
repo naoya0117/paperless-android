@@ -81,3 +81,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (tags, correspondent, document type, storage path, created date) from the button inside the field's right end
 - Scanning with the camera (CameraX): pages taken one after another, checked (turned, reordered, removed,
   enhanced for documents) and uploaded as one PDF; several picked images can be put together the same way
+- Scan pages can be trimmed by their four corners (straightening paper photographed at an angle); after
+  uploading a scan its progress is shown, and a line under the search field shows uploads still running

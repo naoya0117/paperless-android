@@ -11,8 +11,12 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,20 +67,28 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -87,6 +99,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import kotlin.math.hypot
 
 /**
  * Scanning a paper document: pages taken with the camera ([startWithCamera]) or picked images, checked
@@ -100,6 +113,8 @@ fun ScanScreen(
     startWithCamera: Boolean,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Queued for upload (e.g. to show its progress); by default the screen just closes. */
+    onUploaded: () -> Unit = onClose,
     /** Picked images to start with (taken over once, then [onImagesTaken]). */
     initialImages: List<android.net.Uri> = emptyList(),
     onImagesTaken: () -> Unit = {},
@@ -113,10 +128,14 @@ fun ScanScreen(
         }
     }
     var camera by rememberSaveable { mutableStateOf(startWithCamera) }
+
+    /** The page being trimmed (its index). */
+    var cropping by rememberSaveable { mutableStateOf<Int?>(null) }
     var confirmDiscard by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val resources = LocalResources.current
     val currentOnClose by rememberUpdatedState(onClose)
+    val currentOnUploaded by rememberUpdatedState(onUploaded)
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
             when (event) {
@@ -128,7 +147,7 @@ fun ScanScreen(
         }
     }
     LifecycleResumeEffect(state.done) {
-        if (state.done) currentOnClose()
+        if (state.done) currentOnUploaded()
         onPauseOrDispose {}
     }
     val leave = {
@@ -141,8 +160,20 @@ fun ScanScreen(
             }
         }
     }
-    BackHandler(enabled = !state.working, onBack = leave)
-    if (camera) {
+    BackHandler(enabled = !state.working && cropping == null, onBack = leave)
+    val croppedPage = cropping?.let(state.pages::getOrNull)
+    if (croppedPage != null) {
+        CropEditor(
+            page = croppedPage,
+            render = { viewModel.render(croppedPage, enhance = false, maxSide = CROP_SIDE, crop = false) },
+            onApply = { corners ->
+                viewModel.setCorners(checkNotNull(cropping), corners)
+                cropping = null
+            },
+            onCancel = { cropping = null },
+            modifier = modifier,
+        )
+    } else if (camera) {
         CameraCapture(
             pages = state.pages,
             newFile = viewModel::newPageFile,
@@ -186,7 +217,7 @@ fun ScanScreen(
                 }
             },
         ) { padding ->
-            PageReview(state, viewModel, Modifier.padding(padding))
+            PageReview(state, viewModel, onCrop = { cropping = it }, modifier = Modifier.padding(padding))
         }
     }
     if (confirmDiscard) {
@@ -216,6 +247,7 @@ fun ScanScreen(
 private fun PageReview(
     state: ScanState,
     viewModel: ScanViewModel,
+    onCrop: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyVerticalGrid(
@@ -267,6 +299,8 @@ private fun PageReview(
                 first = index == 0,
                 last = index == state.pages.lastIndex,
                 enabled = !state.working,
+                render = { p, e -> viewModel.render(p, e, PREVIEW_SIDE) },
+                onCrop = { onCrop(index) },
                 onRotate = { viewModel.rotate(index) },
                 onEarlier = { viewModel.move(index, -1) },
                 onLater = { viewModel.move(index, 1) },
@@ -284,6 +318,8 @@ private fun PageCard(
     first: Boolean,
     last: Boolean,
     enabled: Boolean,
+    render: suspend (ScanPage, Boolean) -> android.graphics.Bitmap,
+    onCrop: () -> Unit,
     onRotate: () -> Unit,
     onEarlier: () -> Unit,
     onLater: () -> Unit,
@@ -300,26 +336,23 @@ private fun PageCard(
                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            AsyncImage(
-                model = page.file,
-                contentDescription = stringResource(R.string.scan_page, number),
-                contentScale = ContentScale.Fit,
-                // A preview of the filter the PDF gets.
-                colorFilter =
-                    if (enhance) {
-                        ColorFilter.colorMatrix(
-                            ColorMatrix(ScanViewModel.documentFilter().array),
-                        )
-                    } else {
-                        null
-                    },
-                // Sideways, the page is wider than the (portrait) box: smaller, so that nothing is cut off.
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .rotate(page.rotation.toFloat())
-                        .scale(if (page.rotation % 180 == 0) 1f else PAGE_ASPECT),
-            )
+            // As it goes into the PDF: turned, trimmed and filtered.
+            val preview by produceState<ImageBitmap?>(null, page, enhance) {
+                value = runCatching { render(page, enhance).asImageBitmap() }.getOrNull()
+            }
+            preview?.let {
+                Image(
+                    it,
+                    contentDescription = stringResource(R.string.scan_page, number),
+                    contentScale = ContentScale.Fit,
+                    modifier =
+                        Modifier.fillMaxSize().clickable(
+                            enabled = enabled,
+                            onClickLabel = stringResource(R.string.scan_crop),
+                            onClick = onCrop,
+                        ),
+                )
+            } ?: CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
             Text(
                 number.toString(),
                 style = MaterialTheme.typography.labelMedium,
@@ -569,3 +602,126 @@ private fun CameraPreview(
 /** A4 portrait (width / height), for page previews. */
 private const val PAGE_ASPECT = 0.707f
 private val THUMB_HEIGHT = 56.dp
+
+/**
+ * Choosing the part of the page to keep: four corners to drag (not a rectangle when the paper was
+ * photographed at an angle; the page is straightened then).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CropEditor(
+    page: ScanPage,
+    render: suspend () -> android.graphics.Bitmap,
+    onApply: (List<Float>?) -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BackHandler(onBack = onCancel)
+    val image by produceState<ImageBitmap?>(null, page.file, page.rotation) {
+        value = runCatching { render().asImageBitmap() }.getOrNull()
+    }
+    val corners = remember(page) { (page.corners ?: ScanViewModel.FULL_PAGE).toMutableStateList() }
+    Scaffold(
+        modifier = modifier,
+        containerColor = Color.Black,
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.scan_crop_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onCancel) {
+                        Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.scan_crop_cancel))
+                    }
+                },
+                actions = {
+                    TextButton(onClick = {
+                        corners.clear()
+                        corners.addAll(ScanViewModel.FULL_PAGE)
+                    }) { Text(stringResource(R.string.scan_crop_reset)) }
+                    TextButton(
+                        onClick = { onApply(corners.toList()) },
+                    ) { Text(stringResource(R.string.scan_crop_apply)) }
+                },
+            )
+        },
+    ) { padding ->
+        Box(Modifier.padding(padding).fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+            val bitmap = image
+            if (bitmap == null) {
+                CircularProgressIndicator()
+            } else {
+                Box(Modifier.aspectRatio(bitmap.width.toFloat() / bitmap.height)) {
+                    Image(bitmap, contentDescription = null, modifier = Modifier.fillMaxSize())
+                    CornerHandles(corners, Modifier.fillMaxSize())
+                }
+            }
+        }
+    }
+}
+
+/** The four corners over the image (as fractions of it), each dragged by the handle nearest the finger. */
+@Composable
+private fun CornerHandles(
+    corners: androidx.compose.runtime.snapshots.SnapshotStateList<Float>,
+    modifier: Modifier = Modifier,
+) {
+    val color = MaterialTheme.colorScheme.primary
+    val touch = with(LocalDensity.current) { HANDLE_TOUCH.toPx() }
+    val radius = with(LocalDensity.current) { HANDLE_RADIUS.toPx() }
+    var dragged by remember { mutableStateOf<Int?>(null) }
+    Canvas(
+        modifier.pointerInput(Unit) {
+            detectDragGestures(
+                onDragStart = { start ->
+                    dragged =
+                        (0 until CORNERS)
+                            .minByOrNull { i ->
+                                hypot(
+                                    corners[2 * i] * size.width - start.x,
+                                    corners[2 * i + 1] * size.height - start.y,
+                                )
+                            }?.takeIf { i ->
+                                hypot(
+                                    corners[2 * i] * size.width - start.x,
+                                    corners[2 * i + 1] * size.height - start.y,
+                                ) <
+                                    touch
+                            }
+                },
+                onDragEnd = { dragged = null },
+                onDragCancel = { dragged = null },
+                onDrag = { change, amount ->
+                    val i = dragged ?: return@detectDragGestures
+                    change.consume()
+                    corners[2 * i] = (corners[2 * i] + amount.x / size.width).coerceIn(0f, 1f)
+                    corners[2 * i + 1] = (corners[2 * i + 1] + amount.y / size.height).coerceIn(0f, 1f)
+                },
+            )
+        },
+    ) {
+        val points =
+            (0 until CORNERS).map { i ->
+                Offset(corners[2 * i] * size.width, corners[2 * i + 1] * size.height)
+            }
+        // Outside the part kept: darker.
+        val outline =
+            Path().apply {
+                moveTo(points[0].x, points[0].y)
+                points.drop(1).forEach { lineTo(it.x, it.y) }
+                close()
+            }
+        clipPath(outline, clipOp = ClipOp.Difference) { drawRect(Color.Black.copy(alpha = 0.5f)) }
+        drawPath(outline, color, style = Stroke(width = 2.dp.toPx()))
+        points.forEach {
+            drawCircle(Color.White, radius, it)
+            drawCircle(color, radius, it, style = Stroke(width = 3.dp.toPx()))
+        }
+    }
+}
+
+private const val CORNERS = 4
+
+/** Pixels of a page preview in the list, and of the page to trim. */
+private const val PREVIEW_SIDE = 600
+private const val CROP_SIDE = 1600
+private val HANDLE_RADIUS = 12.dp
+private val HANDLE_TOUCH = 48.dp

@@ -130,6 +130,7 @@ import com.naoya0117.paperless.feature.labels.LabelListScreen
 import com.naoya0117.paperless.feature.labels.LabelListViewModel
 import com.naoya0117.paperless.feature.uploads.EnqueueResult
 import com.naoya0117.paperless.feature.uploads.ScanScreen
+import com.naoya0117.paperless.feature.uploads.UploadBanner
 import com.naoya0117.paperless.feature.uploads.UploadsScreen
 import com.naoya0117.paperless.feature.uploads.UploadsViewModel
 import kotlinx.coroutines.flow.first
@@ -434,19 +435,28 @@ fun MainShell(
                     ListScaffold(
                         topBar = {
                             // Searching happens on the documents tab.
-                            DocumentSearchButton(
-                                onClick =
-                                    dropUnlessResumed {
-                                        searchFocusRequests++
-                                        navController.navigate(DOCUMENTS_ROUTE) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                navigationIcon = menuButton,
-                                actions = inboxAction,
-                            )
+                            Column {
+                                DocumentSearchButton(
+                                    onClick =
+                                        dropUnlessResumed {
+                                            searchFocusRequests++
+                                            navController.navigate(DOCUMENTS_ROUTE) {
+                                                popUpTo(navController.graph.findStartDestination().id) {
+                                                    saveState =
+                                                        true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        },
+                                    navigationIcon = menuButton,
+                                    actions = inboxAction,
+                                )
+                                UploadBanner(
+                                    uploads,
+                                    onClick = dropUnlessResumed { navController.navigate(UPLOADS_ROUTE) },
+                                )
+                            }
                         },
                         bottomBar = { TabBar(Tab.HOME, navController) },
                     ) { padding ->
@@ -477,12 +487,18 @@ fun MainShell(
                             topBar = {
                                 when {
                                     shown == Tab.DOCUMENTS ->
-                                        DocumentSearchBar(
-                                            viewModel = listViewModel,
-                                            navigationIcon = menuButton,
-                                            actions = inboxAction,
-                                            focusRequests = searchFocusRequests,
-                                        )
+                                        Column {
+                                            DocumentSearchBar(
+                                                viewModel = listViewModel,
+                                                navigationIcon = menuButton,
+                                                actions = inboxAction,
+                                                focusRequests = searchFocusRequests,
+                                            )
+                                            UploadBanner(
+                                                uploads,
+                                                onClick = dropUnlessResumed { navController.navigate(UPLOADS_ROUTE) },
+                                            )
+                                        }
                                     path == INBOX_ROUTE -> backBar(stringResource(R.string.title_inbox))
                                     else -> error("No bar for $path")
                                 }
@@ -620,6 +636,10 @@ fun MainShell(
                         initialImages = imagesToScan,
                         onImagesTaken = { imagesToScan = emptyList() },
                         onClose = dropUnlessResumed { navController.navigateUp() },
+                        // Its progress: the uploads, instead of the scan.
+                        onUploaded = {
+                            navController.navigate(UPLOADS_ROUTE) { popUpTo(SCAN_ROUTE) { inclusive = true } }
+                        },
                     )
                 }
                 composable(TRASH_ROUTE) {
