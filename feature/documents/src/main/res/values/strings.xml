@@ -70,4 +70,23 @@
     <string name="viewer_note_delete_failed">The note could not be deleted. Check the connection and try again.</string>
     <string name="info_note_delete_message">Delete this note?</string>
     <string name="info_note_delete_named">Delete note “%1$s”</string>
+    <string name="trash_title">Trash</string>
+    <string name="trash_empty">Empty trash</string>
+    <string name="trash_none">The trash is empty.</string>
+    <string name="trash_load_failed">The trash could not be loaded. Check the connection.</string>
+    <string name="trash_restored">Document restored</string>
+    <string name="trash_refused">Not allowed (only the owner can restore or delete a document)</string>
+    <string name="trash_failed">That did not work. Check the connection and try again.</string>
+    <string name="trash_empty_title">Empty the trash?</string>
+    <string name="trash_empty_message">All documents in the trash are deleted permanently. This cannot be undone.</string>
+    <string name="trash_delete_title">Delete permanently?</string>
+    <string name="trash_delete_message">“%1$s” is deleted permanently. This cannot be undone.</string>
+    <string name="trash_delete_permanently">Delete permanently</string>
+    <string name="trash_deleted_at">Deleted %1$s</string>
+    <string name="trash_restore_named">Restore “%1$s”</string>
+    <string name="trash_delete_named">Delete “%1$s” permanently</string>
+    <plurals name="trash_deleted">
+        <item quantity="one">%1$d document deleted permanently</item>
+        <item quantity="other">%1$d documents deleted permanently</item>
+    </plurals>
 </resources>

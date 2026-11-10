@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.CloudUpload
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -103,6 +104,7 @@ import com.naoya0117.paperless.feature.documents.DocumentListViewModel
 import com.naoya0117.paperless.feature.documents.DocumentViewerScreen
 import com.naoya0117.paperless.feature.documents.DocumentViewerViewModel
 import com.naoya0117.paperless.feature.documents.InboxViewModel
+import com.naoya0117.paperless.feature.documents.TrashScreen
 import com.naoya0117.paperless.feature.labels.LabelEditScreen
 import com.naoya0117.paperless.feature.labels.LabelEditViewModel
 import com.naoya0117.paperless.feature.labels.LabelKind
@@ -118,6 +120,7 @@ private const val DOCUMENTS_ROUTE = "documents"
 private const val SEARCH_ROUTE = "search"
 private const val INBOX_ROUTE = "inbox"
 private const val UPLOADS_ROUTE = "uploads"
+private const val TRASH_ROUTE = "trash"
 private const val VIEW_ROUTE = "view/{${DocumentListViewModel.VIEW_ID_ARGUMENT}}"
 private const val LABELS_ROUTE = "labels/{${LabelListViewModel.KIND_ARGUMENT}}"
 private const val LABEL_EDIT_ROUTE =
@@ -255,6 +258,10 @@ fun MainShell(
                 onUploads = {
                     scope.launch { drawerState.close() }
                     if (navController.currentDestination?.route in TAB_ROUTES) navController.navigate(UPLOADS_ROUTE)
+                },
+                onTrash = {
+                    scope.launch { drawerState.close() }
+                    if (navController.currentDestination?.route in TAB_ROUTES) navController.navigate(TRASH_ROUTE)
                 },
                 savedViews = savedViews,
                 onSavedView = { view ->
@@ -437,6 +444,9 @@ fun MainShell(
                 ) {
                     LabelEditScreen(onClose = dropUnlessResumed { navController.navigateUp() })
                 }
+                composable(TRASH_ROUTE) {
+                    TrashScreen(onBack = dropUnlessResumed { navController.navigateUp() })
+                }
                 composable(UPLOADS_ROUTE) {
                     UploadsScreen(viewModel = uploads, onOpenDocument = { id ->
                         navController.navigate("document/$id")
@@ -498,6 +508,7 @@ private fun Drawer(
     onSwitchAccount: (String) -> Unit,
     onAddAccount: () -> Unit,
     onUploads: () -> Unit,
+    onTrash: () -> Unit,
     savedViews: List<SavedView>,
     onSavedView: (SavedView) -> Unit,
     onLabels: (LabelKind) -> Unit,
@@ -588,6 +599,13 @@ private fun Drawer(
                 selected = false,
                 onClick = onUploads,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+            NavigationDrawerItem(
+                label = { Text(stringResource(R.string.drawer_trash)) },
+                icon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
+                selected = false,
+                onClick = onTrash,
+                modifier = Modifier.padding(horizontal = 12.dp),
             )
             HorizontalDivider()
             if (savedViews.isNotEmpty()) {

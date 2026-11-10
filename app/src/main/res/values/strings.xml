@@ -37,4 +37,5 @@
     <string name="drawer_account_sign_in">%1$s · Sign in required</string>
     <string name="drawer_accounts_shown">Accounts shown</string>
     <string name="drawer_accounts_hidden">Accounts hidden</string>
+    <string name="drawer_trash">Trash</string>
 </resources>

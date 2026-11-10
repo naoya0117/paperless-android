@@ -67,3 +67,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Several accounts: add one from the menu (a login that can be cancelled) and switch between them; an account
   that must sign in again can be left for another one
 - Document details: notes (add and delete) and custom field values, shown by type (options, dates, money, ...)
+- Trash (from the menu): restore deleted documents, delete them permanently or empty the trash
+- Pinch to zoom in the viewer (two fingers move the zoomed page)
