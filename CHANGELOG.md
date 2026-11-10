@@ -79,3 +79,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Home tab (shown first): the saved views of the web interface's dashboard, each with its first documents
 - Search field on top of the home and documents tabs (the search tab is gone): text search, order, and filter chips
   (tags, correspondent, document type, storage path, created date) from the button inside the field's right end
+- Scanning with the camera (CameraX): pages taken one after another, checked (turned, reordered, removed,
+  enhanced for documents) and uploaded as one PDF; several picked images can be put together the same way

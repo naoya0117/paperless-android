@@ -34,4 +34,14 @@
     <string name="drawer_accounts_hidden">アカウントを非表示</string>
     <string name="drawer_trash">ごみ箱</string>
     <string name="title_home">ホーム</string>
+    <string name="upload_combine_title">画像をまとめますか？</string>
+    <string name="upload_combine">1 つの文書に</string>
+    <string name="upload_separately">別々に</string>
+    <string name="upload_pick_files">ファイルを選ぶ</string>
+    <string name="upload_pick_files_description">PDF・画像・Office 文書など</string>
+    <string name="upload_scan">カメラでスキャン</string>
+    <string name="upload_scan_description">紙のページを撮影して 1 つの PDF に</string>
+    <plurals name="upload_combine_message">
+        <item quantity="other">%1$d 枚の画像を 1 つの文書（PDF）にまとめるか、別々にアップロードできます。</item>
+    </plurals>
 </resources>

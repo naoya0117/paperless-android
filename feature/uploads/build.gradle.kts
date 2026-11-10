@@ -22,6 +22,12 @@ dependencies {
     implementation(libs.hilt.lifecycle.viewmodel.compose)
     ksp(libs.hilt.compiler)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.view)
+    implementation(libs.androidx.exifinterface)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.coil.compose)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

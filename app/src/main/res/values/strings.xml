@@ -39,4 +39,15 @@
     <string name="drawer_accounts_hidden">Accounts hidden</string>
     <string name="drawer_trash">Trash</string>
     <string name="title_home">Home</string>
+    <string name="upload_combine_title">Put the images together?</string>
+    <string name="upload_combine">One document</string>
+    <string name="upload_separately">Separately</string>
+    <string name="upload_pick_files">Pick files</string>
+    <string name="upload_pick_files_description">PDFs, images, office documents…</string>
+    <string name="upload_scan">Scan with the camera</string>
+    <string name="upload_scan_description">Pages of paper, as one PDF</string>
+    <plurals name="upload_combine_message">
+        <item quantity="one">The image can be uploaded as a PDF or as it is.</item>
+        <item quantity="other">The %1$d images can be put together into one document (PDF) or uploaded separately.</item>
+    </plurals>
 </resources>
