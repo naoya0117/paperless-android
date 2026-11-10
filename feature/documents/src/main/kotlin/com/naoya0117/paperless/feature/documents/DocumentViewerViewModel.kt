@@ -11,6 +11,9 @@ import com.naoya0117.paperless.core.network.DocumentFileKind
 import com.naoya0117.paperless.core.network.PaperlessException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +21,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import javax.inject.Inject
@@ -49,8 +54,6 @@ data class ViewerState(
     val document: Document? = null,
     val labels: LabelNames = LabelNames(),
     val content: ViewerContent = ViewerContent.Loading,
-    /** The document could not be loaded at all (not cached and the server failed). */
-    val documentFailed: Boolean = false,
 )
 
 @HiltViewModel
@@ -66,19 +69,14 @@ class DocumentViewerViewModel
 
         private val fetched = MutableStateFlow<Document?>(null)
         private val content = MutableStateFlow<ViewerContent>(ViewerContent.Loading)
-        private val documentFailed = MutableStateFlow(false)
 
         val state: StateFlow<ViewerState> =
-            combine(documents.cached(documentId), fetched, labels.names(), content, documentFailed) {
-                cached,
-                full,
-                names,
-                file,
-                failed,
-                ->
-                val document = full ?: cached
-                ViewerState(document, names, file, failed && document == null)
+            combine(documents.cached(documentId), fetched, labels.names(), content) { cached, full, names, file ->
+                ViewerState(newer(cached, full), names, file)
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), ViewerState())
+
+        /** One load at a time (e.g. Retry tapped twice), so that no PDF is opened twice. */
+        private var loadJob: Job? = null
 
         private val info = MutableStateFlow(false)
 
@@ -100,27 +98,27 @@ class DocumentViewerViewModel
         fun retry() = load()
 
         private fun load() {
-            documentFailed.value = false
+            if (loadJob?.isActive == true) return
             if (content.value == ViewerContent.Failed) content.value = ViewerContent.Loading
-            viewModelScope.launch {
-                val document =
-                    try {
-                        documents.fetch(documentId).also { fetched.value = it }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (
-                        @Suppress("TooGenericExceptionCaught") _: Exception,
-                    ) {
-                        // Offline: the cached document (if any) is shown.
-                        state.value.document ?: documents.cachedNow()
+            loadJob =
+                viewModelScope.launch {
+                    val document =
+                        try {
+                            documents.fetch(documentId).also { fetched.value = it }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (
+                            @Suppress("TooGenericExceptionCaught") _: Exception,
+                        ) {
+                            // Offline: the cached document (if any) is shown.
+                            documents.cachedNow()
+                        }
+                    if (document == null) {
+                        content.value = ViewerContent.Failed
+                        return@launch
                     }
-                if (document == null) {
-                    documentFailed.value = true
-                    content.value = ViewerContent.Failed
-                    return@launch
+                    if (content.value is ViewerContent.Loading) content.value = openFile(document)
                 }
-                if (content.value is ViewerContent.Loading) content.value = openFile(document)
-            }
         }
 
         /** The cached document, waited for once (the state may not be collected yet). */
@@ -129,9 +127,10 @@ class DocumentViewerViewModel
         private suspend fun openFile(document: Document): ViewerContent =
             try {
                 val file = files.file(document, DocumentFileKind.PREVIEW)
-                val type = file.contentType ?: document.mimeType
+                // Without parameters such as "; charset=binary".
+                val type = (file.contentType ?: document.mimeType)?.substringBefore(';')?.trim()?.lowercase()
                 when {
-                    type == PDF -> ViewerContent.Pdf(PdfPages.open(file.file))
+                    type == PDF -> ViewerContent.Pdf(openPdf(file.file))
                     type?.startsWith("image/") == true -> ViewerContent.Image(file.file)
                     else -> ViewerContent.Unsupported(file.fileName ?: document.originalFileName)
                 }
@@ -150,11 +149,39 @@ class DocumentViewerViewModel
                 ViewerContent.Failed
             }
 
+        /**
+         * Opens the PDF even if the screen is left meanwhile, so that the renderer is never lost unclosed; then
+         * closes it again if so.
+         */
+        private suspend fun openPdf(file: File): PdfPages {
+            val pages = withContext(NonCancellable) { PdfPages.open(file) }
+            if (!currentCoroutineContext().isActive) {
+                pages.close()
+                throw CancellationException("Left while opening")
+            }
+            return pages
+        }
+
         override fun onCleared() {
             (content.value as? ViewerContent.Pdf)?.pages?.close()
         }
 
         companion object {
+            /**
+             * The fetched copy has the full content and notes, but the cache follows edits: the newer one wins
+             * (by modification time), the fetched one on a tie.
+             */
+            internal fun newer(
+                cached: Document?,
+                fetched: Document?,
+            ): Document? =
+                when {
+                    cached == null -> fetched
+                    fetched == null -> cached
+                    cached.modified > fetched.modified -> cached
+                    else -> fetched
+                }
+
             const val DOCUMENT_ID_ARGUMENT = "id"
             private const val PDF = "application/pdf"
             private const val STOP_TIMEOUT_MILLIS = 5_000L

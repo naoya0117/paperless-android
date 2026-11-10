@@ -5,12 +5,16 @@ import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.core.graphics.createBitmap
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.Closeable
 import java.io.File
+import kotlin.math.sqrt
 
 /**
  * Renders the pages of a PDF file one at a time (PdfRenderer allows only one open page). Pages are rendered
@@ -21,24 +25,23 @@ class PdfPages private constructor(
     private val renderer: PdfRenderer,
 ) : Closeable {
     private val lock = Mutex()
-    private var closed = false
+
+    @Volatile private var closed = false
 
     val pageCount: Int = renderer.pageCount
 
-    /** Height / width per page, measured when first needed. */
+    /** Height / width per page, known once the page was rendered. */
     private val aspectRatios = arrayOfNulls<Float>(pageCount)
 
-    /** Height relative to width of page [index] (e.g. about 1.41 for A4 portrait). */
-    suspend fun aspectRatio(index: Int): Float =
-        aspectRatios[index] ?: lock
-            .withLock {
-                withContext(Dispatchers.IO) {
-                    check(!closed) { "closed" }
-                    renderer.openPage(index).use { page -> page.height.toFloat() / page.width }
-                }
-            }.also { aspectRatios[index] = it }
+    /** Height relative to width of page [index] (about 1.41 for A4 portrait), or `null` until rendered. */
+    fun knownAspectRatio(index: Int): Float? = aspectRatios[index]
 
-    /** Page [index] as an image [width] pixels wide (at most [MAX_WIDTH]), on a white background. */
+    /**
+     * Page [index] as an image [width] pixels wide (at most [MAX_WIDTH]), on a white background. Very tall
+     * pages (e.g. receipts) are rendered narrower, so that no page takes more than [MAX_PIXELS].
+     *
+     * @throws IllegalStateException if closed meanwhile
+     */
     suspend fun render(
         index: Int,
         width: Int,
@@ -47,9 +50,11 @@ class PdfPages private constructor(
             withContext(Dispatchers.IO) {
                 check(!closed) { "closed" }
                 renderer.openPage(index).use { page ->
-                    val bitmapWidth = width.coerceIn(1, MAX_WIDTH)
-                    val bitmapHeight = (bitmapWidth.toLong() * page.height / page.width).toInt().coerceAtLeast(1)
-                    aspectRatios[index] = page.height.toFloat() / page.width
+                    val aspect = validAspect(page.width, page.height)
+                    aspectRatios[index] = aspect
+                    val fitting = sqrt(MAX_PIXELS / aspect).toInt()
+                    val bitmapWidth = minOf(width, MAX_WIDTH, fitting).coerceAtLeast(1)
+                    val bitmapHeight = (bitmapWidth * aspect).toInt().coerceAtLeast(1)
                     createBitmap(bitmapWidth, bitmapHeight).also { bitmap ->
                         bitmap.eraseColor(Color.WHITE)
                         page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
@@ -58,11 +63,15 @@ class PdfPages private constructor(
             }
         }
 
+    /**
+     * Stops rendering at once; the renderer is released in the background after a page being rendered
+     * (which cannot be interrupted), so that closing never blocks the caller (e.g. the main thread).
+     */
     override fun close() {
-        // Waits for a page being rendered; the renderer must not be closed meanwhile.
-        kotlinx.coroutines.runBlocking {
+        if (closed) return
+        closed = true
+        CLOSER.launch {
             lock.withLock {
-                closed = true
                 renderer.close()
                 descriptor.close()
             }
@@ -70,8 +79,24 @@ class PdfPages private constructor(
     }
 
     companion object {
-        /** Enough for sharp text on large phones; bounds memory per page (about 8 MB at A4). */
+        /** Enough for sharp text on large phones. */
         const val MAX_WIDTH: Int = 1440
+
+        /** At most about 25 MB per rendered page. */
+        private const val MAX_PIXELS: Float = 1440f * 1440f * 3f
+
+        /** A4 portrait, for pages that report no usable size. */
+        const val A4_ASPECT: Float = 1.414f
+
+        private val CLOSER = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+        private fun validAspect(
+            width: Int,
+            height: Int,
+        ): Float {
+            val aspect = height.toFloat() / width
+            return if (aspect.isFinite() && aspect > 0f) aspect else A4_ASPECT
+        }
 
         /**
          * Opens [file] for rendering.

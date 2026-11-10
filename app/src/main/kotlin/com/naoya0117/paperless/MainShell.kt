@@ -2,6 +2,7 @@ package com.naoya0117.paperless
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
@@ -23,6 +24,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
@@ -127,6 +129,8 @@ fun MainShell(
                 }
             },
             bottomBar = { if (tab != null) TabBar(tab, navController) },
+            // Other screens (e.g. the viewer) are a Scaffold of their own and handle the system bars themselves.
+            contentWindowInsets = if (tab != null) ScaffoldDefaults.contentWindowInsets else WindowInsets(0),
         ) { padding ->
             NavHost(
                 navController = navController,

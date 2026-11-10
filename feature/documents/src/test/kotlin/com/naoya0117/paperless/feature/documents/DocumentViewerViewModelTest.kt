@@ -14,6 +14,7 @@ import com.naoya0117.paperless.core.datastore.AccountStore
 import com.naoya0117.paperless.core.datastore.SecretCipher
 import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.AuthToken
+import com.naoya0117.paperless.core.model.Document
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -39,6 +40,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.net.Proxy
 import java.time.Instant
+import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicBoolean
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -179,7 +181,7 @@ class DocumentViewerViewModelTest {
             offline.set(true)
             val viewModel = viewModel()
 
-            assertTrue(viewModel.awaitState { it.content is ViewerContent.Failed }.documentFailed)
+            assertEquals(null, viewModel.awaitState { it.content is ViewerContent.Failed }.document)
 
             offline.set(false)
             viewModel.retry()
@@ -195,4 +197,45 @@ class DocumentViewerViewModelTest {
         viewModel.toggleInfo()
         assertEquals(false, viewModel.infoVisible.value)
     }
+
+    @Test
+    fun `the newer of the cached and the fetched document is shown`() {
+        val fetched = document(modified = 10, title = "Fetched")
+        val cached = document(modified = 20, title = "Edited")
+
+        assertEquals("Edited", DocumentViewerViewModel.newer(cached, fetched)?.title)
+        assertEquals(
+            "Fetched",
+            DocumentViewerViewModel.newer(cached.copy(modified = Instant.ofEpochMilli(10)), fetched)?.title,
+        )
+        assertEquals("Fetched", DocumentViewerViewModel.newer(null, fetched)?.title)
+        assertEquals("Edited", DocumentViewerViewModel.newer(cached, null)?.title)
+    }
+
+    private fun document(
+        modified: Long,
+        title: String,
+    ) = Document(
+        id = 1,
+        title = title,
+        content = "",
+        created = LocalDate.of(2026, 1, 1),
+        added = Instant.EPOCH,
+        modified = Instant.ofEpochMilli(modified),
+        correspondentId = null,
+        documentTypeId = null,
+        storagePathId = null,
+        tagIds = emptyList(),
+        archiveSerialNumber = null,
+        originalFileName = null,
+        archivedFileName = null,
+        mimeType = null,
+        pageCount = null,
+        customFields = emptyList(),
+        notes = null,
+        owner = null,
+        userCanChange = true,
+        deletedAt = null,
+        searchHit = null,
+    )
 }

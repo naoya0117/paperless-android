@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -139,8 +140,10 @@ private fun PdfPagesView(
     pages: PdfPages,
     onTap: () -> Unit,
 ) {
+    val listState = rememberLazyListState()
     LazyColumn(
-        modifier = Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onTap = { onTap() }) },
+        state = listState,
+        modifier = Modifier.fillMaxSize().tapWhenNotScrolling({ listState.isScrollInProgress }, onTap),
         contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -155,10 +158,12 @@ private fun PdfPage(
 ) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val widthPx = with(LocalDensity.current) { maxWidth.roundToPx() }
-        val aspect by produceState(A4_ASPECT, pages, index) { value = safely { pages.aspectRatio(index) } ?: A4_ASPECT }
         val bitmap by produceState<ImageBitmap?>(null, pages, index, widthPx) {
             value = safely { pages.render(index, widthPx).asImageBitmap() }
         }
+        // Known once rendered; until then the page takes the space of an A4 page.
+        val aspect =
+            bitmap?.let { it.height.toFloat() / it.width } ?: pages.knownAspectRatio(index) ?: PdfPages.A4_ASPECT
         val description = stringResource(R.string.viewer_page, index + 1, pages.pageCount)
         Box(
             modifier =
@@ -206,7 +211,7 @@ private fun ImageView(
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .pointerInput(Unit) { detectTapGestures(onTap = { onTap() }) }
+                .tapWhenNotScrolling({ false }, onTap)
                 .padding(12.dp),
     ) {
         AsyncImage(
@@ -297,5 +302,17 @@ private fun InfoRow(
     }
 }
 
-/** Until a page's size is known. */
-private const val A4_ASPECT = 1.414f
+/**
+ * Taps toggle the details, but not a tap that stops a fling (it was scrolling when the finger went down).
+ */
+private fun Modifier.tapWhenNotScrolling(
+    scrolling: () -> Boolean,
+    onTap: () -> Unit,
+): Modifier =
+    pointerInput(Unit) {
+        var wasScrolling = false
+        detectTapGestures(
+            onPress = { wasScrolling = scrolling() },
+            onTap = { if (!wasScrolling) onTap() },
+        )
+    }
