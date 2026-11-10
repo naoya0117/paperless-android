@@ -61,7 +61,14 @@ internal fun formatMoney(
     return if (currency == null) {
         listOfNotNull(code, plain(amount)).joinToString(" ")
     } else {
-        NumberFormat.getCurrencyInstance().apply { this.currency = currency }.format(amount)
+        // The locale's format keeps its own currency's digits (e.g. none for yen in Japanese): use the value's.
+        NumberFormat
+            .getCurrencyInstance()
+            .apply {
+                this.currency = currency
+                minimumFractionDigits = currency.defaultFractionDigits.coerceAtLeast(0)
+                maximumFractionDigits = currency.defaultFractionDigits.coerceAtLeast(0)
+            }.format(amount)
     }
 }
 
