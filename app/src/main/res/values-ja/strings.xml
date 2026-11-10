@@ -33,4 +33,5 @@
     <string name="drawer_accounts_shown">アカウントを表示中</string>
     <string name="drawer_accounts_hidden">アカウントを非表示</string>
     <string name="drawer_trash">ごみ箱</string>
+    <string name="title_home">ホーム</string>
 </resources>

@@ -38,4 +38,5 @@
     <string name="drawer_accounts_shown">Accounts shown</string>
     <string name="drawer_accounts_hidden">Accounts hidden</string>
     <string name="drawer_trash">Trash</string>
+    <string name="title_home">Home</string>
 </resources>

@@ -36,6 +36,7 @@ import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Person
@@ -113,6 +114,7 @@ import com.naoya0117.paperless.feature.documents.DocumentListScreen
 import com.naoya0117.paperless.feature.documents.DocumentListViewModel
 import com.naoya0117.paperless.feature.documents.DocumentViewerScreen
 import com.naoya0117.paperless.feature.documents.DocumentViewerViewModel
+import com.naoya0117.paperless.feature.documents.HomeScreen
 import com.naoya0117.paperless.feature.documents.InboxViewModel
 import com.naoya0117.paperless.feature.documents.TrashScreen
 import com.naoya0117.paperless.feature.labels.LabelEditScreen
@@ -126,6 +128,7 @@ import com.naoya0117.paperless.feature.uploads.UploadsViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+private const val HOME_ROUTE = "home"
 private const val DOCUMENTS_ROUTE = "documents"
 private const val SEARCH_ROUTE = "search"
 private const val INBOX_ROUTE = "inbox"
@@ -139,16 +142,19 @@ private const val LABEL_EDIT_ROUTE =
 /** The bottom tabs: only what is used most; everything else is in the drawer (hamburger menu). */
 private enum class Tab(
     val route: String,
-    val mode: DocumentListMode,
+    /** The list a tab shows; `null` for the home screen. */
+    val mode: DocumentListMode?,
     val icon: ImageVector,
     val label: Int,
 ) {
+    HOME(HOME_ROUTE, null, Icons.Outlined.Home, R.string.title_home),
     DOCUMENTS(DOCUMENTS_ROUTE, DocumentListMode.ALL, Icons.Outlined.Description, R.string.title_documents),
     SEARCH(SEARCH_ROUTE, DocumentListMode.SEARCH, Icons.Outlined.Search, R.string.title_search),
 }
 
 /** The document lists: one per tab, and the inbox (opened from the documents tab). */
-private val LIST_ROUTES = Tab.entries.map { it.route to it.mode } + (INBOX_ROUTE to DocumentListMode.INBOX)
+private val LIST_ROUTES =
+    Tab.entries.mapNotNull { tab -> tab.mode?.let { tab.route to it } } + (INBOX_ROUTE to DocumentListMode.INBOX)
 
 private val TAB_ROUTES = Tab.entries.map { it.route }.toSet()
 
@@ -182,11 +188,11 @@ fun MainShell(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val inboxCount by inbox.count.collectAsStateWithLifecycle()
-    // The count may have changed (e.g. documents checked in the inbox) whenever the list shows again.
-    LaunchedEffect(route) { if (route == DOCUMENTS_ROUTE) inbox.refresh() }
+    // The count may have changed (e.g. documents checked in the inbox) whenever its screens (home, documents) show again.
+    LaunchedEffect(route) { if (route == HOME_ROUTE || route == DOCUMENTS_ROUTE) inbox.refresh() }
     // Also when coming back to the app (e.g. documents were checked in the web interface meanwhile).
     LifecycleResumeEffect(route) {
-        if (route == DOCUMENTS_ROUTE) inbox.refresh()
+        if (route == HOME_ROUTE || route == DOCUMENTS_ROUTE) inbox.refresh()
         onPauseOrDispose {}
     }
     // Back closes the drawer rather than the app.
@@ -319,8 +325,8 @@ fun MainShell(
                     }
                 },
                 actions = {
-                    // The inbox belongs to the documents tab.
-                    if (shown == Tab.DOCUMENTS && inboxCount > 0) {
+                    // The inbox belongs to the home and documents tabs.
+                    if ((shown == Tab.HOME || shown == Tab.DOCUMENTS) && inboxCount > 0) {
                         InboxButton(
                             inboxCount,
                             dropUnlessResumed {
@@ -340,7 +346,7 @@ fun MainShell(
         Box(Modifier.fillMaxSize()) {
             NavHost(
                 navController = navController,
-                startDestination = DOCUMENTS_ROUTE,
+                startDestination = HOME_ROUTE,
                 // One animation for the back button and the back gesture (its own transitions are set to the same):
                 // screens slide in from the right and back out to it. Between tabs they fade.
                 enterTransition = {
@@ -367,6 +373,19 @@ fun MainShell(
                 predictivePopEnterTransition = { popEnter() },
                 predictivePopExitTransition = { popExit() },
             ) {
+                composable(HOME_ROUTE) {
+                    ListScaffold(
+                        topBar = { tabBar(Tab.HOME) },
+                        bottomBar = { TabBar(Tab.HOME, navController) },
+                    ) { padding ->
+                        HomeScreen(
+                            onOpenDocument = { navController.navigate("document/${it.id}") },
+                            onOpenView = { id -> navController.navigate("view/$id") },
+                            modifier = Modifier.padding(padding),
+                            onRefresh = { inbox.refresh(force = true) },
+                        )
+                    }
+                }
                 LIST_ROUTES.forEach { (path, mode) ->
                     composable(
                         route = path,
@@ -415,7 +434,7 @@ fun MainShell(
                                 },
                                 snackbar = snackbar,
                                 modifier = Modifier.padding(padding),
-                                // The inbox count is shown on the documents tab only.
+                                // The inbox count is shown on the home and documents tabs (home refreshes it itself).
                                 onRefresh = { if (path == DOCUMENTS_ROUTE) inbox.refresh(force = true) },
                             )
                         }
@@ -559,7 +578,7 @@ private fun TabBar(
                 onClick =
                     dropUnlessResumed {
                         navController.navigate(item.route) {
-                            // The documents tab is the root; the others come back to it on Back.
+                            // The home tab is the root; the others come back to it on Back.
                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                             launchSingleTop = true
                             restoreState = true

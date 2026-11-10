@@ -103,4 +103,9 @@
     <string name="documents_moved_to_trash">ごみ箱へ移動しました</string>
     <string name="documents_open">開く</string>
     <string name="documents_menu">その他の操作</string>
+    <string name="home_show_all">すべて表示</string>
+    <string name="home_view_failed">文書を読み込めませんでした</string>
+    <string name="home_view_empty">文書はありません</string>
+    <string name="home_no_views">ダッシュボードに表示する保存済みビューがここに並びます。Web 画面の「設定 → 保存済みビュー → ダッシュボードに表示」で選べます。</string>
+    <string name="home_load_failed">ダッシュボードを読み込めませんでした。接続を確認して、引っ張って更新してください。</string>
 </resources>

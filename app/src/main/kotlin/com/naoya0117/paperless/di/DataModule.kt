@@ -19,6 +19,7 @@ import com.naoya0117.paperless.core.database.UploadQueue
 import com.naoya0117.paperless.core.datastore.AccountStore
 import com.naoya0117.paperless.core.datastore.AndroidKeystoreCipher
 import com.naoya0117.paperless.feature.documents.DocumentFileExport
+import com.naoya0117.paperless.feature.documents.HomeViewModel
 import dagger.Lazy
 import dagger.Module
 import dagger.Provides
@@ -74,6 +75,7 @@ object DataModule {
             uploads.get().clear(accountId)
             files.get().clear(accountId)
             cache.clear(accountId)
+            HomeViewModel.clear(context, accountId)
             // Copies handed to other apps are not kept per account: all go.
             withContext(Dispatchers.IO) { DocumentFileExport.clearShared(context) }
         }
