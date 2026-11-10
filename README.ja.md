@@ -21,6 +21,10 @@ Kotlin で実装した [Paperless-ngx](https://github.com/paperless-ngx/paperles
 [GitHub のリリース](https://github.com/naoya0117/paperless-android/releases)から APK（`paperless-android-<バージョン>.apk`）を
 ダウンロードしてインストールしてください。各リリースに APK の SHA-256 を記載しています。
 
+> **GitHub 版と F-Droid 版：** F-Droid で配布するアプリ（掲載後）は F-Droid がビルドして署名するため、GitHub の APK とは
+> 署名が異なります。互いに上書きして更新することはできません。切り替えるときは、先にアプリをアンインストールしてください
+> （アカウントを含むアプリのデータも削除されます）。
+
 APK は次の証明書（SHA-256）で署名しています。
 
 ```text

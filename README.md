@@ -23,6 +23,10 @@ Download the APK (`paperless-android-<version>.apk`) from the
 [releases on GitHub](https://github.com/naoya0117/paperless-android/releases) and install it.
 Each release lists the APK's SHA-256.
 
+> **GitHub and F-Droid:** the app on F-Droid (once it is listed there) is built and signed by F-Droid, so it has a
+> different signature from the APK on GitHub. Neither can update the other: to switch, uninstall the app first
+> (the app's data, including the accounts, is removed with it).
+
 The APK is signed with the following certificate (SHA-256):
 
 ```text
