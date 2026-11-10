@@ -52,8 +52,15 @@ jobs:
           PROPS
           free -m
 
-      - name: Debug build and unit tests
-        run: ./gradlew assembleDebug test --console=plain && ./gradlew --stop
+      - name: Debug build
+        run: ./gradlew assembleDebug --console=plain && ./gradlew --stop
+
+      # Robolectric tests run in their own JVM next to the daemon; a smaller daemon heap leaves room for it.
+      - name: Unit tests
+        run: >-
+          ./gradlew test --console=plain
+          -Dorg.gradle.jvmargs="-Xmx1g -XX:MaxMetaspaceSize=768m -XX:+UseSerialGC -Dfile.encoding=UTF-8"
+          && ./gradlew --stop
 
       - name: Release build
         run: ./gradlew assembleRelease --console=plain && ./gradlew --stop
