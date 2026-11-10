@@ -216,7 +216,8 @@ class DocumentViewerViewModelTest {
         runTest {
             signIn()
             val viewModel = viewModel()
-            viewModel.awaitState { it.document?.content == "full text" }
+            // The file is the preview the viewer loads (cached): shared once it is there.
+            viewModel.awaitState { it.document?.content == "full text" && it.content is ViewerContent.Image }
 
             viewModel.share()
 
