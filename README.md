@@ -19,11 +19,11 @@ An Android client for [Paperless-ngx](https://github.com/paperless-ngx/paperless
 
 ## Features
 
-- **Documents**: home screen with the saved views of the dashboard; document lists with large thumbnails, also
-  offline; full-text search with order and filters (tags, correspondent, document type, storage path, created date)
+- **Documents**: home screen with the saved views of the dashboard; document lists with large thumbnails, available
+  offline; inbox; trash with restore; full-text search with sorting and filters (tags, correspondent, document type, storage path, created date)
 - **Viewer**: PDFs and images, full screen, pinch to zoom, search within the document; details with notes and
-  custom fields; editing; share, open in another app, download, delete; trash with restore; inbox
-- **Adding documents**: scanning with the camera (several pages, trimmed by their corners and enhanced, as one PDF);
+  custom fields; editing; share, open in another app, download, delete
+- **Adding documents**: scanning with the camera (several pages, cropped to their corners and enhanced, as one PDF);
   uploading files or sharing them from other apps, several images as one document; uploads queued and sent in the
   background
 - **Organizing**: tags, correspondents, document types and storage paths; saved views

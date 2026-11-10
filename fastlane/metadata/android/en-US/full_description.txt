@@ -3,8 +3,8 @@
 <p><b>Documents</b></p>
 <ul>
 <li>Home screen with the saved views of your dashboard</li>
-<li>Document lists with large thumbnails, also offline</li>
-<li>Full-text search with order and filters (tags, correspondent, document type, storage path, created date)</li>
+<li>Document lists with large thumbnails, available offline</li>
+<li>Full-text search with sorting and filters (tags, correspondent, document type, storage path, created date)</li>
 <li>Viewer for PDFs and images: full screen, pinch to zoom, search within the document</li>
 <li>Details with notes and custom fields; editing title, date, labels and archive serial number</li>
 <li>Share, open in another app, download, delete; trash with restore</li>
@@ -13,7 +13,7 @@
 
 <p><b>Adding documents</b></p>
 <ul>
-<li>Scan paper with the camera: several pages, trimmed by their corners and enhanced, uploaded as one PDF</li>
+<li>Scan paper with the camera: several pages, cropped to their corners and enhanced, uploaded as one PDF</li>
 <li>Upload files, or share them from other apps; several images can become one document</li>
 <li>Uploads are queued and sent in the background when a network is available</li>
 </ul>
