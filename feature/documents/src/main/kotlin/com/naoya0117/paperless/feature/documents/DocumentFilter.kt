@@ -64,7 +64,9 @@ data class DocumentFilter(
     val sort: DocumentSort = DocumentSort(),
 ) {
     /** The created dates applied today. */
-    val createdRange: DateRange? get() = createdPreset?.range() ?: created
+    val createdRange: DateRange? get() = createdRange(LocalDate.now())
+
+    fun createdRange(today: LocalDate): DateRange? = createdPreset?.range(today) ?: created
 
     /** How many conditions narrow the list (not the order). */
     val conditionCount: Int
@@ -75,7 +77,10 @@ data class DocumentFilter(
     val isDefault: Boolean get() = this == DocumentFilter()
 
     /** The query for these conditions and [search] (blank: none). */
-    fun toQuery(search: String): DocumentQuery =
+    fun toQuery(
+        search: String,
+        today: LocalDate = LocalDate.now(),
+    ): DocumentQuery =
         DocumentQuery(
             // At most as long as the server accepts (e.g. pasted text).
             search =
@@ -89,7 +94,7 @@ data class DocumentFilter(
             correspondent = correspondentIds.toIdFilter(),
             documentType = documentTypeIds.toIdFilter(),
             storagePath = storagePathIds.toIdFilter(),
-            created = createdRange,
+            created = createdRange(today),
             ordering = sort.ordering,
         )
 

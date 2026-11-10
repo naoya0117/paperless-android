@@ -121,6 +121,9 @@ class DocumentListViewModel
 
         private val mutableFilter = MutableStateFlow(DocumentFilter.restore(savedState))
 
+        /** For dates relative to today (e.g. "this year"); checked again with each refresh. */
+        private val today = MutableStateFlow(java.time.LocalDate.now())
+
         /** The conditions and order of the list ([DocumentListMode.ALL]). */
         val filter: StateFlow<DocumentFilter> = mutableFilter.asStateFlow()
 
@@ -189,7 +192,7 @@ class DocumentListViewModel
             when (mode) {
                 // The search field and the filter chips above the list.
                 DocumentListMode.ALL ->
-                    combine(activeSearch, mutableFilter) { text, filter -> filter.toQuery(text) }
+                    combine(activeSearch, mutableFilter, today) { text, filter, day -> filter.toQuery(text, day) }
                         .distinctUntilChanged()
                         .flatMapLatest { query -> documents.documents(query) }
                 DocumentListMode.INBOX -> documents.documents(DocumentQuery(inInbox = true))
@@ -227,6 +230,7 @@ class DocumentListViewModel
 
         /** Labels change rarely; refreshed with the list (pull to refresh) and when the screen opens. */
         fun refreshLabels() {
+            today.value = java.time.LocalDate.now()
             viewModelScope.launch {
                 try {
                     labels.refreshAll()
