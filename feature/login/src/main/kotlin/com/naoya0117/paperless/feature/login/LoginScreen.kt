@@ -3,23 +3,26 @@ package com.naoya0117.paperless.feature.login
 import android.app.Activity
 import android.net.Uri
 import android.security.KeyChain
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -46,6 +49,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -65,11 +70,13 @@ import kotlinx.coroutines.withContext
  *
  * @param reSignInAccountId an account to sign in to again with its settings, or `null` for a new account
  * @param onSignedIn called once after signing in succeeded
+ * @param onRemoveAccount for [reSignInAccountId]: gives up on it (e.g. the server is gone) and removes it
  */
 @Composable
 fun LoginScreen(
     reSignInAccountId: String?,
     onSignedIn: (Account) -> Unit,
+    onRemoveAccount: (String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: LoginViewModel = hiltViewModel(),
 ) {
@@ -102,6 +109,7 @@ fun LoginScreen(
                 addTrustedCertificate = certificateFiles,
                 removeTrustedCertificate = viewModel::removeTrustedCertificate,
                 submit = viewModel::submit,
+                removeAccount = { reSignInAccountId?.let(onRemoveAccount) },
             ),
         modifier = modifier,
     )
@@ -122,6 +130,7 @@ internal class LoginActions(
     val addTrustedCertificate: () -> Unit = {},
     val removeTrustedCertificate: (TrustedCertificate) -> Unit = {},
     val submit: () -> Unit = {},
+    val removeAccount: () -> Unit = {},
 )
 
 @Composable
@@ -131,11 +140,22 @@ internal fun LoginContent(
     modifier: Modifier = Modifier,
 ) {
     val enabled = !state.inProgress
+    // Back from the code entry goes to the credentials rather than closing the app.
+    BackHandler(enabled = state.step == LoginStep.MFA_CODE && enabled, onBack = actions.cancelMfa)
+    if (state.signedIn != null) {
+        // Signed in: the app switches to its next screen in a moment.
+        val description = stringResource(R.string.login_in_progress)
+        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(Modifier.semantics { contentDescription = description })
+        }
+        return
+    }
+    val submitOnDone = KeyboardActions(onDone = { if (state.canSubmit) actions.submit() })
     Column(
         modifier =
             modifier
+                // Includes the keyboard (IME) insets.
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp)
                 .widthIn(max = 560.dp),
@@ -144,19 +164,29 @@ internal fun LoginContent(
         val title = if (state.reSignInAccountId != null) R.string.login_title_again else R.string.login_title
         Text(text = stringResource(title), style = MaterialTheme.typography.headlineSmall)
         if (state.step == LoginStep.MFA_CODE) {
-            MfaStep(state, actions, enabled)
+            MfaStep(state, actions, enabled, submitOnDone)
         } else {
-            CredentialsStep(state, actions, enabled)
+            CredentialsStep(state, actions, enabled, submitOnDone)
         }
         state.error?.let { ErrorText(state) }
         Button(onClick = actions.submit, enabled = state.canSubmit, modifier = Modifier.fillMaxWidth()) {
             if (state.inProgress) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                val description = stringResource(R.string.login_in_progress)
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp).semantics { contentDescription = description },
+                    strokeWidth = 2.dp,
+                )
             } else {
                 Text(stringResource(R.string.login_submit))
             }
         }
         if (state.step == LoginStep.CREDENTIALS) AdvancedSettings(state, actions, enabled)
+        if (state.reSignInAccountId != null) {
+            HorizontalDivider()
+            TextButton(onClick = actions.removeAccount, enabled = enabled) {
+                Text(stringResource(R.string.login_remove_account))
+            }
+        }
     }
 }
 
@@ -165,6 +195,7 @@ private fun CredentialsStep(
     state: LoginState,
     actions: LoginActions,
     enabled: Boolean,
+    submitOnDone: KeyboardActions,
 ) {
     OutlinedTextField(
         value = state.serverUrl,
@@ -220,6 +251,7 @@ private fun CredentialsStep(
             enabled = enabled,
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+            keyboardActions = submitOnDone,
             modifier = Modifier.fillMaxWidth(),
         )
     } else {
@@ -232,6 +264,7 @@ private fun CredentialsStep(
             enabled = enabled,
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+            keyboardActions = submitOnDone,
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -242,6 +275,7 @@ private fun MfaStep(
     state: LoginState,
     actions: LoginActions,
     enabled: Boolean,
+    submitOnDone: KeyboardActions,
 ) {
     Text(stringResource(R.string.login_mfa_explanation))
     OutlinedTextField(
@@ -251,6 +285,7 @@ private fun MfaStep(
         singleLine = true,
         enabled = enabled,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+        keyboardActions = submitOnDone,
         modifier = Modifier.fillMaxWidth(),
     )
     TextButton(onClick = actions.cancelMfa, enabled = enabled) { Text(stringResource(R.string.login_mfa_back)) }
@@ -304,6 +339,9 @@ private fun AdvancedSettings(
     // Open when there is something to see, e.g. when signing in again to an account with such settings.
     val hasSettings = state.headers.isNotEmpty() || state.tls != AccountTls()
     var expanded by rememberSaveable { mutableStateOf(hasSettings) }
+    // Settings may arrive later (signing in again), and a header error must be visible.
+    val mustShow = hasSettings || state.error == LoginError.INVALID_HEADER
+    LaunchedEffect(mustShow) { if (mustShow) expanded = true }
     HorizontalDivider()
     TextButton(onClick = { expanded = !expanded }) { Text(stringResource(R.string.login_advanced)) }
     if (!expanded) return
@@ -331,11 +369,18 @@ private fun AdvancedSettings(
                 enabled = enabled,
                 isError = state.invalidHeaderIndex == index,
                 visualTransformation = PasswordVisualTransformation(),
+                // A secret: the keyboard must not learn or suggest it.
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 modifier = Modifier.weight(1f),
             )
         }
         val remove = { actions.setHeaders(state.headers.filterIndexed { i, _ -> i != index }) }
-        TextButton(onClick = remove, enabled = enabled) {
+        val removeDescription = stringResource(R.string.login_header_remove_description, index + 1)
+        TextButton(
+            onClick = remove,
+            enabled = enabled,
+            modifier = Modifier.semantics { contentDescription = removeDescription },
+        ) {
             Text(stringResource(R.string.login_header_remove))
         }
     }
@@ -363,7 +408,12 @@ private fun AdvancedSettings(
     state.tls.trustedCertificates.forEachIndexed { index, certificate ->
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.login_trusted_certificate_item, index + 1), modifier = Modifier.weight(1f))
-            TextButton(onClick = { actions.removeTrustedCertificate(certificate) }, enabled = enabled) {
+            val removeDescription = stringResource(R.string.login_trusted_certificate_remove_description, index + 1)
+            TextButton(
+                onClick = { actions.removeTrustedCertificate(certificate) },
+                enabled = enabled,
+                modifier = Modifier.semantics { contentDescription = removeDescription },
+            ) {
                 Text(stringResource(R.string.login_header_remove))
             }
         }
@@ -406,17 +456,15 @@ private fun chooseClientCertificate(
     state: LoginState,
     onChosen: (String?) -> Unit,
 ) {
-    val url = runCatching { ServerUrl.parse(state.serverUrl.trim()) }.getOrNull()
-    val host = url?.let { java.net.URI(it.toString()).host }
-    val port = url?.let { java.net.URI(it.toString()).port } ?: -1
+    val url = runCatching { ServerUrl.parse(state.serverUrl.trim()) }.getOrNull()?.httpUrl
     KeyChain.choosePrivateKeyAlias(
         activity,
         // Called on a binder thread; the view model's state is saved on the main thread.
         { alias -> if (alias != null) activity.runOnUiThread { onChosen(alias) } },
         null,
         null,
-        host,
-        port,
+        url?.host,
+        url?.port ?: -1,
         state.tls.clientCertificateAlias,
     )
 }
@@ -433,4 +481,4 @@ private fun java.io.InputStream.readAtMost(limit: Int): ByteArray {
     return out.toByteArray()
 }
 
-private const val MAX_CERTIFICATE_BYTES = 1024 * 1024
+private const val MAX_CERTIFICATE_BYTES = 64 * 1024

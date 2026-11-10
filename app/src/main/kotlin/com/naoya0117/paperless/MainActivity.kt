@@ -53,7 +53,12 @@ private fun App(viewModel: AppViewModel = hiltViewModel()) {
         AppScreen.Loading ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         // The account list drives the screen: once signed in, Home follows by itself.
-        is AppScreen.Login -> LoginScreen(reSignInAccountId = current.reSignInAccountId, onSignedIn = {})
+        is AppScreen.Login ->
+            LoginScreen(
+                reSignInAccountId = current.reSignInAccountId,
+                onSignedIn = {},
+                onRemoveAccount = viewModel::signOut,
+            )
         is AppScreen.Home -> HomePlaceholder(current.account, onSignOut = { viewModel.signOut(current.account.id) })
     }
 }
