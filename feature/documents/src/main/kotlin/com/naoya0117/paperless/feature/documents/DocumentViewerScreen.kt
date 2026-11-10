@@ -323,7 +323,11 @@ fun DocumentViewerScreen(
                                         onShare = viewModel::share,
                                         onOpen = viewModel::openExternally,
                                         onDownload = viewModel::download,
-                                        onDelete = { confirmDelete = true },
+                                        onDelete =
+                                            { confirmDelete = true }.takeIf {
+                                                state.document?.userCanChange ==
+                                                    true
+                                            },
                                         actionsEnabled = !state.busy,
                                     )
                                 }
@@ -384,7 +388,7 @@ private fun ViewerMenu(
     onShare: () -> Unit,
     onOpen: () -> Unit,
     onDownload: () -> Unit,
-    onDelete: () -> Unit,
+    onDelete: (() -> Unit)?,
     /** File actions and deleting wait while one runs; the search does not. */
     actionsEnabled: Boolean,
 ) {
@@ -408,8 +412,11 @@ private fun ViewerMenu(
         item(R.string.viewer_share, Icons.Outlined.Share, onShare)
         item(R.string.viewer_open_with, Icons.AutoMirrored.Outlined.OpenInNew, onOpen)
         item(R.string.viewer_download, Icons.Outlined.Download, onDownload)
-        HorizontalDivider()
-        item(R.string.viewer_delete, Icons.Outlined.Delete, onDelete)
+        // Only with permission to change the document (like in the lists).
+        if (onDelete != null) {
+            HorizontalDivider()
+            item(R.string.viewer_delete, Icons.Outlined.Delete, onDelete)
+        }
     }
 }
 

@@ -103,7 +103,7 @@ class DocumentListViewModel
                     } finally {
                         busy.value = false
                     }
-                // Not waiting: the list may be gone (then the event is dropped).
+                // Not waiting: the list may be gone; the event is shown when it is visible again.
                 eventChannel.trySend(event)
             }
         }

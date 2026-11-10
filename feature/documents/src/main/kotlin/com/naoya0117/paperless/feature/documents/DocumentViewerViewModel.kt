@@ -1,6 +1,7 @@
 package com.naoya0117.paperless.feature.documents
 
 import android.net.Uri
+import android.os.SystemClock
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -68,7 +69,15 @@ sealed interface ViewerEvent {
         val uri: Uri,
         val mimeType: String,
         val open: Boolean,
-    ) : ViewerEvent
+        /** When it was ready ([SystemClock.elapsedRealtime]): an app is not started long after it was asked for. */
+        val readyAt: Long = SystemClock.elapsedRealtime(),
+    ) : ViewerEvent {
+        val stale: Boolean get() = SystemClock.elapsedRealtime() - readyAt > STALE_AFTER_MILLIS
+
+        private companion object {
+            const val STALE_AFTER_MILLIS = 15_000L
+        }
+    }
 
     data class Saved(
         val fileName: String,

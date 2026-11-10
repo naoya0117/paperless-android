@@ -1,6 +1,5 @@
 package com.naoya0117.paperless.feature.documents
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -41,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,10 +52,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,6 +69,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import coil3.compose.AsyncImage
 import com.naoya0117.paperless.core.model.Document
+import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
@@ -90,7 +89,7 @@ fun DocumentListScreen(
     onOpenDocument: (Document) -> Unit,
     modifier: Modifier = Modifier,
     onEditDocument: (Long) -> Unit = {},
-    snackbar: SnackbarHostState? = null,
+    snackbar: SnackbarHostState,
     onRefresh: () -> Unit = {},
     viewModel: DocumentListViewModel = hiltViewModel(),
 ) {
@@ -103,35 +102,44 @@ fun DocumentListScreen(
             viewModel.events.collect { event ->
                 val message =
                     when (event) {
+                        // Not long after it was asked for (e.g. back on the list minutes later).
                         is ViewerEvent.SendFile ->
-                            if (context.sendFile(event)) null else resources.getString(R.string.viewer_no_app)
+                            if (event.stale ||
+                                context.sendFile(event)
+                            ) {
+                                null
+                            } else {
+                                resources.getString(R.string.viewer_no_app)
+                            }
                         is ViewerEvent.Saved -> resources.getString(R.string.viewer_saved, event.fileName)
                         ViewerEvent.Deleted -> resources.getString(R.string.documents_moved_to_trash)
                         is ViewerEvent.Failed -> resources.getString(event.message())
                         else -> null
                     }
-                if (message != null) {
-                    if (snackbar != null) {
-                        snackbar.showSnackbar(message)
-                    } else {
-                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                    }
-                }
+                // Not waiting for it: the next event (e.g. a chooser to open) comes at once.
+                if (message != null) launch { snackbar.showSnackbar(message) }
             }
         }
     }
+    val pages = viewModel.documentPages.collectAsLazyPagingItems()
     val actionRunning by viewModel.actionRunning.collectAsStateWithLifecycle()
-    var confirmDelete by remember { mutableStateOf<Document?>(null) }
+
+    /** The document to delete (after confirming), by ID: kept when the screen is recreated. */
+    var confirmDelete by rememberSaveable { mutableStateOf<Long?>(null) }
     val menu =
-        DocumentMenuActions(
-            enabled = !actionRunning,
-            onEdit = { onEditDocument(it.id) },
-            onShare = viewModel::share,
-            onOpen = viewModel::openExternally,
-            onDownload = viewModel::download,
-            onDelete = { confirmDelete = it },
-        )
-    confirmDelete?.let { document ->
+        remember(viewModel, actionRunning, onEditDocument) {
+            DocumentMenuActions(
+                enabled = !actionRunning,
+                onEdit = { onEditDocument(it.id) },
+                onShare = viewModel::share,
+                onOpen = viewModel::openExternally,
+                onDownload = viewModel::download,
+                onDelete = { confirmDelete = it.id },
+            )
+        }
+    // Only for a document still listed: the user must see what goes.
+    val toDelete = confirmDelete?.let { id -> pages.itemSnapshotList.items.firstOrNull { it.id == id } }
+    toDelete?.let { document ->
         AlertDialog(
             onDismissRequest = { confirmDelete = null },
             title = { Text(stringResource(R.string.viewer_delete_title)) },
@@ -149,7 +157,6 @@ fun DocumentListScreen(
             },
         )
     }
-    val pages = viewModel.documentPages.collectAsLazyPagingItems()
     val activeSearch by viewModel.activeSearch.collectAsStateWithLifecycle()
     val labels by viewModel.labelNames.collectAsStateWithLifecycle()
     val searchText by viewModel.searchText.collectAsStateWithLifecycle()
@@ -213,17 +220,19 @@ private fun DocumentMenu(
             text: Int,
             icon: ImageVector,
             onClick: (Document) -> Unit,
+            enabled: Boolean = actions.enabled,
         ) = DropdownMenuItem(
             text = { Text(stringResource(text)) },
             leadingIcon = { Icon(icon, contentDescription = null) },
-            enabled = actions.enabled,
+            enabled = enabled,
             onClick = {
                 onDismiss()
                 onClick(document)
             },
         )
         // Editing and deleting need permission to change the document.
-        if (document.userCanChange) item(R.string.viewer_edit, Icons.Outlined.Edit, actions.onEdit)
+        // Editing does not wait for a file action.
+        if (document.userCanChange) item(R.string.viewer_edit, Icons.Outlined.Edit, actions.onEdit, enabled = true)
         item(R.string.viewer_share, Icons.Outlined.Share, actions.onShare)
         item(R.string.viewer_open_with, Icons.AutoMirrored.Outlined.OpenInNew, actions.onOpen)
         item(R.string.viewer_download, Icons.Outlined.Download, actions.onDownload)
@@ -253,7 +262,6 @@ private fun DocumentList(
 
     /** The document whose menu is open. */
     var menuFor by rememberSaveable { mutableStateOf<Long?>(null) }
-    val haptics = LocalHapticFeedback.current
     // Text typed but not searched yet (typing pauses first): show progress, not the prompt.
     val searchPending =
         mode == DocumentListMode.SEARCH && typedSearch.isNotBlank() && typedSearch.trim() != activeSearch
@@ -276,11 +284,19 @@ private fun DocumentList(
                                     labels,
                                     accountId,
                                     onClick = { onOpenDocument(document) },
-                                    onLongClick = {
-                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        menuFor = document.id
-                                    },
+                                    // combinedClickable gives the long-press feedback itself.
+                                    onLongClick = { menuFor = document.id },
                                 )
+                                // Gone from the list (e.g. refreshed away) with its menu open: it does not reopen later.
+                                DisposableEffect(document.id) {
+                                    onDispose {
+                                        if (menuFor ==
+                                            document.id
+                                        ) {
+                                            menuFor = null
+                                        }
+                                    }
+                                }
                                 DocumentMenu(
                                     document = document,
                                     actions = menu,

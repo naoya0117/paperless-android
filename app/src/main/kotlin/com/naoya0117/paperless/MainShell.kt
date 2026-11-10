@@ -92,6 +92,7 @@ import androidx.core.content.edit
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavBackStackEntry
@@ -378,6 +379,8 @@ fun MainShell(
                             ),
                     ) {
                         val shown = Tab.entries.firstOrNull { it.route == path }
+                        // Not from a list that is leaving (e.g. a tap during a transition).
+                        val entryLifecycle = LocalLifecycleOwner.current.lifecycle
                         ListScaffold(
                             topBar = {
                                 when {
@@ -402,7 +405,14 @@ fun MainShell(
                         ) { padding ->
                             DocumentListScreen(
                                 onOpenDocument = { navController.navigate("document/${it.id}") },
-                                onEditDocument = { id -> navController.navigate("document/$id/edit") },
+                                onEditDocument = { id ->
+                                    if (entryLifecycle.currentState.isAtLeast(
+                                            Lifecycle.State.RESUMED,
+                                        )
+                                    ) {
+                                        navController.navigate("document/$id/edit")
+                                    }
+                                },
                                 snackbar = snackbar,
                                 modifier = Modifier.padding(padding),
                                 // The inbox count is shown on the documents tab only.
@@ -425,12 +435,21 @@ fun MainShell(
                     // A saved view is titled with its name.
                     val id = entry.arguments?.getLong(DocumentListViewModel.VIEW_ID_ARGUMENT)
                     val name = allSavedViews.firstOrNull { it.id == id }?.name ?: stringResource(R.string.drawer_views)
+                    // Not from a list that is leaving (e.g. a tap during a transition).
+                    val entryLifecycle = LocalLifecycleOwner.current.lifecycle
                     ListScaffold(
                         topBar = { backBar(name) },
                     ) { padding ->
                         DocumentListScreen(
                             onOpenDocument = { navController.navigate("document/${it.id}") },
-                            onEditDocument = { id -> navController.navigate("document/$id/edit") },
+                            onEditDocument = { id ->
+                                if (entryLifecycle.currentState.isAtLeast(
+                                        Lifecycle.State.RESUMED,
+                                    )
+                                ) {
+                                    navController.navigate("document/$id/edit")
+                                }
+                            },
                             snackbar = snackbar,
                             modifier = Modifier.padding(padding),
                         )
