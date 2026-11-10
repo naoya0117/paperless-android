@@ -30,6 +30,8 @@ import java.net.Proxy
 import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class DocumentFileRepositoryTest {
@@ -44,6 +46,9 @@ class DocumentFileRepositoryTest {
 
     private val fileRequests = CopyOnWriteArrayList<String>()
     private val failFiles = AtomicBoolean(false)
+
+    /** When set, the next file request signals the first latch and waits for the second. */
+    @Volatile private var blockFiles: Pair<CountDownLatch, CountDownLatch>? = null
 
     private object XorCipher : SecretCipher {
         override fun encrypt(plain: ByteArray) = plain.map { (it.toInt() xor 0x33).toByte() }.toByteArray()
@@ -93,6 +98,11 @@ class DocumentFileRepositoryTest {
                             .build()
                     }
                     fileRequests += path
+                    blockFiles?.let { (requested, release) ->
+                        blockFiles = null
+                        requested.countDown()
+                        release.await(10, TimeUnit.SECONDS)
+                    }
                     if (failFiles.get()) {
                         return MockResponse
                             .Builder()
@@ -203,10 +213,11 @@ class DocumentFileRepositoryTest {
             val entry = sample.length() + File(sample.path + ".meta").length()
             createRepository(maxBytes = entry * 3 + entry / 2) // room for three files with their metadata
             signIn()
-            val first = thumbnail(document(1))
-            thumbnail(document(2))
-            thumbnail(document(3))
-            first.file.setLastModified(System.currentTimeMillis() + 10_000) // used most recently
+            val cached = (1L..3L).map { thumbnail(document(it)).file }
+            val longAgo = System.currentTimeMillis() - 10 * 60_000
+            cached.forEachIndexed { index, file -> file.setLastModified(longAgo + index) }
+            // A cache hit makes document 1 the most recently used.
+            thumbnail(document(1))
 
             thumbnail(document(4))
 
@@ -215,8 +226,73 @@ class DocumentFileRepositoryTest {
                     cacheDir,
                     accountId,
                 ).list()!!.filter { !it.endsWith(".meta") }.map { it.substringBefore('-') }
-            assertTrue(left.toString(), "1" in left && "4" in left)
-            assertFalse(left.toString(), "2" in left)
+            assertEquals(listOf("1", "3", "4"), left.sorted())
+            assertEquals(
+                "the hit was not downloaded again",
+                listOf("99", "1", "2", "3", "4"),
+                fileRequests.map {
+                    it.split("/")[3]
+                },
+            )
+        }
+
+    @Test
+    fun `files used within the last minute are not dropped`() =
+        runTest {
+            signIn()
+            val sample = thumbnail(document(99)).file
+            val entry = sample.length() + File(sample.path + ".meta").length()
+            createRepository(maxBytes = entry)
+            signIn()
+            val first = thumbnail(document(1))
+
+            thumbnail(document(2))
+
+            assertTrue("it may still be in use", first.file.exists())
+        }
+
+    @Test
+    fun `an older version finishing later does not delete the newer one`() =
+        runTest {
+            signIn()
+            val newer = thumbnail(document(7, modified = 2))
+
+            val older = thumbnail(document(7, modified = 1))
+
+            assertTrue(newer.file.exists())
+            assertTrue(older.file.exists())
+            thumbnail(document(7, modified = 3))
+            assertFalse(newer.file.exists())
+            assertFalse(older.file.exists())
+        }
+
+    @Test
+    fun `previews and downloads share the cached file`() =
+        runTest {
+            signIn()
+
+            val preview = withContext(Dispatchers.IO) { files.file(document(7), DocumentFileKind.PREVIEW) }
+            val download = withContext(Dispatchers.IO) { files.file(document(7), DocumentFileKind.DOWNLOAD) }
+
+            assertEquals(preview.file, download.file)
+            assertEquals(1, fileRequests.size)
+        }
+
+    @Test
+    fun `a download finishing after sign-out is not stored`() =
+        runTest {
+            signIn()
+            val requested = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            blockFiles = requested to release
+
+            val download = async(Dispatchers.IO) { runCatching { files.file(document(7), DocumentFileKind.THUMBNAIL) } }
+            withContext(Dispatchers.IO) { assertTrue(requested.await(10, TimeUnit.SECONDS)) }
+            accounts.signOut(accountId)
+            release.countDown()
+
+            assertTrue(download.await().exceptionOrNull() is NotSignedInException)
+            assertFalse(File(cacheDir, accountId).exists())
         }
 
     @Test

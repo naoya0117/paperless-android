@@ -8,12 +8,15 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import java.util.Properties
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Where document files are cached: a cache directory the system may also clear, and the most it may hold.
+ * Where document files are cached: a cache directory the system may also clear, and the most it may hold
+ * (for all accounts together; the least recently used files go first, whichever account they belong to).
  */
 class DocumentFileStorage(
     val directory: File,
@@ -24,7 +27,10 @@ class DocumentFileStorage(
     }
 }
 
-/** A document file on disk. [file] stays valid until the cache is trimmed or the account signs out. */
+/**
+ * A document file on disk. Use it soon: [file] may be deleted later to keep the cache within its limit (not
+ * within a minute of being returned), when the account signs out, or by the system; ask again then.
+ */
 data class CachedDocumentFile(
     val file: File,
     val contentType: String?,
@@ -44,42 +50,54 @@ class DocumentFileRepository
         private val accounts: AccountRepository,
         private val storage: DocumentFileStorage,
     ) {
-        /** Downloads of the same file wait for each other; striped to bound memory. */
-        private val locks = List(LOCK_STRIPES) { Mutex() }
+        /** Per file name: downloads of the same file wait for each other, others do not. */
+        private val locks = HashMap<String, Pair<Mutex, Int>>()
 
         /** Serializes trimming and clearing, which walk the whole cache. */
         private val trimLock = Mutex()
 
+        /** Bytes in the cache as far as known; negative until counted. Trimming walks the disk only when over. */
+        private val knownBytes = AtomicLong(-1)
+
         /**
          * The file of [document] (from the active account), downloaded if it is not cached yet.
          *
-         * @throws NotSignedInException
-         * @throws com.naoya0117.paperless.core.network.PaperlessException if it must be downloaded and that fails
+         * @throws NotSignedInException also if the account signed out while downloading
+         * @throws com.naoya0117.paperless.core.network.PaperlessException if downloading fails
+         * @throws IOException if the file cannot be stored (e.g. the device is out of storage)
          */
         suspend fun file(
             document: Document,
             kind: DocumentFileKind,
         ): CachedDocumentFile {
             val session = accounts.currentSession() ?: throw NotSignedInException()
-            val directory = accountDirectory(session.account.id)
-            val name = "${document.id}-${kind.name.lowercase()}-${document.modified.toEpochMilli()}"
-            val file = File(directory, name)
-            return locks[Math.floorMod(name.hashCode(), LOCK_STRIPES)].withLock {
-                cached(file) ?: download(session, document, kind, file)
-            }
+            val file = File(accountDirectory(session.account.id), fileName(document, kind))
+            // Stored files appear atomically (renamed into place with their metadata), so a hit needs no lock.
+            cached(file)?.let { return it }
+            return withFileLock(file.name) { cached(file) ?: download(session, document, kind, file) }
         }
 
         /** Deletes the account's cached files, e.g. after signing out. */
         suspend fun clear(accountId: String) =
-            trimLock.withLock { withContext(Dispatchers.IO) { accountDirectory(accountId).deleteRecursively() } }
+            trimLock.withLock {
+                withContext(Dispatchers.IO) { accountDirectory(accountId).deleteRecursively() }
+                knownBytes.set(-1)
+            }
 
+        /** `null` if not cached (or deleted meanwhile). */
         private suspend fun cached(file: File): CachedDocumentFile? =
             withContext(Dispatchers.IO) {
-                val meta = metaFile(file)
-                if (!file.isFile || !meta.isFile) return@withContext null
-                // Marks it as recently used for trimming.
-                file.setLastModified(System.currentTimeMillis())
-                readMeta(file, meta)
+                try {
+                    val meta = metaFile(file)
+                    if (!file.isFile) return@withContext null
+                    val properties = Properties()
+                    meta.inputStream().use { properties.load(it) }
+                    // Marks it as recently used for trimming (best effort: some file systems ignore it).
+                    file.setLastModified(System.currentTimeMillis())
+                    CachedDocumentFile(file, properties.getProperty(CONTENT_TYPE), properties.getProperty(FILE_NAME))
+                } catch (_: IOException) {
+                    null
+                }
             }
 
         private suspend fun download(
@@ -89,89 +107,161 @@ class DocumentFileRepository
             file: File,
         ): CachedDocumentFile {
             val directory = file.parentFile!!
-            val partial = File(directory, "${file.name}.part")
+            val partial = File(directory, file.name + PART)
+            val partialMeta = File(directory, file.name + META + PART)
+            var stored = false
             try {
-                val (contentType, fileName) =
+                val result =
                     session.client.documents.openFile(document.id, kind).use { remote ->
-                        withContext(Dispatchers.IO) { directory.mkdirs() }
-                        withContext(Dispatchers.IO) { partial.outputStream() }.use { remote.copyTo(it) }
-                        remote.contentType to remote.fileName
+                        withContext(Dispatchers.IO) {
+                            directory.mkdirs()
+                            partial.outputStream()
+                        }.use { remote.copyTo(it) }
+                        CachedDocumentFile(file, remote.contentType, remote.fileName)
                     }
-                val result = CachedDocumentFile(file, contentType, fileName)
-                val stored =
+                withContext(Dispatchers.IO) { writeMeta(result, partialMeta) }
+                stored =
                     withContext(NonCancellable) {
                         // Not after a sign-out: the account's files were deleted and must stay so.
                         accounts.writeData(session) {
                             withContext(Dispatchers.IO) {
-                                writeMeta(result)
-                                check(partial.renameTo(file)) { "Could not store $file" }
-                                deleteOtherVersions(file)
+                                if (!partialMeta.renameTo(metaFile(file)) || !partial.renameTo(file)) {
+                                    throw IOException("Could not store $file")
+                                }
                             }
                         }
                     }
-                if (stored) trim(keep = file)
+                if (!stored) throw NotSignedInException()
+                withContext(Dispatchers.IO) { deleteOlderVersions(file) }
+                if (knownBytes.get() >= 0) knownBytes.addAndGet(file.length() + metaFile(file).length())
+                trimIfNeeded(keep = file)
                 return result
             } finally {
-                withContext(NonCancellable + Dispatchers.IO) { partial.delete() }
-            }
-        }
-
-        /** Older modification times of the same document and kind (not downloads still in progress). */
-        private fun deleteOtherVersions(file: File) {
-            val prefix = file.name.substringBeforeLast('-') + "-"
-            file.parentFile
-                ?.listFiles { other ->
-                    other.name.startsWith(prefix) &&
-                        other.name != file.name &&
-                        other != metaFile(file) &&
-                        !other.name.endsWith(".part")
-                }?.forEach { it.delete() }
-        }
-
-        /** Deletes the least recently used files until the cache fits [DocumentFileStorage.maxBytes]. */
-        private suspend fun trim(keep: File) =
-            trimLock.withLock {
-                withContext(Dispatchers.IO) {
-                    val files =
-                        storage.directory
-                            .walkTopDown()
-                            .filter { it.isFile && !it.name.endsWith(META) && !it.name.endsWith(".part") }
-                            .toList()
-                    var total = files.sumOf { it.length() + metaFile(it).length() }
-                    for (oldest in files.sortedBy { it.lastModified() }) {
-                        if (total <= storage.maxBytes) break
-                        if (oldest == keep) continue
-                        total -= oldest.length() + metaFile(oldest).length()
-                        metaFile(oldest).delete()
-                        oldest.delete()
-                    }
+                withContext(NonCancellable + Dispatchers.IO) {
+                    partial.delete()
+                    partialMeta.delete()
+                    // E.g. the account signed out while downloading: do not leave its directory behind.
+                    if (!stored) directory.delete() // only succeeds when empty
                 }
             }
+        }
+
+        /** Versions of the same document and kind with an older modification time. */
+        private fun deleteOlderVersions(file: File) {
+            val prefix = file.name.substringBeforeLast('-') + "-"
+            val modified = file.name.substringAfterLast('-').toLong()
+            file.parentFile?.listFiles()?.forEach { other ->
+                if (!other.name.startsWith(prefix) ||
+                    other.name.endsWith(PART) ||
+                    other.name.endsWith(META)
+                ) {
+                    return@forEach
+                }
+                val otherModified = other.name.substringAfterLast('-').toLongOrNull() ?: return@forEach
+                if (otherModified < modified) {
+                    metaFile(other).delete()
+                    other.delete()
+                }
+            }
+        }
+
+        /**
+         * Deletes the least recently used files until the cache fits [DocumentFileStorage.maxBytes]. Files used
+         * within the last minute are kept (they may just have been returned), and a single file larger than half
+         * the limit does not push out everything else: it is the first to go next time. Leftovers of interrupted
+         * downloads are removed.
+         */
+        private suspend fun trimIfNeeded(keep: File) {
+            val known = knownBytes.get()
+            if (known in 0..storage.maxBytes) return
+            trimLock.withLock {
+                withContext(Dispatchers.IO) {
+                    val now = System.currentTimeMillis()
+                    val entries = mutableListOf<Entry>()
+                    storage.directory.walkTopDown().filter { it.isFile }.forEach { file ->
+                        val name = file.name
+                        when {
+                            name.endsWith(PART) -> if (file.lastModified() < now - LEFTOVER_AGE_MILLIS) file.delete()
+                            name.endsWith(META) ->
+                                if (!File(file.parentFile, name.removeSuffix(META)).exists() &&
+                                    file.lastModified() < now - LEFTOVER_AGE_MILLIS
+                                ) {
+                                    file.delete()
+                                }
+                            else -> entries += Entry(file, file.lastModified(), file.length() + metaFile(file).length())
+                        }
+                    }
+                    var total = entries.sumOf { it.bytes }
+                    val oversized = keep.length() > storage.maxBytes / 2
+                    if (oversized) total -= entries.firstOrNull { it.file == keep }?.bytes ?: 0
+                    for (entry in entries.sortedBy { it.lastUsed }) {
+                        if (total <= storage.maxBytes) break
+                        if (entry.file == keep || entry.lastUsed > now - RECENTLY_USED_MILLIS) continue
+                        metaFile(entry.file).delete()
+                        entry.file.delete()
+                        total -= entry.bytes
+                    }
+                    if (oversized) total += keep.length() + metaFile(keep).length()
+                    knownBytes.set(total)
+                }
+            }
+        }
+
+        private class Entry(
+            val file: File,
+            val lastUsed: Long,
+            val bytes: Long,
+        )
+
+        private suspend fun <T> withFileLock(
+            name: String,
+            block: suspend () -> T,
+        ): T {
+            val mutex =
+                synchronized(locks) {
+                    val (mutex, users) = locks[name] ?: (Mutex() to 0)
+                    locks[name] = mutex to users + 1
+                    mutex
+                }
+            try {
+                return mutex.withLock { block() }
+            } finally {
+                synchronized(locks) {
+                    val (_, users) = locks.getValue(name)
+                    if (users == 1) locks.remove(name) else locks[name] = mutex to users - 1
+                }
+            }
+        }
 
         private fun accountDirectory(accountId: String) = File(storage.directory, accountId)
 
         private fun metaFile(file: File) = File(file.parentFile, file.name + META)
 
-        private fun writeMeta(file: CachedDocumentFile) {
+        private fun writeMeta(
+            file: CachedDocumentFile,
+            target: File,
+        ) {
             val properties = Properties()
             file.contentType?.let { properties.setProperty(CONTENT_TYPE, it) }
             file.fileName?.let { properties.setProperty(FILE_NAME, it) }
-            metaFile(file.file).outputStream().use { properties.store(it, null) }
-        }
-
-        private fun readMeta(
-            file: File,
-            meta: File,
-        ): CachedDocumentFile {
-            val properties = Properties()
-            meta.inputStream().use { properties.load(it) }
-            return CachedDocumentFile(file, properties.getProperty(CONTENT_TYPE), properties.getProperty(FILE_NAME))
+            target.outputStream().use { properties.store(it, null) }
         }
 
         private companion object {
-            const val LOCK_STRIPES = 32
             const val META = ".meta"
+            const val PART = ".part"
             const val CONTENT_TYPE = "contentType"
             const val FILE_NAME = "fileName"
+            const val RECENTLY_USED_MILLIS = 60_000L
+            const val LEFTOVER_AGE_MILLIS = 60 * 60 * 1000L
+
+            /** PREVIEW and DOWNLOAD are the same file (the archived PDF, or else the original): cache it once. */
+            fun fileName(
+                document: Document,
+                kind: DocumentFileKind,
+            ): String {
+                val key = if (kind == DocumentFileKind.DOWNLOAD) DocumentFileKind.PREVIEW else kind
+                return "${document.id}-${key.name.lowercase()}-${document.modified.toEpochMilli()}"
+            }
         }
     }
