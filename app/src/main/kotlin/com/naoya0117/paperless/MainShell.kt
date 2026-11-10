@@ -127,6 +127,8 @@ private enum class Tab(
 /** The document lists: one per tab, and the inbox (opened from the documents tab). */
 private val LIST_ROUTES = Tab.entries.map { it.route to it.mode } + (INBOX_ROUTE to DocumentListMode.INBOX)
 
+private val TAB_ROUTES = Tab.entries.map { it.route }.toSet()
+
 private const val DOCUMENT_ROUTE = "document/{${DocumentViewerViewModel.DOCUMENT_ID_ARGUMENT}}"
 private const val EDIT_ROUTE = "document/{${DocumentEditViewModel.DOCUMENT_ID_ARGUMENT}}/edit"
 
@@ -146,6 +148,7 @@ fun MainShell(
     drawer: DrawerViewModel = hiltViewModel(),
 ) {
     val savedViews by drawer.savedViews.collectAsStateWithLifecycle()
+    val allSavedViews by drawer.allSavedViews.collectAsStateWithLifecycle()
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
@@ -234,7 +237,8 @@ fun MainShell(
                 savedViews = savedViews,
                 onSavedView = { view ->
                     scope.launch { drawerState.close() }
-                    navController.navigate("view/${view.id}") { launchSingleTop = true }
+                    // Once only: a second tap while the menu closes must not replace the opened view.
+                    if (navController.currentDestination?.route in TAB_ROUTES) navController.navigate("view/${view.id}")
                 },
                 onLabels = { kind ->
                     scope.launch { drawerState.close() }
@@ -258,7 +262,7 @@ fun MainShell(
         val viewName =
             if (route == VIEW_ROUTE) {
                 val id = backStack?.arguments?.getLong(DocumentListViewModel.VIEW_ID_ARGUMENT)
-                savedViews.firstOrNull { it.id == id }?.name
+                allSavedViews.firstOrNull { it.id == id }?.name
             } else {
                 null
             }

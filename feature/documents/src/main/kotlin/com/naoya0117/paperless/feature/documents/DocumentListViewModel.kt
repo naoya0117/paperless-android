@@ -79,23 +79,33 @@ class DocumentListViewModel
 
         private val viewId: Long? = savedState.get<Long>(VIEW_ID_ARGUMENT)
 
-        /** The saved view shown ([DocumentListMode.VIEW]); `null` while not cached (or gone). */
-        val savedView: StateFlow<SavedView?> =
+        private val viewFlow: Flow<SavedView?> =
             if (mode != DocumentListMode.VIEW || viewId == null) {
-                MutableStateFlow(null)
+                flowOf(null)
             } else {
-                labels.savedViews.items
-                    .map { views -> views.firstOrNull { it.id == viewId } }
-                    .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+                labels.savedViews.items.map { views -> views.firstOrNull { it.id == viewId } }
+            }
+
+        /** The saved view shown ([DocumentListMode.VIEW]); `null` while not cached (or gone). */
+        val savedView: StateFlow<SavedView?> = viewFlow.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+        /** The view is not on the server any more (it is not among the refreshed saved views). */
+        val savedViewMissing: StateFlow<Boolean> =
+            if (mode != DocumentListMode.VIEW) {
+                MutableStateFlow(false)
+            } else {
+                combine(viewFlow, labels.savedViews.refreshedAt) { view, refreshedAt ->
+                    view == null &&
+                        refreshedAt != null
+                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), false)
             }
 
         /** The saved view's query, like the web UI builds it; `null` while the view is not known. */
         private val viewQuery: Flow<DocumentQuery?> =
-            combine(savedView, labels.customFields.items) { view, fields ->
+            combine(viewFlow, labels.customFields.items, labels.customFields.refreshedAt) { view, fields, refreshedAt ->
                 view?.toDocumentQuery(
-                    pageSize = DocumentQuery().pageSize,
-                    // A sort by a deleted custom field falls back to the created date (once fields are known).
-                    existingCustomFieldIds = fields.takeIf { it.isNotEmpty() }?.map { it.id }?.toSet(),
+                    // A sort by a deleted custom field falls back to the created date (once the fields are known).
+                    existingCustomFieldIds = refreshedAt?.let { fields.map { it.id }.toSet() },
                 )
             }.distinctUntilChanged()
 

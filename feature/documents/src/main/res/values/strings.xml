@@ -58,4 +58,5 @@
     <string name="viewer_file_storage_failed">The file could not be prepared (is the device storage full?)</string>
     <string name="viewer_save_failed">The file could not be saved to Downloads</string>
     <string name="viewer_delete_failed">The document could not be deleted. Check the connection and try again.</string>
+    <string name="documents_view_missing">This view no longer exists.</string>
 </resources>

@@ -71,6 +71,7 @@ fun DocumentListScreen(
     val labels by viewModel.labelNames.collectAsStateWithLifecycle()
     val searchText by viewModel.searchText.collectAsStateWithLifecycle()
     val accountId by viewModel.accountId.collectAsStateWithLifecycle()
+    val viewMissing by viewModel.savedViewMissing.collectAsStateWithLifecycle()
     Column(modifier.fillMaxSize()) {
         if (viewModel.mode == DocumentListMode.SEARCH) {
             OutlinedTextField(
@@ -90,6 +91,7 @@ fun DocumentListScreen(
             typedSearch = searchText,
             activeSearch = activeSearch,
             accountId = accountId,
+            viewMissing = viewMissing,
             onRefresh = {
                 viewModel.refreshLabels()
                 pages.refresh()
@@ -113,6 +115,7 @@ private fun DocumentList(
     typedSearch: String,
     activeSearch: String,
     accountId: String?,
+    viewMissing: Boolean,
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onOpenDocument: (Document) -> Unit,
@@ -147,6 +150,7 @@ private fun DocumentList(
             refresh is LoadState.Loading || searchPending -> Centered { CircularProgressIndicator() }
             // Scrollable like the empty states, so that pull to refresh works too.
             refresh is LoadState.Error -> Scrollable { ErrorBanner(onRetry = onRetry) }
+            viewMissing -> EmptyState(Icons.Outlined.SearchOff, stringResource(R.string.documents_view_missing))
             mode == DocumentListMode.SEARCH && typedSearch.isBlank() ->
                 EmptyState(Icons.Outlined.Search, stringResource(R.string.documents_search_prompt))
             mode == DocumentListMode.SEARCH ->

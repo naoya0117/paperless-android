@@ -358,4 +358,21 @@ class DocumentListViewModelTest {
             val query = documentQueries.last()
             assertTrue(query, "tags__id__all=1" in query && "ordering=title" in query)
         }
+
+    @Test
+    fun `a view that is gone from the server is reported`() =
+        runTest {
+            accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls())
+            val viewModel =
+                viewModel(
+                    SavedStateHandle(
+                        mapOf(
+                            DocumentListViewModel.MODE_ARGUMENT to DocumentListMode.VIEW.name,
+                            DocumentListViewModel.VIEW_ID_ARGUMENT to 8L,
+                        ),
+                    ),
+                )
+
+            withContext(Dispatchers.Default) { withTimeout(10_000) { viewModel.savedViewMissing.first { it } } }
+        }
 }
