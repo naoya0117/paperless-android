@@ -383,6 +383,12 @@ private fun CameraCapture(
             if (!it) refused = true
         }
     LaunchedEffect(Unit) { if (!granted) permission.launch(Manifest.permission.CAMERA) }
+    // Allowed in the app's settings meanwhile: noticed when coming back.
+    LifecycleResumeEffect(Unit) {
+        granted =
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        onPauseOrDispose {}
+    }
     var taking by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     val capture = remember { ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY).build() }

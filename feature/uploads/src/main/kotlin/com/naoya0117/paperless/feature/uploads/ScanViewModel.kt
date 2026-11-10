@@ -96,6 +96,7 @@ class ScanViewModel
                             .filter { it.file.exists() },
                     enhance = handle.get<Boolean>(ENHANCE_KEY) ?: true,
                     title = handle.get<String>(TITLE_KEY).orEmpty(),
+                    done = handle.get<Boolean>(DONE_KEY) ?: false,
                 ),
             )
         val state: StateFlow<ScanState> = mutableState.asStateFlow()
@@ -244,6 +245,7 @@ class ScanViewModel
             handle[ROTATIONS_KEY] = state.pages.map { it.rotation }.toIntArray()
             handle[ENHANCE_KEY] = state.enhance
             handle[TITLE_KEY] = state.title
+            handle[DONE_KEY] = state.done
         }
 
         /** The PDF: a page per image, A4 wide, the image as JPEG (one page in memory at a time). */
@@ -255,7 +257,14 @@ class ScanViewModel
                     try {
                         val scale = PAGE_WIDTH_POINTS / minOf(bitmap.width, bitmap.height).toFloat()
                         pdf.addPage(bitmap.width, bitmap.height, bitmap.width * scale, bitmap.height * scale) { out ->
-                            bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+                            if (!bitmap.compress(
+                                    Bitmap.CompressFormat.JPEG,
+                                    JPEG_QUALITY,
+                                    out,
+                                )
+                            ) {
+                                throw IOException("Cannot encode a page")
+                            }
                         }
                     } finally {
                         bitmap.recycle()
@@ -319,6 +328,7 @@ class ScanViewModel
             private const val ROTATIONS_KEY = "scan.rotations"
             private const val ENHANCE_KEY = "scan.enhance"
             private const val TITLE_KEY = "scan.title"
+            private const val DONE_KEY = "scan.done"
             private const val PDF = "application/pdf"
             private const val STALE_AFTER_MILLIS = 24L * 60 * 60 * 1000
             private const val JPEG_QUALITY = 85
