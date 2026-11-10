@@ -8,7 +8,6 @@ import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -51,6 +50,8 @@ data class ScanState(
     val title: String = "",
     /** Pages are being read (picked images) or the PDF is being made. */
     val working: Boolean = false,
+    /** Queued for upload: the screen closes (when it is shown again, if it was not). */
+    val done: Boolean = false,
 )
 
 sealed interface ScanEvent {
@@ -98,6 +99,16 @@ class ScanViewModel
                 ),
             )
         val state: StateFlow<ScanState> = mutableState.asStateFlow()
+
+        init {
+            // Scans given up without discarding (e.g. the app was closed) are deleted after a day.
+            applicationScope.launch(Dispatchers.IO) {
+                val now = System.currentTimeMillis()
+                directory.parentFile?.listFiles()?.forEach { old ->
+                    if (old != directory && now - old.lastModified() > STALE_AFTER_MILLIS) old.deleteRecursively()
+                }
+            }
+        }
 
         private val eventChannel = Channel<ScanEvent>(Channel.BUFFERED)
         val events: Flow<ScanEvent> = eventChannel.receiveAsFlow()
@@ -177,19 +188,30 @@ class ScanViewModel
                         }
                         // The upload has its own copy: the pages are not needed any more.
                         directory.deleteRecursively()
+                        mutableState.value = ScanState(done = true)
+                        save(mutableState.value)
                         ScanEvent.Queued
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: NotSignedInException) {
                         ScanEvent.NotSignedIn
                     } catch (
-                        @Suppress("TooGenericExceptionCaught") _: Exception,
+                        // Also running out of memory with very large pages: told, not a crash.
+                        @Suppress("TooGenericExceptionCaught") _: Throwable,
                     ) {
                         ScanEvent.Failed
                     } finally {
                         mutableState.update { it.copy(working = false) }
                     }
                 eventChannel.trySend(event)
+            }
+        }
+
+        /** Left without uploading or discarding (e.g. the account changed): the pages go. */
+        override fun onCleared() {
+            if (mutableState.value.pages.isNotEmpty() && !mutableState.value.working) {
+                val dir = directory
+                applicationScope.launch(Dispatchers.IO) { dir.deleteRecursively() }
             }
         }
 
@@ -224,39 +246,27 @@ class ScanViewModel
             handle[TITLE_KEY] = state.title
         }
 
-        /** The PDF, a page per image at its size (limited, so that the file stays small enough). */
+        /** The PDF: a page per image, A4 wide, the image as JPEG (one page in memory at a time). */
         private fun makePdf(state: ScanState): File {
-            val document = PdfDocument()
-            try {
-                state.pages.forEachIndexed { index, page ->
+            val file = File(directory, "scan-${System.nanoTime()}.pdf")
+            JpegPdf(file).use { pdf ->
+                state.pages.forEach { page ->
                     val bitmap = loadPage(page, state.enhance)
                     try {
-                        // Points (1/72 inch) for an A4-ish page at the image's proportions.
                         val scale = PAGE_WIDTH_POINTS / minOf(bitmap.width, bitmap.height).toFloat()
-                        val width = (bitmap.width * scale).toInt()
-                        val height = (bitmap.height * scale).toInt()
-                        val pdfPage =
-                            document.startPage(
-                                PdfDocument.PageInfo.Builder(width, height, index + 1).create(),
-                            )
-                        pdfPage.canvas.drawBitmap(
-                            bitmap,
-                            Matrix().apply { setScale(scale, scale) },
-                            Paint(Paint.FILTER_BITMAP_FLAG),
-                        )
-                        document.finishPage(pdfPage)
+                        pdf.addPage(bitmap.width, bitmap.height, bitmap.width * scale, bitmap.height * scale) { out ->
+                            bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+                        }
                     } finally {
                         bitmap.recycle()
                     }
                 }
-                val file = File(directory, "scan-${System.nanoTime()}.pdf")
-                file.outputStream().use { document.writeTo(it) }
-                return file
-            } finally {
-                document.close()
+                pdf.finish()
             }
+            return file
         }
 
+        /** The page at most [MAX_SIDE] pixels long, turned and (if [enhance]) filtered, in one drawing. */
         private fun loadPage(
             page: ScanPage,
             enhance: Boolean,
@@ -265,26 +275,41 @@ class ScanViewModel
             BitmapFactory.decodeFile(page.file.path, bounds)
             var sample = 1
             while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= MAX_SIDE) sample *= 2
+            // Opaque: half the memory of ARGB.
             val decoded =
-                BitmapFactory.decodeFile(page.file.path, BitmapFactory.Options().apply { inSampleSize = sample })
-                    ?: throw IOException("Not an image: ${page.file}")
-            val rotation = page.rotation + exifRotation(page.file)
-            val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
-            val turned = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
-            if (turned !== decoded) decoded.recycle()
-            if (!enhance) return turned
-            val result = Bitmap.createBitmap(turned.width, turned.height, Bitmap.Config.ARGB_8888)
-            Canvas(result).drawBitmap(
-                turned,
-                0f,
-                0f,
-                Paint().apply {
-                    colorFilter =
-                        ColorMatrixColorFilter(documentFilter())
-                },
-            )
-            turned.recycle()
-            return result
+                BitmapFactory.decodeFile(
+                    page.file.path,
+                    BitmapFactory.Options().apply {
+                        inSampleSize = sample
+                        inPreferredConfig = Bitmap.Config.RGB_565
+                    },
+                ) ?: throw IOException("Not an image: ${page.file}")
+            try {
+                val rotation = (page.rotation + exifRotation(page.file)) % FULL
+                val scale = minOf(1f, MAX_SIDE / maxOf(decoded.width, decoded.height).toFloat())
+                val turned = rotation == QUARTER || rotation == 3 * QUARTER
+                val width = ((if (turned) decoded.height else decoded.width) * scale).toInt().coerceAtLeast(1)
+                val height = ((if (turned) decoded.width else decoded.height) * scale).toInt().coerceAtLeast(1)
+                val matrix =
+                    Matrix().apply {
+                        postTranslate(-decoded.width / 2f, -decoded.height / 2f)
+                        postRotate(rotation.toFloat())
+                        postScale(scale, scale)
+                        postTranslate(width / 2f, height / 2f)
+                    }
+                val paint =
+                    Paint(Paint.FILTER_BITMAP_FLAG).apply {
+                        if (enhance) colorFilter = ColorMatrixColorFilter(documentFilter())
+                    }
+                return Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565).also { result ->
+                    Canvas(result).apply {
+                        drawColor(android.graphics.Color.WHITE)
+                        drawBitmap(decoded, matrix, paint)
+                    }
+                }
+            } finally {
+                decoded.recycle()
+            }
         }
 
         companion object {
@@ -295,6 +320,8 @@ class ScanViewModel
             private const val ENHANCE_KEY = "scan.enhance"
             private const val TITLE_KEY = "scan.title"
             private const val PDF = "application/pdf"
+            private const val STALE_AFTER_MILLIS = 24L * 60 * 60 * 1000
+            private const val JPEG_QUALITY = 85
             private const val QUARTER = 90
             private const val FULL = 360
 
@@ -345,10 +372,11 @@ class ScanViewModel
                 now: LocalDateTime = LocalDateTime.now(),
             ): String {
                 val name =
-                    title.trim().replace(Regex("""[\\/:*?"<>|]"""), "_").ifEmpty {
-                        "Scan " +
-                            now.format(NAME_TIME)
-                    }
+                    title
+                        .trim()
+                        .removeSuffix(".pdf")
+                        .replace(Regex("""[\\/:*?"<>|\u0000-\u001f]"""), "_")
+                        .ifEmpty { "Scan " + now.format(NAME_TIME) }
                 return "$name.pdf"
             }
 

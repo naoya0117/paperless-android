@@ -134,4 +134,34 @@ class ScanViewModelTest {
         assertEquals("a_b.pdf", ScanViewModel.fileName("a/b"))
         assertEquals("Scan 2026-11-10 14.05.pdf", ScanViewModel.fileName("", LocalDateTime.of(2026, 11, 10, 14, 5)))
     }
+
+    @Test
+    fun `the PDF embeds the pages as JPEG with a valid cross-reference table`() {
+        val file = folder.root.resolve("out.pdf")
+        val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 1, 2, 3, 0xFF.toByte(), 0xD9.toByte())
+        JpegPdf(file).use { pdf ->
+            pdf.addPage(100, 141, 595f, 839f) { it.write(jpeg) }
+            pdf.addPage(141, 100, 839f, 595f) { it.write(jpeg) }
+            pdf.finish()
+        }
+        val bytes = file.readBytes()
+        val text = String(bytes, Charsets.ISO_8859_1)
+        assertTrue(text.startsWith("%PDF-1.4"))
+        assertTrue(
+            text.contains("/Count 2") && text.contains("/Filter /DCTDecode") && text.contains("/Length 0000000007"),
+        )
+        // Every object offset in the table points at that object.
+        val xref = text.substringAfterLast("startxref\n").substringBefore("\n").toInt()
+        val entries =
+            text
+                .substring(xref)
+                .lines()
+                .drop(3)
+                .takeWhile { it.endsWith(" n ") }
+        entries.forEachIndexed { index, entry ->
+            val offset = entry.substringBefore(' ').toInt()
+            assertTrue(entry, text.startsWith("${index + 1} 0 obj", offset))
+        }
+        assertEquals(8, entries.size)
+    }
 }

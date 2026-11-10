@@ -263,7 +263,7 @@ fun MainShell(
     val resolver = LocalContext.current.contentResolver
 
     /** Several images picked: whether to put them together into one document (they wait here meanwhile). */
-    var picked by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var picked by rememberSaveable { mutableStateOf<List<Uri>>(emptyList()) }
 
     /** Images to put into one document on the scan screen (handed over once). */
     var imagesToScan by remember { mutableStateOf<List<Uri>>(emptyList()) }
@@ -273,6 +273,13 @@ fun MainShell(
             if (uris.size > 1 && images) picked = uris else enqueue(uris)
         }
     var addMenu by rememberSaveable { mutableStateOf(false) }
+    val packageManager = LocalContext.current.packageManager
+    val hasCamera = remember { packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY) }
+
+    /** Opens the scan screen once (not again on a second tap meanwhile). */
+    val openScan = { camera: Boolean ->
+        if (navController.currentDestination?.route == DOCUMENTS_ROUTE) navController.navigate("scan?camera=$camera")
+    }
     if (addMenu) {
         AddSheet(
             onDismiss = { addMenu = false },
@@ -280,10 +287,12 @@ fun MainShell(
                 addMenu = false
                 pickFiles.launch(UPLOAD_MIME_TYPES)
             },
-            onScan = {
-                addMenu = false
-                navController.navigate("scan?camera=true")
-            },
+            // Only with a camera.
+            onScan =
+                {
+                    addMenu = false
+                    openScan(true)
+                }.takeIf { hasCamera },
         )
     }
     if (picked.isNotEmpty()) {
@@ -296,7 +305,7 @@ fun MainShell(
                     onClick = {
                         imagesToScan = picked
                         picked = emptyList()
-                        navController.navigate("scan?camera=false")
+                        openScan(false)
                     },
                 ) { Text(stringResource(R.string.upload_combine)) }
             },
@@ -907,7 +916,7 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.popExit(): ExitTra
 private fun AddSheet(
     onDismiss: () -> Unit,
     onFiles: () -> Unit,
-    onScan: () -> Unit,
+    onScan: (() -> Unit)?,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.navigationBarsPadding().padding(bottom = 16.dp)) {
@@ -917,12 +926,14 @@ private fun AddSheet(
                 leadingContent = { Icon(Icons.Outlined.UploadFile, contentDescription = null) },
                 modifier = Modifier.clickable(onClick = onFiles),
             )
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.upload_scan)) },
-                supportingContent = { Text(stringResource(R.string.upload_scan_description)) },
-                leadingContent = { Icon(Icons.Outlined.DocumentScanner, contentDescription = null) },
-                modifier = Modifier.clickable(onClick = onScan),
-            )
+            if (onScan != null) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.upload_scan)) },
+                    supportingContent = { Text(stringResource(R.string.upload_scan_description)) },
+                    leadingContent = { Icon(Icons.Outlined.DocumentScanner, contentDescription = null) },
+                    modifier = Modifier.clickable(onClick = onScan),
+                )
+            }
         }
     }
 }

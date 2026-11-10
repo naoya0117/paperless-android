@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -70,6 +71,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -81,6 +83,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
@@ -117,11 +120,16 @@ fun ScanScreen(
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
             when (event) {
-                ScanEvent.Queued -> currentOnClose()
+                // Closed when done (below), also if the app was in the background then.
+                ScanEvent.Queued -> Unit
                 ScanEvent.NotSignedIn -> snackbar.showSnackbar(resources.getString(R.string.uploads_not_signed_in_scan))
                 ScanEvent.Failed -> snackbar.showSnackbar(resources.getString(R.string.scan_failed))
             }
         }
+    }
+    LifecycleResumeEffect(state.done) {
+        if (state.done) currentOnClose()
+        onPauseOrDispose {}
     }
     val leave = {
         when {
@@ -225,6 +233,7 @@ private fun PageReview(
                 OutlinedTextField(
                     value = state.title,
                     onValueChange = viewModel::setTitle,
+                    enabled = !state.working,
                     label = { Text(stringResource(R.string.scan_name)) },
                     placeholder = { Text(stringResource(R.string.scan_name_hint)) },
                     singleLine = true,
@@ -239,7 +248,7 @@ private fun PageReview(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(checked = state.enhance, onCheckedChange = viewModel::setEnhance)
+                    Switch(checked = state.enhance, onCheckedChange = viewModel::setEnhance, enabled = !state.working)
                 }
                 if (state.pages.isEmpty() && !state.working) {
                     Text(
@@ -257,6 +266,7 @@ private fun PageReview(
                 enhance = state.enhance,
                 first = index == 0,
                 last = index == state.pages.lastIndex,
+                enabled = !state.working,
                 onRotate = { viewModel.rotate(index) },
                 onEarlier = { viewModel.move(index, -1) },
                 onLater = { viewModel.move(index, 1) },
@@ -273,6 +283,7 @@ private fun PageCard(
     enhance: Boolean,
     first: Boolean,
     last: Boolean,
+    enabled: Boolean,
     onRotate: () -> Unit,
     onEarlier: () -> Unit,
     onLater: () -> Unit,
@@ -302,7 +313,12 @@ private fun PageCard(
                     } else {
                         null
                     },
-                modifier = Modifier.fillMaxSize().rotate(page.rotation.toFloat()),
+                // Sideways, the page is wider than the (portrait) box: smaller, so that nothing is cut off.
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .rotate(page.rotation.toFloat())
+                        .scale(if (page.rotation % 180 == 0) 1f else PAGE_ASPECT),
             )
             Text(
                 number.toString(),
@@ -317,22 +333,22 @@ private fun PageCard(
             )
         }
         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-            IconButton(onClick = onEarlier, enabled = !first) {
+            IconButton(onClick = onEarlier, enabled = enabled && !first) {
                 Icon(
                     Icons.AutoMirrored.Outlined.ArrowBack,
                     contentDescription = stringResource(R.string.scan_move_earlier, number),
                 )
             }
-            IconButton(onClick = onRotate) {
+            IconButton(onClick = onRotate, enabled = enabled) {
                 Icon(
                     Icons.AutoMirrored.Outlined.RotateRight,
                     contentDescription = stringResource(R.string.scan_rotate, number),
                 )
             }
-            IconButton(onClick = onRemove) {
+            IconButton(onClick = onRemove, enabled = enabled) {
                 Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.scan_remove, number))
             }
-            IconButton(onClick = onLater, enabled = !last) {
+            IconButton(onClick = onLater, enabled = enabled && !last) {
                 Icon(
                     Icons.AutoMirrored.Outlined.ArrowForward,
                     contentDescription = stringResource(R.string.scan_move_later, number),
@@ -358,7 +374,14 @@ private fun CameraCapture(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
         )
     }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
+
+    /** Refused once already: asking again may not show anything (then the app's settings help). */
+    var refused by rememberSaveable { mutableStateOf(false) }
+    val permission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+            granted = it
+            if (!it) refused = true
+        }
     LaunchedEffect(Unit) { if (!granted) permission.launch(Manifest.permission.CAMERA) }
     var taking by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
@@ -376,11 +399,24 @@ private fun CameraCapture(
                 Button(onClick = { permission.launch(Manifest.permission.CAMERA) }) {
                     Text(stringResource(R.string.scan_allow_camera))
                 }
+                if (refused) {
+                    TextButton(
+                        onClick = {
+                            context.startActivity(
+                                android.content.Intent(
+                                    android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    android.net.Uri.fromParts("package", context.packageName, null),
+                                ),
+                            )
+                        },
+                    ) { Text(stringResource(R.string.scan_open_settings), color = Color.White) }
+                }
             }
         }
         IconButton(
             onClick = onClose,
-            modifier = Modifier.align(Alignment.TopStart).padding(top = 32.dp, start = 8.dp),
+            enabled = !taking,
+            modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(start = 8.dp),
         ) {
             Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.scan_close), tint = Color.White)
         }
@@ -455,7 +491,7 @@ private fun CameraCapture(
                     }
                 }
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                    TextButton(onClick = onDone, enabled = pages.isNotEmpty()) {
+                    TextButton(onClick = onDone, enabled = pages.isNotEmpty() && !taking) {
                         Text(
                             stringResource(R.string.scan_done, pages.size),
                             color = if (pages.isNotEmpty()) Color.White else Color.Gray,
@@ -475,21 +511,51 @@ private fun CameraPreview(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember { PreviewView(context) }
+    var unavailable by remember { mutableStateOf(false) }
     DisposableEffect(lifecycleOwner, capture) {
         val future = ProcessCameraProvider.getInstance(context)
         var provider: ProcessCameraProvider? = null
+        var disposed = false
         future.addListener(
             {
-                provider =
-                    future.get().also {
-                        val preview = Preview.Builder().build().apply { surfaceProvider = previewView.surfaceProvider }
-                        it.unbindAll()
-                        it.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture)
-                    }
+                // Not bound any more once the screen is gone (the provider can come late).
+                if (disposed) return@addListener
+                try {
+                    val cameras = future.get()
+                    // The back camera, else any (e.g. a tablet with a front camera only).
+                    val selector =
+                        if (cameras.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA)) {
+                            CameraSelector.DEFAULT_BACK_CAMERA
+                        } else {
+                            CameraSelector.DEFAULT_FRONT_CAMERA
+                        }
+                    val preview = Preview.Builder().build().apply { surfaceProvider = previewView.surfaceProvider }
+                    cameras.unbindAll()
+                    cameras.bindToLifecycle(lifecycleOwner, selector, preview, capture)
+                    provider = cameras
+                } catch (
+                    @Suppress("TooGenericExceptionCaught") _: Exception,
+                ) {
+                    // No camera, or it cannot be opened.
+                    unavailable = true
+                }
             },
             ContextCompat.getMainExecutor(context),
         )
-        onDispose { provider?.unbindAll() }
+        onDispose {
+            disposed = true
+            provider?.unbindAll()
+        }
+    }
+    if (unavailable) {
+        Box(modifier, contentAlignment = Alignment.Center) {
+            Text(
+                stringResource(R.string.scan_camera_unavailable),
+                color = Color.White,
+                modifier = Modifier.padding(32.dp),
+            )
+        }
+        return
     }
     AndroidView(factory = { previewView }, modifier = modifier)
 }

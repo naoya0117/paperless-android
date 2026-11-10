@@ -38,4 +38,6 @@
     <string name="scan_done">Done (%1$d)</string>
     <string name="scan_failed">The pages could not be put together. Is the device storage full?</string>
     <string name="uploads_not_signed_in_scan">Sign in to upload</string>
+    <string name="scan_camera_unavailable">The camera cannot be used.</string>
+    <string name="scan_open_settings">Open the app\'s settings</string>
 </resources>

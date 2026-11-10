@@ -38,4 +38,6 @@
     <string name="scan_done">完了（%1$d）</string>
     <string name="scan_failed">ページをまとめられませんでした。端末の空き容量が足りない可能性があります。</string>
     <string name="uploads_not_signed_in_scan">アップロードするにはサインインしてください</string>
+    <string name="scan_camera_unavailable">カメラを使えません。</string>
+    <string name="scan_open_settings">アプリの設定を開く</string>
 </resources>

@@ -47,7 +47,7 @@
     <string name="upload_scan">Scan with the camera</string>
     <string name="upload_scan_description">Pages of paper, as one PDF</string>
     <plurals name="upload_combine_message">
-        <item quantity="one">The image can be uploaded as it is, or as one document.</item>
+        <item quantity="one">The image can be uploaded as a PDF or as it is.</item>
         <item quantity="other">The %1$d images can be put together into one document (PDF) or uploaded separately.</item>
     </plurals>
 </resources>
