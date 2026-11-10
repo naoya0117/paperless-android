@@ -336,11 +336,9 @@ private fun DocumentList(
             viewMissing -> EmptyState(Icons.Outlined.SearchOff, stringResource(R.string.documents_view_missing))
             mode == DocumentListMode.SEARCH && typedSearch.isBlank() ->
                 EmptyState(Icons.Outlined.Search, stringResource(R.string.documents_search_prompt))
-            mode == DocumentListMode.SEARCH || filtered ->
-                EmptyState(
-                    Icons.Outlined.SearchOff,
-                    stringResource(R.string.documents_no_results),
-                )
+            mode == DocumentListMode.SEARCH || (filtered && typedSearch.isNotBlank()) ->
+                EmptyState(Icons.Outlined.SearchOff, stringResource(R.string.documents_no_results))
+            filtered -> EmptyState(Icons.Outlined.SearchOff, stringResource(R.string.documents_no_filter_results))
             mode == DocumentListMode.INBOX ->
                 EmptyState(
                     Icons.Outlined.Inbox,

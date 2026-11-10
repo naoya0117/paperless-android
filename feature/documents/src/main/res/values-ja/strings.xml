@@ -149,4 +149,5 @@
     <string name="date_range">%1$s〜%2$s</string>
     <string name="date_from">%1$s 以降</string>
     <string name="date_until">%1$s まで</string>
+    <string name="documents_no_filter_results">条件に合う文書はありません。</string>
 </resources>

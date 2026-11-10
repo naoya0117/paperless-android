@@ -151,4 +151,5 @@
     <string name="date_range">%1$s – %2$s</string>
     <string name="date_from">From %1$s</string>
     <string name="date_until">Until %1$s</string>
+    <string name="documents_no_filter_results">No documents match these filters.</string>
 </resources>

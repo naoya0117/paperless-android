@@ -8,10 +8,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -49,6 +55,7 @@ import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -91,8 +98,15 @@ fun DocumentSearchBar(
     var filtersOpen by rememberSaveable { mutableStateOf(!filter.isDefault) }
     val focus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
-    LaunchedEffect(focusRequests) { if (focusRequests > 0) focus.requestFocus() }
-    Column(Modifier.fillMaxWidth().statusBarsPadding()) {
+    // Each request once (not again when the screen comes back, e.g. from a document or after rotation).
+    var handledFocus by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(focusRequests) {
+        if (focusRequests > handledFocus) {
+            handledFocus = focusRequests
+            focus.requestFocus()
+        }
+    }
+    Column(Modifier.fillMaxWidth().windowInsetsPadding(BAR_INSETS)) {
         SearchBarRow(navigationIcon, actions) {
             TextField(
                 value = text,
@@ -100,7 +114,13 @@ fun DocumentSearchBar(
                 placeholder = { Text(stringResource(R.string.documents_search_hint)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+                keyboardActions =
+                    KeyboardActions(
+                        onSearch = {
+                            viewModel.submitSearch()
+                            focusManager.clearFocus()
+                        },
+                    ),
                 colors = transparentFieldColors(),
                 modifier = Modifier.weight(1f).focusRequester(focus),
             )
@@ -129,7 +149,7 @@ fun DocumentSearchButton(
     navigationIcon: @Composable () -> Unit,
     actions: @Composable RowScope.() -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().statusBarsPadding()) {
+    Column(Modifier.fillMaxWidth().windowInsetsPadding(BAR_INSETS)) {
         SearchBarRow(navigationIcon, actions, onClick = onClick) {
             Text(
                 stringResource(R.string.documents_search_hint),
@@ -160,19 +180,20 @@ private fun SearchBarRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
     ) {
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .height(SEARCH_BAR_HEIGHT)
-                    .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-        ) {
+        val shape = CircleShape
+        val color = MaterialTheme.colorScheme.surfaceContainerHigh
+        // At least as high as a text field; higher with a large font.
+        val size = Modifier.weight(1f).heightIn(min = SEARCH_BAR_HEIGHT)
+        val inside: @Composable () -> Unit = {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, end = 4.dp)) {
                 navigationIcon()
                 content()
             }
+        }
+        if (onClick != null) {
+            Surface(onClick = onClick, shape = shape, color = color, modifier = size, content = inside)
+        } else {
+            Surface(shape = shape, color = color, modifier = size, content = inside)
         }
         actions()
     }
@@ -237,9 +258,9 @@ private fun FilterChips(
         CountChip(R.string.filter_document_types, filter.documentTypeIds.size) { sheet = FilterSheet.DOCUMENT_TYPES }
         CountChip(R.string.filter_storage_paths, filter.storagePathIds.size) { sheet = FilterSheet.STORAGE_PATHS }
         FilterChip(
-            selected = filter.created != null,
+            selected = filter.createdRange != null,
             onClick = { sheet = FilterSheet.CREATED },
-            label = { Text(filter.created?.let { dateRangeLabel(it) } ?: stringResource(R.string.filter_created)) },
+            label = { Text(createdLabel(filter)) },
         )
         if (!filter.isDefault) {
             AssistChip(
@@ -255,7 +276,7 @@ private fun FilterChips(
         FilterSheet.TAGS ->
             LabelSheet(
                 title = R.string.filter_tags_title,
-                options = labels.tags.mapValues { it.value.name },
+                options = remember(labels.tags) { labels.tags.mapValues { it.value.name } },
                 selected = filter.tagIds,
                 onChange = { onChange(filter.copy(tagIds = it)) },
                 onDismiss = close,
@@ -284,7 +305,12 @@ private fun FilterChips(
                 onChange = { onChange(filter.copy(storagePathIds = it)) },
                 onDismiss = close,
             )
-        FilterSheet.CREATED -> DateSheet(filter.created, { onChange(filter.copy(created = it)) }, close)
+        FilterSheet.CREATED ->
+            DateSheet(
+                filter,
+                { created, preset -> onChange(filter.copy(created = created, createdPreset = preset)) },
+                close,
+            )
         null -> Unit
     }
 }
@@ -413,17 +439,25 @@ private fun LabelSheet(
     onDismiss: () -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
+    // Applied when the sheet closes (not a new list per tap).
+    var picked by rememberSaveable { mutableStateOf(selected.toList()) }
+    // Chosen labels that are not known (e.g. deleted meanwhile) stay visible, so that they can be removed.
+    val all = remember(options, selected) { options + (selected - options.keys).associateWith { "#$it" } }
     val shown =
-        remember(options, query) {
-            options.entries
+        remember(all, query) {
+            all.entries
                 .filter { query.isBlank() || it.value.contains(query.trim(), ignoreCase = true) }
                 .sortedBy { it.value.lowercase() }
         }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    val close = {
+        if (picked.toSet() != selected) onChange(picked.toSet())
+        onDismiss()
+    }
+    ModalBottomSheet(onDismissRequest = close) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 24.dp, end = 12.dp)) {
             Text(stringResource(title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            if (selected.isNotEmpty()) {
-                TextButton(onClick = { onChange(emptySet()) }) { Text(stringResource(R.string.filter_clear)) }
+            if (picked.isNotEmpty()) {
+                TextButton(onClick = { picked = emptyList() }) { Text(stringResource(R.string.filter_clear)) }
             }
         }
         OutlinedTextField(
@@ -445,42 +479,26 @@ private fun LabelSheet(
                 }
             }
             items(shown, key = { it.key }) { (id, name) ->
-                val checked = id in selected
+                val checked = id in picked
                 ListItem(
                     headlineContent = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     leadingContent = { Checkbox(checked = checked, onCheckedChange = null) },
-                    modifier = Modifier.clickable { onChange(if (checked) selected - id else selected + id) },
+                    modifier = Modifier.clickable { picked = if (checked) picked - id else picked + id },
                 )
             }
         }
     }
 }
 
-private enum class DatePreset { NONE, LAST_30_DAYS, THIS_YEAR, LAST_YEAR }
-
-private fun DatePreset.range(today: LocalDate): DateRange? =
-    when (this) {
-        DatePreset.NONE -> null
-        DatePreset.LAST_30_DAYS -> DateRange(today.minusDays(DAYS_IN_MONTH), today)
-        DatePreset.THIS_YEAR -> DateRange(today.withDayOfYear(1), null)
-        DatePreset.LAST_YEAR ->
-            today
-                .minusYears(
-                    1,
-                ).let { DateRange(it.withDayOfYear(1), it.withDayOfYear(it.lengthOfYear())) }
-    }
-
-private const val DAYS_IN_MONTH = 30L
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DateSheet(
-    created: DateRange?,
-    onChange: (DateRange?) -> Unit,
+    filter: DocumentFilter,
+    onChange: (DateRange?, CreatedPreset?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val today = remember { LocalDate.now() }
     var picking by rememberSaveable { mutableStateOf(false) }
+    val created = filter.createdRange
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.padding(bottom = 24.dp)) {
             Text(
@@ -488,24 +506,20 @@ private fun DateSheet(
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             )
-            val names =
-                mapOf(
-                    DatePreset.NONE to R.string.date_any,
-                    DatePreset.LAST_30_DAYS to R.string.date_last_30_days,
-                    DatePreset.THIS_YEAR to R.string.date_this_year,
-                    DatePreset.LAST_YEAR to R.string.date_last_year,
-                )
-            val presetChosen = DatePreset.entries.firstOrNull { it.range(today) == created }
-            DatePreset.entries.forEach { preset ->
-                SortRow(stringResource(names.getValue(preset)), selected = presetChosen == preset) {
-                    onChange(preset.range(today))
+            SortRow(stringResource(R.string.date_any), selected = created == null) {
+                onChange(null, null)
+                onDismiss()
+            }
+            CreatedPreset.entries.forEach { preset ->
+                SortRow(stringResource(presetName(preset)), selected = filter.createdPreset == preset) {
+                    onChange(null, preset)
                     onDismiss()
                 }
             }
             SortRow(
-                created?.takeIf { presetChosen == null }?.let { dateRangeLabel(it) }
+                filter.created?.takeIf { filter.createdPreset == null }?.let { dateRangeLabel(it) }
                     ?: stringResource(R.string.date_custom),
-                selected = created != null && presetChosen == null,
+                selected = filter.createdPreset == null && filter.created != null,
             ) { picking = true }
         }
     }
@@ -524,6 +538,7 @@ private fun DateSheet(
                         picking = false
                         onChange(
                             DateRange(state.selectedStartDateMillis?.toDate(), state.selectedEndDateMillis?.toDate()),
+                            null,
                         )
                         onDismiss()
                     },
@@ -539,6 +554,19 @@ private fun DateSheet(
         }
     }
 }
+
+private fun presetName(preset: CreatedPreset): Int =
+    when (preset) {
+        CreatedPreset.LAST_30_DAYS -> R.string.date_last_30_days
+        CreatedPreset.THIS_YEAR -> R.string.date_this_year
+        CreatedPreset.LAST_YEAR -> R.string.date_last_year
+    }
+
+@Composable
+private fun createdLabel(filter: DocumentFilter): String =
+    filter.createdPreset?.let { stringResource(presetName(it)) }
+        ?: filter.created?.let { dateRangeLabel(it) }
+        ?: stringResource(R.string.filter_created)
 
 /** The pickers work in UTC midnight milliseconds. */
 private fun LocalDate.toMillis(): Long = atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
@@ -559,3 +587,10 @@ private fun dateRangeLabel(range: DateRange): String {
 }
 
 private val SEARCH_BAR_HEIGHT = 56.dp
+
+/** Clear of the status bar, and of side bars and cutouts (in landscape). */
+private val BAR_INSETS: WindowInsets
+    @Composable get() =
+        WindowInsets.systemBars.union(WindowInsets.displayCutout).only(
+            WindowInsetsSides.Top + WindowInsetsSides.Horizontal,
+        )

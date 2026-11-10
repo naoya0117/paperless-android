@@ -31,6 +31,25 @@ data class DocumentSort(
     }
 }
 
+/** Created dates relative to today: kept as such (not as the dates of the day they were chosen). */
+enum class CreatedPreset {
+    LAST_30_DAYS,
+    THIS_YEAR,
+    LAST_YEAR,
+    ;
+
+    fun range(today: LocalDate = LocalDate.now()): DateRange =
+        when (this) {
+            LAST_30_DAYS -> DateRange(today.minusDays(DAYS_IN_MONTH - 1), today)
+            THIS_YEAR -> DateRange(today.withDayOfYear(1), null)
+            LAST_YEAR -> today.minusYears(1).let { DateRange(it.withDayOfYear(1), it.withDayOfYear(it.lengthOfYear())) }
+        }
+
+    private companion object {
+        const val DAYS_IN_MONTH = 30L
+    }
+}
+
 /** What the document list is narrowed to (beyond the search text), and its order. */
 data class DocumentFilter(
     /** Documents must have all of these tags. */
@@ -39,26 +58,38 @@ data class DocumentFilter(
     val correspondentIds: Set<Long> = emptySet(),
     val documentTypeIds: Set<Long> = emptySet(),
     val storagePathIds: Set<Long> = emptySet(),
+    /** Chosen dates; see [createdPreset] for dates relative to today. */
     val created: DateRange? = null,
+    val createdPreset: CreatedPreset? = null,
     val sort: DocumentSort = DocumentSort(),
 ) {
+    /** The created dates applied today. */
+    val createdRange: DateRange? get() = createdPreset?.range() ?: created
+
     /** How many conditions narrow the list (not the order). */
     val conditionCount: Int
         get() =
             listOf(tagIds, correspondentIds, documentTypeIds, storagePathIds).count { it.isNotEmpty() } +
-                (if (created != null) 1 else 0)
+                (if (createdRange != null) 1 else 0)
 
     val isDefault: Boolean get() = this == DocumentFilter()
 
     /** The query for these conditions and [search] (blank: none). */
     fun toQuery(search: String): DocumentQuery =
         DocumentQuery(
-            search = search.trim().takeIf { it.isNotEmpty() }?.let(DocumentSearch::Text),
+            // At most as long as the server accepts (e.g. pasted text).
+            search =
+                search
+                    .trim()
+                    .take(
+                        DocumentSearch.MAX_LENGTH / 2,
+                    ).takeIf { it.isNotEmpty() }
+                    ?.let(DocumentSearch::Text),
             tags = if (tagIds.isEmpty()) TagFilter.Any else TagFilter.Matching(all = tagIds),
             correspondent = correspondentIds.toIdFilter(),
             documentType = documentTypeIds.toIdFilter(),
             storagePath = storagePathIds.toIdFilter(),
-            created = created,
+            created = createdRange,
             ordering = sort.ordering,
         )
 
@@ -70,6 +101,7 @@ data class DocumentFilter(
         handle[STORAGE_PATHS] = storagePathIds.toLongArray()
         handle[CREATED_FROM] = created?.from?.toEpochDay()
         handle[CREATED_TO] = created?.to?.toEpochDay()
+        handle[CREATED_PRESET] = createdPreset?.name
         handle[SORT_FIELD] = sort.orderBy?.name
         handle[SORT_DESCENDING] = sort.descending
     }
@@ -82,6 +114,7 @@ data class DocumentFilter(
         private const val STORAGE_PATHS = PREFIX + "storagePaths"
         private const val CREATED_FROM = PREFIX + "createdFrom"
         private const val CREATED_TO = PREFIX + "createdTo"
+        private const val CREATED_PRESET = PREFIX + "createdPreset"
         private const val SORT_FIELD = PREFIX + "sortField"
         private const val SORT_DESCENDING = PREFIX + "sortDescending"
 
@@ -95,6 +128,13 @@ data class DocumentFilter(
                 documentTypeIds = ids(DOCUMENT_TYPES),
                 storagePathIds = ids(STORAGE_PATHS),
                 created = if (from == null && to == null) null else DateRange(from, to),
+                createdPreset =
+                    handle.get<String>(CREATED_PRESET)?.let { name ->
+                        CreatedPreset.entries.firstOrNull {
+                            it.name ==
+                                name
+                        }
+                    },
                 sort =
                     DocumentSort(
                         orderBy =

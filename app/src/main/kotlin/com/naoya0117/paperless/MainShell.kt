@@ -163,7 +163,7 @@ private const val DOCUMENT_ROUTE = "document/{${DocumentViewerViewModel.DOCUMENT
 private const val EDIT_ROUTE = "document/{${DocumentEditViewModel.DOCUMENT_ID_ARGUMENT}}/edit"
 
 /**
- * The signed-in app: bottom tabs (documents, search) under a top bar with the drawer (hamburger menu) and, on
+ * The signed-in app: bottom tabs (home, documents) under a top bar with the drawer (hamburger menu) and, on
  * the documents tab, the inbox button; and the screens opened from them.
  */
 @OptIn(ExperimentalMaterial3Api::class)
