@@ -1,6 +1,10 @@
 package com.naoya0117.paperless.feature.uploads
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,11 +41,14 @@ internal data class UploadProgress(
     companion object {
         fun of(uploads: List<Upload>): UploadProgress {
             val sending = uploads.filter { it.state == UploadState.QUEUED || it.state == UploadState.UPLOADING }
-            val total = sending.sumOf { it.size }
+            val processing = uploads.filter { it.state == UploadState.PROCESSING }
+            // The processed ones count as sent, so that the bar does not go back when one is sent.
+            val total = (sending + processing).sumOf { it.size }
+            val sent = sending.sumOf { it.sentBytes } + processing.sumOf { it.size }
             return UploadProgress(
                 sending = sending.size,
-                processing = uploads.count { it.state == UploadState.PROCESSING },
-                sent = if (sending.isEmpty() || total <= 0) null else sending.sumOf { it.sentBytes }.toFloat() / total,
+                processing = processing.size,
+                sent = if (sending.isEmpty() || total <= 0) null else sent.toFloat() / total,
             )
         }
     }
@@ -59,7 +66,12 @@ fun UploadBanner(
 ) {
     val uploads by viewModel.uploads.collectAsStateWithLifecycle()
     val progress = UploadProgress.of(uploads)
-    AnimatedVisibility(visible = progress.active > 0, modifier = modifier) {
+    AnimatedVisibility(
+        visible = progress.active > 0,
+        enter = expandVertically() + fadeIn(),
+        exit = shrinkVertically() + fadeOut(),
+        modifier = modifier,
+    ) {
         Surface(
             onClick = onClick,
             shape = RoundedCornerShape(12.dp),

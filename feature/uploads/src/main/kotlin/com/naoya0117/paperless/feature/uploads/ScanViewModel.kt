@@ -165,7 +165,10 @@ class ScanViewModel
         fun setCorners(
             index: Int,
             corners: List<Float>?,
-        ) = changePage(index) { it.copy(corners = corners?.takeIf { c -> c.size == CORNER_VALUES && c != FULL_PAGE }) }
+        ) = changePage(index) {
+            // Only a proper quadrilateral (see isValidQuad); the whole page is no trimming.
+            it.copy(corners = corners?.takeIf { c -> isValidQuad(c) && c != FULL_PAGE })
+        }
 
         /**
          * The page as it goes into the PDF, at most [maxSide] pixels long (e.g. small for a preview); [crop]
@@ -292,7 +295,12 @@ class ScanViewModel
                 state.pages.forEach { page ->
                     val bitmap = loadPage(page, state.enhance)
                     try {
-                        val scale = PAGE_WIDTH_POINTS / minOf(bitmap.width, bitmap.height).toFloat()
+                        // A4 wide, but no side beyond what PDF allows (e.g. a very long strip).
+                        val scale =
+                            minOf(
+                                PAGE_WIDTH_POINTS / minOf(bitmap.width, bitmap.height),
+                                MAX_PAGE_POINTS / maxOf(bitmap.width, bitmap.height),
+                            )
                         pdf.addPage(bitmap.width, bitmap.height, bitmap.width * scale, bitmap.height * scale) { out ->
                             if (!bitmap.compress(
                                     Bitmap.CompressFormat.JPEG,
@@ -323,8 +331,23 @@ class ScanViewModel
         ): Bitmap {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(page.file.path, bounds)
+            // A trimmed page needs more of the image's pixels: decoded so that its part still has maxSide.
+            val kept =
+                page.corners?.let { c ->
+                    maxOf(
+                        c.filterIndexed { i, _ -> i % 2 == 0 }.spread(),
+                        c
+                            .filterIndexed { i, _ ->
+                                i %
+                                    2 ==
+                                    1
+                            }.spread(),
+                    )
+                }
+                    ?: 1f
+            val needed = maxSide / kept.coerceAtLeast(MIN_KEPT)
             var sample = 1
-            while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
+            while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= needed) sample *= 2
             // Opaque: half the memory of ARGB.
             val decoded =
                 BitmapFactory.decodeFile(
@@ -365,7 +388,9 @@ class ScanViewModel
                 val w = (outWidth * scale).toInt().coerceAtLeast(1)
                 val h = (outHeight * scale).toInt().coerceAtLeast(1)
                 val target = floatArrayOf(0f, 0f, w.toFloat(), 0f, w.toFloat(), h.toFloat(), 0f, h.toFloat())
-                matrix.postConcat(Matrix().apply { setPolyToPoly(quad, 0, target, 0, 4) })
+                // Not mappable (e.g. corners on a line): the whole page.
+                val straighten = Matrix()
+                if (straighten.setPolyToPoly(quad, 0, target, 0, 4)) matrix.postConcat(straighten)
                 val paint =
                     Paint(Paint.FILTER_BITMAP_FLAG).apply {
                         if (enhance) colorFilter = ColorMatrixColorFilter(documentFilter())
@@ -402,12 +427,42 @@ class ScanViewModel
             private fun savedCorners(
                 values: FloatArray?,
                 index: Int,
-            ): List<Float>? =
-                values
-                    ?.toList()
-                    ?.drop(index * CORNER_VALUES)
-                    ?.take(CORNER_VALUES)
-                    ?.takeIf { it.size == CORNER_VALUES && it.none(Float::isNaN) }
+            ): List<Float>? {
+                val start = index * CORNER_VALUES
+                if (values == null || values.size < start + CORNER_VALUES) return null
+                return values.copyOfRange(start, start + CORNER_VALUES).toList().takeIf { it.none(Float::isNaN) }
+            }
+
+            private const val MAX_PAGE_POINTS = 14_400f
+
+            /** Trimmed to less than this of a side: decoded as if it were this much (memory). */
+            private const val MIN_KEPT = 0.25f
+
+            /** The smallest part kept, of the page's area. */
+            private const val MIN_AREA = 0.01f
+
+            private fun List<Float>.spread(): Float = max() - min()
+
+            /**
+             * Whether [corners] make a usable quadrilateral: convex, in order (clockwise on screen), and not
+             * tiny. Crossed or folded corners would mirror or garble the page.
+             */
+            fun isValidQuad(corners: List<Float>): Boolean {
+                if (corners.size != CORNER_VALUES) return false
+                val p = corners.chunked(2)
+                // y points down: clockwise on screen gives positive cross products.
+                val crosses =
+                    (0 until 4).map { i ->
+                        val a = p[i]
+                        val b = p[(i + 1) % 4]
+                        val c = p[(i + 2) % 4]
+                        (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0])
+                    }
+                val area =
+                    (0 until 4).sumOf { i -> (p[i][0] * p[(i + 1) % 4][1] - p[(i + 1) % 4][0] * p[i][1]).toDouble() } /
+                        2
+                return crosses.all { it > 0 } && area >= MIN_AREA
+            }
 
             /** The corners after turning the page a quarter clockwise: (x, y) → (1 − y, x), the order kept. */
             internal fun turnCorners(corners: List<Float>): List<Float> {

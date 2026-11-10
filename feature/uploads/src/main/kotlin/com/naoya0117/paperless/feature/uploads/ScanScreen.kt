@@ -19,6 +19,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -72,7 +73,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -85,6 +85,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -99,7 +100,6 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
-import kotlin.math.hypot
 
 /**
  * Scanning a paper document: pages taken with the camera ([startWithCamera]) or picked images, checked
@@ -129,8 +129,8 @@ fun ScanScreen(
     }
     var camera by rememberSaveable { mutableStateOf(startWithCamera) }
 
-    /** The page being trimmed (its index). */
-    var cropping by rememberSaveable { mutableStateOf<Int?>(null) }
+    /** The page being trimmed (its file's name: pages may be fewer after a restore). */
+    var cropping by rememberSaveable { mutableStateOf<String?>(null) }
     var confirmDiscard by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val resources = LocalResources.current
@@ -161,13 +161,14 @@ fun ScanScreen(
         }
     }
     BackHandler(enabled = !state.working && cropping == null, onBack = leave)
-    val croppedPage = cropping?.let(state.pages::getOrNull)
+    val croppedIndex = state.pages.indexOfFirst { it.file.name == cropping }
+    val croppedPage = state.pages.getOrNull(croppedIndex)
     if (croppedPage != null) {
         CropEditor(
             page = croppedPage,
             render = { viewModel.render(croppedPage, enhance = false, maxSide = CROP_SIDE, crop = false) },
             onApply = { corners ->
-                viewModel.setCorners(checkNotNull(cropping), corners)
+                viewModel.setCorners(croppedIndex, corners)
                 cropping = null
             },
             onCancel = { cropping = null },
@@ -217,7 +218,13 @@ fun ScanScreen(
                 }
             },
         ) { padding ->
-            PageReview(state, viewModel, onCrop = { cropping = it }, modifier = Modifier.padding(padding))
+            PageReview(state, viewModel, onCrop = {
+                cropping =
+                    state.pages
+                        .getOrNull(it)
+                        ?.file
+                        ?.name
+            }, modifier = Modifier.padding(padding))
         }
     }
     if (confirmDiscard) {
@@ -337,22 +344,31 @@ private fun PageCard(
             contentAlignment = Alignment.Center,
         ) {
             // As it goes into the PDF: turned, trimmed and filtered.
-            val preview by produceState<ImageBitmap?>(null, page, enhance) {
-                value = runCatching { render(page, enhance).asImageBitmap() }.getOrNull()
+            val preview by produceState<PagePreview>(PagePreview.Loading, page, enhance) {
+                value =
+                    preview { render(page, enhance) }
             }
-            preview?.let {
-                Image(
-                    it,
-                    contentDescription = stringResource(R.string.scan_page, number),
-                    contentScale = ContentScale.Fit,
-                    modifier =
-                        Modifier.fillMaxSize().clickable(
-                            enabled = enabled,
-                            onClickLabel = stringResource(R.string.scan_crop),
-                            onClick = onCrop,
-                        ),
-                )
-            } ?: CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+            when (val current = preview) {
+                PagePreview.Loading -> CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                PagePreview.Failed ->
+                    Text(
+                        stringResource(R.string.scan_page_unreadable),
+                        modifier = Modifier.padding(8.dp),
+                    )
+                is PagePreview.Ready ->
+                    Image(
+                        current.image,
+                        contentDescription = stringResource(R.string.scan_page, number),
+                        contentScale = ContentScale.Fit,
+                        modifier =
+                            Modifier.fillMaxSize().clickable(
+                                enabled = enabled,
+                                onClickLabel = stringResource(R.string.scan_crop),
+                                onClick = onCrop,
+                            ),
+                    )
+            }
+
             Text(
                 number.toString(),
                 style = MaterialTheme.typography.labelMedium,
@@ -617,10 +633,10 @@ private fun CropEditor(
     modifier: Modifier = Modifier,
 ) {
     BackHandler(onBack = onCancel)
-    val image by produceState<ImageBitmap?>(null, page.file, page.rotation) {
-        value = runCatching { render().asImageBitmap() }.getOrNull()
-    }
-    val corners = remember(page) { (page.corners ?: ScanViewModel.FULL_PAGE).toMutableStateList() }
+    val image by produceState<PagePreview>(PagePreview.Loading, page.file, page.rotation) { value = preview(render) }
+    // Kept when the screen is recreated (e.g. the phone turned) before applying.
+    var corners by rememberSaveable(page.file.name) { mutableStateOf(page.corners ?: ScanViewModel.FULL_PAGE) }
+    val valid = ScanViewModel.isValidQuad(corners)
     Scaffold(
         modifier = modifier,
         containerColor = Color.Black,
@@ -633,87 +649,157 @@ private fun CropEditor(
                     }
                 },
                 actions = {
-                    TextButton(onClick = {
-                        corners.clear()
-                        corners.addAll(ScanViewModel.FULL_PAGE)
-                    }) { Text(stringResource(R.string.scan_crop_reset)) }
                     TextButton(
-                        onClick = { onApply(corners.toList()) },
+                        onClick = { corners = ScanViewModel.FULL_PAGE },
+                    ) { Text(stringResource(R.string.scan_crop_reset)) }
+                    TextButton(
+                        onClick = { onApply(corners) },
+                        enabled = valid,
                     ) { Text(stringResource(R.string.scan_crop_apply)) }
                 },
             )
         },
-    ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-            val bitmap = image
-            if (bitmap == null) {
-                CircularProgressIndicator()
-            } else {
-                Box(Modifier.aspectRatio(bitmap.width.toFloat() / bitmap.height)) {
-                    Image(bitmap, contentDescription = null, modifier = Modifier.fillMaxSize())
-                    CornerHandles(corners, Modifier.fillMaxSize())
-                }
+        bottomBar = {
+            if (!valid) {
+                Text(
+                    stringResource(R.string.scan_crop_invalid),
+                    color = Color.White,
+                    modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp),
+                )
             }
+        },
+    ) { padding ->
+        when (val current = image) {
+            PagePreview.Loading ->
+                Box(
+                    Modifier.padding(padding).fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) { CircularProgressIndicator() }
+            PagePreview.Failed ->
+                Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(stringResource(R.string.scan_page_unreadable), color = Color.White)
+                }
+            is PagePreview.Ready ->
+                CornerEditor(
+                    image = current.image,
+                    corners = corners,
+                    onChange = { corners = it },
+                    modifier = Modifier.padding(padding).fillMaxSize(),
+                )
         }
     }
 }
 
-/** The four corners over the image (as fractions of it), each dragged by the handle nearest the finger. */
+/** A rendered page, or why not. */
+private sealed interface PagePreview {
+    data object Loading : PagePreview
+
+    data object Failed : PagePreview
+
+    data class Ready(
+        val image: ImageBitmap,
+    ) : PagePreview
+}
+
+private suspend fun preview(render: suspend () -> android.graphics.Bitmap): PagePreview =
+    try {
+        PagePreview.Ready(render().asImageBitmap())
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (
+        // Not readable, or too large for the memory left.
+        @Suppress("TooGenericExceptionCaught") _: Throwable,
+    ) {
+        PagePreview.Failed
+    }
+
+/**
+ * The image with its four corners (as fractions of it) over it; each is dragged by the handle nearest the
+ * finger, also from just outside the image (the handles sit on its edges by default).
+ */
 @Composable
-private fun CornerHandles(
-    corners: androidx.compose.runtime.snapshots.SnapshotStateList<Float>,
+private fun CornerEditor(
+    image: ImageBitmap,
+    corners: List<Float>,
+    onChange: (List<Float>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val color = MaterialTheme.colorScheme.primary
-    val touch = with(LocalDensity.current) { HANDLE_TOUCH.toPx() }
-    val radius = with(LocalDensity.current) { HANDLE_RADIUS.toPx() }
+    val density = LocalDensity.current
+    val touch = with(density) { HANDLE_TOUCH.toPx() }
+    val radius = with(density) { HANDLE_RADIUS.toPx() }
+    val margin = with(density) { EDITOR_MARGIN.toPx() }
+    val current by rememberUpdatedState(corners)
+    val change by rememberUpdatedState(onChange)
     var dragged by remember { mutableStateOf<Int?>(null) }
-    Canvas(
-        modifier.pointerInput(Unit) {
-            detectDragGestures(
-                onDragStart = { start ->
-                    dragged =
-                        (0 until CORNERS)
-                            .minByOrNull { i ->
-                                hypot(
-                                    corners[2 * i] * size.width - start.x,
-                                    corners[2 * i + 1] * size.height - start.y,
-                                )
-                            }?.takeIf { i ->
-                                hypot(
-                                    corners[2 * i] * size.width - start.x,
-                                    corners[2 * i + 1] * size.height - start.y,
-                                ) <
-                                    touch
-                            }
-                },
-                onDragEnd = { dragged = null },
-                onDragCancel = { dragged = null },
-                onDrag = { change, amount ->
-                    val i = dragged ?: return@detectDragGestures
-                    change.consume()
-                    corners[2 * i] = (corners[2 * i] + amount.x / size.width).coerceIn(0f, 1f)
-                    corners[2 * i + 1] = (corners[2 * i + 1] + amount.y / size.height).coerceIn(0f, 1f)
-                },
+    BoxWithConstraints(modifier) {
+        // Where the image is drawn: as large as fits within the margin, centred.
+        val area =
+            with(density) {
+                androidx.compose.ui.geometry.Size(
+                    maxWidth.toPx() - 2 * margin,
+                    maxHeight.toPx() - 2 * margin,
+                )
+            }
+        val fit = minOf(area.width / image.width, area.height / image.height)
+        val shown =
+            androidx.compose.ui.geometry
+                .Size(image.width * fit, image.height * fit)
+        val origin = Offset(margin + (area.width - shown.width) / 2, margin + (area.height - shown.height) / 2)
+
+        fun point(i: Int) =
+            Offset(origin.x + current[2 * i] * shown.width, origin.y + current[2 * i + 1] * shown.height)
+        Canvas(
+            Modifier.fillMaxSize().pointerInput(image) {
+                detectDragGestures(
+                    onDragStart = { start ->
+                        dragged =
+                            (0 until CORNERS)
+                                .map { i -> i to (point(i) - start).getDistance() }
+                                .minByOrNull { it.second }
+                                ?.takeIf { it.second < touch }
+                                ?.first
+                    },
+                    onDragEnd = { dragged = null },
+                    onDragCancel = { dragged = null },
+                    onDrag = { pointer, amount ->
+                        val i = dragged ?: return@detectDragGestures
+                        pointer.consume()
+                        change(
+                            current.toMutableList().apply {
+                                set(2 * i, (get(2 * i) + amount.x / shown.width).coerceIn(0f, 1f))
+                                set(2 * i + 1, (get(2 * i + 1) + amount.y / shown.height).coerceIn(0f, 1f))
+                            },
+                        )
+                    },
+                )
+            },
+        ) {
+            drawImage(
+                image,
+                dstOffset =
+                    androidx.compose.ui.unit
+                        .IntOffset(origin.x.toInt(), origin.y.toInt()),
+                dstSize =
+                    androidx.compose.ui.unit
+                        .IntSize(shown.width.toInt(), shown.height.toInt()),
             )
-        },
-    ) {
-        val points =
-            (0 until CORNERS).map { i ->
-                Offset(corners[2 * i] * size.width, corners[2 * i + 1] * size.height)
+            val points = (0 until CORNERS).map(::point)
+            val outline =
+                Path().apply {
+                    moveTo(points[0].x, points[0].y)
+                    points.drop(1).forEach { lineTo(it.x, it.y) }
+                    close()
+                }
+            // Outside the part kept (within the image): darker.
+            clipRect(origin.x, origin.y, origin.x + shown.width, origin.y + shown.height) {
+                clipPath(outline, clipOp = ClipOp.Difference) { drawRect(Color.Black.copy(alpha = 0.5f)) }
             }
-        // Outside the part kept: darker.
-        val outline =
-            Path().apply {
-                moveTo(points[0].x, points[0].y)
-                points.drop(1).forEach { lineTo(it.x, it.y) }
-                close()
+            drawPath(outline, color, style = Stroke(width = 2.dp.toPx()))
+            points.forEach {
+                drawCircle(Color.White, radius, it)
+                drawCircle(color, radius, it, style = Stroke(width = 3.dp.toPx()))
             }
-        clipPath(outline, clipOp = ClipOp.Difference) { drawRect(Color.Black.copy(alpha = 0.5f)) }
-        drawPath(outline, color, style = Stroke(width = 2.dp.toPx()))
-        points.forEach {
-            drawCircle(Color.White, radius, it)
-            drawCircle(color, radius, it, style = Stroke(width = 3.dp.toPx()))
         }
     }
 }
@@ -725,3 +811,6 @@ private const val PREVIEW_SIDE = 600
 private const val CROP_SIDE = 1600
 private val HANDLE_RADIUS = 12.dp
 private val HANDLE_TOUCH = 48.dp
+
+/** Room around the image to the editor's edges, so that handles on the image's edges can be grabbed. */
+private val EDITOR_MARGIN = 24.dp

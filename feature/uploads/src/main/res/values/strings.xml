@@ -53,4 +53,6 @@
         <item quantity="one">The server is processing %1$d document…</item>
         <item quantity="other">The server is processing %1$d documents…</item>
     </plurals>
+    <string name="scan_crop_invalid">The corners must form a box (not crossed, not too small).</string>
+    <string name="scan_page_unreadable">Cannot read this page</string>
 </resources>

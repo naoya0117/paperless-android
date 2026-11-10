@@ -252,7 +252,19 @@ class ScanViewModelTest {
                     upload(com.naoya0117.paperless.core.model.UploadState.DONE, 10, 10),
                 ),
             )
-        assertEquals(UploadProgress(sending = 2, processing = 1, sent = 0.25f), progress)
+        assertEquals(UploadProgress(sending = 2, processing = 1, sent = 60f / 210), progress)
         assertEquals(3, progress.active)
+    }
+
+    @Test
+    fun `only proper quadrilaterals trim`() {
+        assertTrue(ScanViewModel.isValidQuad(ScanViewModel.FULL_PAGE))
+        assertTrue(ScanViewModel.isValidQuad(listOf(0.1f, 0.2f, 0.9f, 0.1f, 0.8f, 0.9f, 0.2f, 0.8f)))
+        // Top left and top right swapped: mirrored.
+        assertTrue(!ScanViewModel.isValidQuad(listOf(1f, 0f, 0f, 0f, 1f, 1f, 0f, 1f)))
+        // Crossed (bow tie).
+        assertTrue(!ScanViewModel.isValidQuad(listOf(0f, 0f, 1f, 0f, 0f, 1f, 1f, 1f)))
+        // Tiny.
+        assertTrue(!ScanViewModel.isValidQuad(listOf(0.5f, 0.5f, 0.55f, 0.5f, 0.55f, 0.55f, 0.5f, 0.55f)))
     }
 }
