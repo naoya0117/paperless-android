@@ -58,20 +58,50 @@ import kotlinx.coroutines.withContext
 
 /** A license or notice text bundled with the app (res/raw), opened by [LicenseTextScreen]. */
 enum class BundledText(
-    /** The SPDX ID for licenses, as in the library list. */
-    val key: String,
     @StringRes val title: Int,
     @RawRes val text: Int,
     /** License texts are wrapped at ~72 columns; joined into paragraphs, they fit narrow screens. */
     val reflow: Boolean,
+    /** The license's SPDX ID, as in the library list. */
+    val spdxId: String? = null,
+    /**
+     * The libraries (`group:name`) the text is for, if it carries their copyright (MIT, BSD); empty if it is
+     * the license's text for any library.
+     */
+    val libraries: Set<String> = emptySet(),
 ) {
-    GPL("GPL-3.0-or-later", R.string.about_license_gpl, R.raw.license_gpl_3_0, reflow = true),
-    APACHE("Apache-2.0", R.string.about_license_apache, R.raw.license_apache_2_0, reflow = true),
-    NOTICES("notices", R.string.about_notices, R.raw.third_party_notices, reflow = false),
+    GPL(R.string.about_license_gpl, R.raw.license_gpl_3_0, reflow = true),
+    APACHE(R.string.about_license_apache, R.raw.license_apache_2_0, reflow = true, spdxId = "Apache-2.0"),
+    MIT_CHECKER_QUAL(
+        R.string.about_license_mit,
+        R.raw.license_mit_checker_qual,
+        reflow = true,
+        spdxId = "MIT",
+        libraries = setOf("org.checkerframework:checker-qual"),
+    ),
+    BSD_LIBYUV(
+        R.string.about_license_bsd_3_clause,
+        R.raw.license_bsd_3_clause_libyuv,
+        reflow = true,
+        spdxId = "BSD-3-Clause",
+        libraries = setOf("androidx.camera:camera-core"),
+    ),
+    NOTICES(R.string.about_notices, R.raw.third_party_notices, reflow = false),
     ;
 
     companion object {
-        fun of(key: String?): BundledText? = entries.firstOrNull { it.key == key }
+        /** By [name] (the navigation argument). */
+        fun of(name: String?): BundledText? = entries.firstOrNull { it.name == name }
+
+        /** The text of a library's license, if bundled. */
+        fun forLicense(
+            spdxId: String,
+            library: String,
+        ): BundledText? =
+            entries.firstOrNull {
+                it.spdxId == spdxId &&
+                    (it.libraries.isEmpty() || library in it.libraries)
+            }
     }
 }
 
@@ -207,8 +237,8 @@ fun AboutScreen(
                     }
                 is LibrariesState.Loaded ->
                     items(state.libraries, key = { it.id }) { library ->
-                        // Licenses not bundled (none so far: the build only allows Apache-2.0) open their URL.
-                        val text = library.licenses.firstNotNullOfOrNull { BundledText.of(it) }
+                        // Licenses not bundled (none so far: the build allows only bundled ones) open their URL.
+                        val text = library.licenses.firstNotNullOfOrNull { BundledText.forLicense(it, library.id) }
                         ListItem(
                             headlineContent = { Text(library.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                             supportingContent = {

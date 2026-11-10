@@ -24,6 +24,13 @@ aboutLibraries {
         // The app is GPL-3.0-or-later: fail the build on a dependency whose license is not known to be compatible.
         strictMode = com.mikepenz.aboutlibraries.plugin.StrictMode.FAIL
         allowedLicenses.addAll("Apache-2.0")
+        // These carry the libraries' copyright: their texts are bundled per library (BundledText in AboutScreen.kt).
+        allowedLicensesMap =
+            mapOf(
+                "MIT" to listOf("org.checkerframework:checker-qual"),
+                // libyuv in CameraX's native code
+                "BSD-3-Clause" to listOf("androidx.camera:camera-core"),
+            )
     }
 }
 

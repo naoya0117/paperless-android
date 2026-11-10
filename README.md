@@ -76,7 +76,7 @@ See [LICENSE](LICENSE) for the full text.
 - [paperless-mobile](https://github.com/astubenbord/paperless-mobile) — GPL-3.0
 - [Paperless-ngx](https://github.com/paperless-ngx/paperless-ngx) — GPL-3.0
 
-The open source libraries in the app (currently all under the Apache License 2.0), their licenses and notices are
+The open source libraries in the app (Apache License 2.0; MIT and BSD 3-Clause for two of them), their licenses and notices are
 listed in the app under **About** in the menu. The build fails if a dependency's license is not on the allowed list
 (`aboutLibraries` in `app/build.gradle.kts`), or if a library with a NOTICE file is missing from
 `app/src/main/res/raw/third_party_notices.txt`.

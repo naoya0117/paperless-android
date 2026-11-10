@@ -659,7 +659,7 @@ fun MainShell(
                         onOpenText = { text ->
                             // Once only: a double tap must not open the text twice.
                             if (navController.currentDestination?.route == ABOUT_ROUTE) {
-                                navController.navigate("about/${text.key}")
+                                navController.navigate("about/${text.name}")
                             }
                         },
                     )

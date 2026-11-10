@@ -21,7 +21,7 @@ class AboutScreenTest {
         assertTrue("${libraries.size}", libraries.size > 10)
         libraries.forEach { library ->
             assertTrue(library.id, library.licenses.isNotEmpty())
-            library.licenses.forEach { assertNotNull("${library.id}: $it", BundledText.of(it)) }
+            library.licenses.forEach { assertNotNull("${library.id}: $it", BundledText.forLicense(it, library.id)) }
         }
     }
 
