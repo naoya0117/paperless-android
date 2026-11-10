@@ -26,4 +26,5 @@
     </plurals>
     <string name="share_no_files">アップロードできるファイルが共有されませんでした</string>
     <string name="drawer_labels">ラベル</string>
+    <string name="drawer_views">ビュー</string>
 </resources>

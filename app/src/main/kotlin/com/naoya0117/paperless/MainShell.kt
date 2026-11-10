@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Menu
@@ -65,6 +66,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
@@ -82,6 +84,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.naoya0117.paperless.core.model.Account
+import com.naoya0117.paperless.core.model.SavedView
 import com.naoya0117.paperless.feature.documents.DocumentEditScreen
 import com.naoya0117.paperless.feature.documents.DocumentEditViewModel
 import com.naoya0117.paperless.feature.documents.DocumentListMode
@@ -105,6 +108,7 @@ private const val DOCUMENTS_ROUTE = "documents"
 private const val SEARCH_ROUTE = "search"
 private const val INBOX_ROUTE = "inbox"
 private const val UPLOADS_ROUTE = "uploads"
+private const val VIEW_ROUTE = "view/{${DocumentListViewModel.VIEW_ID_ARGUMENT}}"
 private const val LABELS_ROUTE = "labels/{${LabelListViewModel.KIND_ARGUMENT}}"
 private const val LABEL_EDIT_ROUTE =
     "labels/{${LabelListViewModel.KIND_ARGUMENT}}/edit?${LabelEditViewModel.LABEL_ID_ARGUMENT}={${LabelEditViewModel.LABEL_ID_ARGUMENT}}"
@@ -139,7 +143,9 @@ fun MainShell(
     onSignOut: () -> Unit,
     inbox: InboxViewModel = hiltViewModel(),
     uploads: UploadsViewModel = hiltViewModel(),
+    drawer: DrawerViewModel = hiltViewModel(),
 ) {
+    val savedViews by drawer.savedViews.collectAsStateWithLifecycle()
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
@@ -225,6 +231,11 @@ fun MainShell(
                     scope.launch { drawerState.close() }
                     navController.navigate(UPLOADS_ROUTE) { launchSingleTop = true }
                 },
+                savedViews = savedViews,
+                onSavedView = { view ->
+                    scope.launch { drawerState.close() }
+                    navController.navigate("view/${view.id}") { launchSingleTop = true }
+                },
                 onLabels = { kind ->
                     scope.launch { drawerState.close() }
                     navController.navigate("labels/${kind.key}") { launchSingleTop = true }
@@ -240,7 +251,16 @@ fun MainShell(
             when (route) {
                 INBOX_ROUTE -> R.string.title_inbox
                 UPLOADS_ROUTE -> R.string.drawer_uploads
+                VIEW_ROUTE -> R.string.drawer_views
                 else -> null
+            }
+        // A saved view is titled with its name.
+        val viewName =
+            if (route == VIEW_ROUTE) {
+                val id = backStack?.arguments?.getLong(DocumentListViewModel.VIEW_ID_ARGUMENT)
+                savedViews.firstOrNull { it.id == id }?.name
+            } else {
+                null
             }
         val listScreen = tab != null || secondaryTitle != null
         Scaffold(
@@ -267,9 +287,15 @@ fun MainShell(
                                 }
                             },
                         )
-                    INBOX_ROUTE, UPLOADS_ROUTE ->
+                    INBOX_ROUTE, UPLOADS_ROUTE, VIEW_ROUTE ->
                         CenterAlignedTopAppBar(
-                            title = { Text(stringResource(checkNotNull(secondaryTitle))) },
+                            title = {
+                                Text(
+                                    viewName ?: stringResource(checkNotNull(secondaryTitle)),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
                             navigationIcon = {
                                 // navigateUp never leaves the start destination (e.g. on a double tap).
                                 IconButton(onClick = { navController.navigateUp() }) {
@@ -316,6 +342,19 @@ fun MainShell(
                             onRefresh = { if (path == DOCUMENTS_ROUTE) inbox.refresh(force = true) },
                         )
                     }
+                }
+                composable(
+                    VIEW_ROUTE,
+                    arguments =
+                        listOf(
+                            navArgument(DocumentListViewModel.MODE_ARGUMENT) {
+                                type = NavType.StringType
+                                defaultValue = DocumentListMode.VIEW.name
+                            },
+                            navArgument(DocumentListViewModel.VIEW_ID_ARGUMENT) { type = NavType.LongType },
+                        ),
+                ) {
+                    DocumentListScreen(onOpenDocument = { navController.navigate("document/${it.id}") })
                 }
                 composable(
                     DOCUMENT_ROUTE,
@@ -426,6 +465,8 @@ private const val MAX_BADGE = 99
 private fun Drawer(
     account: Account,
     onUploads: () -> Unit,
+    savedViews: List<SavedView>,
+    onSavedView: (SavedView) -> Unit,
     onLabels: (LabelKind) -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -461,6 +502,24 @@ private fun Drawer(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
             )
             HorizontalDivider()
+            if (savedViews.isNotEmpty()) {
+                Text(
+                    stringResource(R.string.drawer_views),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp),
+                )
+                savedViews.forEach { view ->
+                    NavigationDrawerItem(
+                        label = { Text(view.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        icon = { Icon(Icons.Outlined.FilterList, contentDescription = null) },
+                        selected = false,
+                        onClick = { onSavedView(view) },
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                }
+                HorizontalDivider(Modifier.padding(top = 8.dp))
+            }
             Text(
                 stringResource(R.string.drawer_labels),
                 style = MaterialTheme.typography.titleSmall,

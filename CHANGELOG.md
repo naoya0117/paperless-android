@@ -63,3 +63,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and delete the document (moved to the trash, after a confirmation)
 - Label management (from the menu): tags, correspondents, document types and storage paths; search, create,
   edit (name, automatic matching, tag color, inbox tag and parent, storage path template) and delete
+- Saved views in the menu: each opens its documents with the view's filter and sort order
