@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Demo build without a server, built locally only and not released (`./gradlew :app:assembleDemo`): a server
   built into the app with sample documents, labels and saved views; changes are kept in memory
 
+### Fixed
+
+- Monetary custom fields were rounded to whole numbers when the device's language uses a currency without
+  decimals (e.g. Japanese: `EUR18.75` was shown as `€19`)
+
 ## [0.1.0] - 2026-11-10
 
 ### Added
