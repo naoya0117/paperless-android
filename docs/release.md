@@ -59,7 +59,8 @@ keytool -list -v -keystore ~/keys/paperless-android-release.jks -alias paperless
 paperless.signing.storeFile=/Users/naoya/keys/paperless-android-release.jks
 paperless.signing.storePassword=...
 paperless.signing.keyAlias=paperless-android
-paperless.signing.keyPassword=...   # storePassword と同じ値
+# storePassword と同じ値（.properties は行末にコメントを書けないため、ここに書く）
+paperless.signing.keyPassword=...
 ```
 
 ファイルに書かない場合は、環境変数でも渡せます。名前にドットを含むため `export` では設定できず、`env` を使います。
