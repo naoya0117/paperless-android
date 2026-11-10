@@ -23,4 +23,21 @@
     <string name="info_added">Added</string>
     <string name="info_modified">Modified</string>
     <string name="info_notes">Notes</string>
+    <string name="edit_title">Edit document</string>
+    <string name="edit_close">Close</string>
+    <string name="edit_save">Save</string>
+    <string name="edit_discard_title">Discard your changes?</string>
+    <string name="edit_discard">Discard</string>
+    <string name="edit_keep_editing">Keep editing</string>
+    <string name="edit_field_title">Title</string>
+    <string name="edit_field_tags">Tags</string>
+    <string name="edit_field_archive_serial_number">Archive serial number (ASN)</string>
+    <string name="edit_none">None</string>
+    <string name="edit_search">Search</string>
+    <string name="edit_add_tags">Add tags</string>
+    <string name="edit_remove_tag">Remove tag %1$s</string>
+    <string name="edit_error_invalid">The server did not accept these values.</string>
+    <string name="edit_error_forbidden">You may not change this document.</string>
+    <string name="edit_error_connection">Could not reach the server. Your changes are kept; try again.</string>
+    <string name="edit_error_other">Saving failed.</string>
 </resources>

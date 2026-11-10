@@ -23,4 +23,21 @@
     <string name="info_added">追加日時</string>
     <string name="info_modified">更新日時</string>
     <string name="info_notes">メモ</string>
+    <string name="edit_title">文書を編集</string>
+    <string name="edit_close">閉じる</string>
+    <string name="edit_save">保存</string>
+    <string name="edit_discard_title">変更を破棄しますか？</string>
+    <string name="edit_discard">破棄</string>
+    <string name="edit_keep_editing">編集を続ける</string>
+    <string name="edit_field_title">タイトル</string>
+    <string name="edit_field_tags">タグ</string>
+    <string name="edit_field_archive_serial_number">アーカイブ番号（ASN）</string>
+    <string name="edit_none">なし</string>
+    <string name="edit_search">検索</string>
+    <string name="edit_add_tags">タグを追加</string>
+    <string name="edit_remove_tag">タグ %1$s を外す</string>
+    <string name="edit_error_invalid">サーバーがこの値を受け付けませんでした。</string>
+    <string name="edit_error_forbidden">この文書を変更する権限がありません。</string>
+    <string name="edit_error_connection">サーバーに接続できませんでした。変更は残っているので、もう一度保存してください。</string>
+    <string name="edit_error_other">保存できませんでした。</string>
 </resources>

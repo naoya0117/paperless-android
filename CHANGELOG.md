@@ -54,3 +54,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   large thumbnails, tags, pull to refresh, infinite scrolling and offline use
 - In-app viewer: PDF pages scrolled vertically (images too); tapping shows the document's details with an edit
   button
+- Editing a document: title, date, correspondent, document type, storage path, tags and archive serial number,
+  with the server's errors per field and a confirmation before discarding changes

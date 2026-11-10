@@ -47,6 +47,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.naoya0117.paperless.core.model.Account
+import com.naoya0117.paperless.feature.documents.DocumentEditScreen
+import com.naoya0117.paperless.feature.documents.DocumentEditViewModel
 import com.naoya0117.paperless.feature.documents.DocumentListMode
 import com.naoya0117.paperless.feature.documents.DocumentListScreen
 import com.naoya0117.paperless.feature.documents.DocumentListViewModel
@@ -70,7 +72,7 @@ private enum class Tab(
 }
 
 private const val DOCUMENT_ROUTE = "document/{${DocumentViewerViewModel.DOCUMENT_ID_ARGUMENT}}"
-private const val EDIT_ROUTE = "document/{id}/edit"
+private const val EDIT_ROUTE = "document/{${DocumentEditViewModel.DOCUMENT_ID_ARGUMENT}}/edit"
 
 /** The signed-in app: top bar with the drawer, bottom tabs, and the screens in between. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -166,13 +168,14 @@ fun MainShell(
                         onEdit = { id -> navController.navigate("document/$id/edit") },
                     )
                 }
-                composable(EDIT_ROUTE, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
-                    // Replaced by the editor (next issue).
-                    Text(
-                        "#${entry.arguments?.getLong("id")}",
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.padding(24.dp),
-                    )
+                composable(
+                    EDIT_ROUTE,
+                    arguments =
+                        listOf(
+                            navArgument(DocumentEditViewModel.DOCUMENT_ID_ARGUMENT) { type = NavType.LongType },
+                        ),
+                ) {
+                    DocumentEditScreen(onClose = { navController.popBackStack() })
                 }
             }
         }
