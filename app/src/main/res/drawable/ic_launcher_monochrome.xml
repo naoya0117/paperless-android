@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The themed (monochrome) icon: the sheet with its lines cut out (only the shape counts; the launcher
+  colours it).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M36,30h25l11,11v37h-36z M43.92,51.6h19.44a1.44,1.44 0 0,1 0,2.88h-19.44a1.44,1.44 0 0,1 0,-2.88z M43.92,58.8h19.44a1.44,1.44 0 0,1 0,2.88h-19.44a1.44,1.44 0 0,1 0,-2.88z M43.92,66h11.52a1.44,1.44 0 0,1 0,2.88h-11.52a1.44,1.44 0 0,1 0,-2.88z" />
+</vector>

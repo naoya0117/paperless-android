@@ -1,14 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Placeholder: a sheet of paper with a folded corner. -->
+<!--
+  The app icon: a sheet of paper with a folded corner and lines of text, on the green background
+  (ic_launcher_background). 108 x 108 dp; the launcher shows the middle 72 dp.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- The sheet, its top right corner folded. -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M38,30h22l12,12v36h-34z" />
+        android:pathData="M36,30h25l11,11v37h-36z" />
+    <!-- The fold. -->
     <path
-        android:fillColor="#B9D3BC"
-        android:pathData="M60,30v12h12z" />
+        android:fillColor="#DCECDD"
+        android:pathData="M61,30v11h11z" />
+    <!-- Lines of text: two dark, a shorter light one. -->
+    <path
+        android:fillColor="#17541F"
+        android:pathData="M43.92,51.6h19.44a1.44,1.44 0 0,1 0,2.88h-19.44a1.44,1.44 0 0,1 0,-2.88z" />
+    <path
+        android:fillColor="#17541F"
+        android:pathData="M43.92,58.8h19.44a1.44,1.44 0 0,1 0,2.88h-19.44a1.44,1.44 0 0,1 0,-2.88z" />
+    <path
+        android:fillColor="#6FBF73"
+        android:pathData="M43.92,66h11.52a1.44,1.44 0 0,1 0,2.88h-11.52a1.44,1.44 0 0,1 0,-2.88z" />
 </vector>
