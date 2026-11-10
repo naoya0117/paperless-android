@@ -67,11 +67,12 @@ class TrashViewModel
         private val eventChannel = Channel<TrashEvent>(Channel.BUFFERED)
         val events: Flow<TrashEvent> = eventChannel.receiveAsFlow()
 
+        /** Declared before [init], which starts the first load. */
+        private var loadJob: Job? = null
+
         init {
             load()
         }
-
-        private var loadJob: Job? = null
 
         /** Loads the trash; a load still running is replaced (it may be from before an action). */
         fun load() {
@@ -118,7 +119,10 @@ class TrashViewModel
                     try {
                         val done = block()
                         mutableState.update { state ->
-                            state.copy(documents = state.documents?.filterNot { it.id in done })
+                            state.copy(
+                                documents = state.documents?.filterNot { it.id in done },
+                                total = (state.total - done.size).coerceAtLeast(0),
+                            )
                         }
                         TrashEvent.Done(action, done.size)
                     } catch (e: CancellationException) {

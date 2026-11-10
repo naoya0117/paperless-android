@@ -73,15 +73,23 @@ fun Modifier.zoomable(state: ZoomState): Modifier =
         .pointerInput(state) {
             awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false)
-                do {
-                    // Before the content, so that a pinch does not also scroll it.
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                    if (event.changes.count { it.pressed } >= 2) {
-                        state.transform(event.calculateZoom(), event.calculatePan(), event.calculateCentroid(), size)
-                        event.changes.forEach { it.consume() }
-                    }
-                } while (event.changes.any { it.pressed })
-                state.settle()
+                try {
+                    do {
+                        // Before the content, so that a pinch does not also scroll it.
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.changes.count { it.pressed } >= 2) {
+                            state.transform(
+                                event.calculateZoom(),
+                                event.calculatePan(),
+                                event.calculateCentroid(),
+                                size,
+                            )
+                            event.changes.forEach { it.consume() }
+                        }
+                    } while (event.changes.any { it.pressed })
+                } finally {
+                    state.settle()
+                }
             }
         }.graphicsLayer {
             scaleX = state.scale
