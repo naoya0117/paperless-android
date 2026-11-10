@@ -225,7 +225,8 @@ class DocumentViewerViewModelTest {
                 "not really an image",
                 resolver.openInputStream(event.uri)!!.use { it.readBytes().decodeToString() },
             )
-            assertFalse(viewModel.state.value.busy)
+            // The state is only up to date while collected.
+            viewModel.awaitState { !it.busy }
         }
 
     @Test
