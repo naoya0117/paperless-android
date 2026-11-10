@@ -364,14 +364,11 @@ class DocumentViewerViewModelTest {
             assertEquals("$3.00", formatMoney("3", "USD"))
             assertEquals("12.30", formatMoney("12.3", null))
             // A locale whose currency has no fraction digits keeps the value's digits.
-            val locale = java.util.Locale.getDefault()
-            try {
-                java.util.Locale.setDefault(java.util.Locale.JAPAN)
-                assertEquals("€18.75", formatMoney("EUR18.75", null))
-                assertEquals("￥1,200", formatMoney("JPY1200", null))
-            } finally {
-                java.util.Locale.setDefault(locale)
-            }
+            java.util.Locale.setDefault(java.util.Locale.JAPAN)
+            assertEquals("€18.75", formatMoney("EUR18.75", null))
+            assertEquals("￥1,200", formatMoney("JPY1200", null))
+            // A currency without a fixed number of digits (on some platforms) keeps the amount's.
+            assertTrue(formatMoney("XAU1.50", null).endsWith("1.50"))
         } finally {
             java.util.Locale.setDefault(default)
         }

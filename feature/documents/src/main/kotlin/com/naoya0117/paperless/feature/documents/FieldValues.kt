@@ -61,13 +61,15 @@ internal fun formatMoney(
     return if (currency == null) {
         listOfNotNull(code, plain(amount)).joinToString(" ")
     } else {
-        // The locale's format keeps its own currency's digits (e.g. none for yen in Japanese): use the value's.
+        // The locale's format keeps its own currency's digits (e.g. none for yen in Japanese): use the value's
+        // currency's, or the amount's own for currencies without a fixed number (e.g. gold, XAU).
+        val digits = currency.defaultFractionDigits.takeIf { it >= 0 } ?: amount.scale().coerceAtLeast(0)
         NumberFormat
             .getCurrencyInstance()
             .apply {
                 this.currency = currency
-                minimumFractionDigits = currency.defaultFractionDigits.coerceAtLeast(0)
-                maximumFractionDigits = currency.defaultFractionDigits.coerceAtLeast(0)
+                minimumFractionDigits = digits
+                maximumFractionDigits = digits
             }.format(amount)
     }
 }
