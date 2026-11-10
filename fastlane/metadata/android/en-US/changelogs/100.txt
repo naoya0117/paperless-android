@@ -1,0 +1,5 @@
+First release.
+- Home with dashboard views, document lists, search with sorting and filters
+- Viewer with zoom and search, notes, custom fields, editing, trash
+- Camera scanning into one PDF, uploads in the background, sharing from other apps
+- Labels and saved views, several accounts, mTLS and custom headers

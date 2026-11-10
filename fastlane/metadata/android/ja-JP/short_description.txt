@@ -1,0 +1,1 @@
+Paperless-ngx の Android クライアント。文書の閲覧・検索・スキャン・アップロード
