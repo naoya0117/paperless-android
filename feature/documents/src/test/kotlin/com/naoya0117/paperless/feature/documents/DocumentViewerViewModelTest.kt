@@ -361,4 +361,46 @@ class DocumentViewerViewModelTest {
             java.util.Locale.setDefault(default)
         }
     }
+
+    @Test
+    fun `tapping switches to full screen, which the search leaves`() {
+        val viewModel = viewModel()
+        assertFalse(viewModel.fullscreen.value)
+
+        viewModel.toggleFullscreen()
+        assertTrue(viewModel.fullscreen.value)
+
+        viewModel.openSearch()
+        assertFalse(viewModel.fullscreen.value)
+        assertTrue(viewModel.search.value.open)
+    }
+
+    @Test
+    fun `without page search the document's text is searched`() =
+        runTest {
+            signIn()
+            val viewModel = viewModel()
+            viewModel.awaitState { it.document?.content == "full text" && it.content is ViewerContent.Image }
+
+            viewModel.openSearch()
+            viewModel.setSearchQuery(" TEXT ")
+
+            val search =
+                withContext(Dispatchers.Default.limitedParallelism(1)) {
+                    withTimeout(10_000) { viewModel.search.first { it.matches.isNotEmpty() && !it.searching } }
+                }
+            assertEquals(SearchMatch.InText("full ", "text", ""), search.currentMatch)
+
+            viewModel.closeSearch()
+            assertEquals(SearchState(), viewModel.search.value)
+        }
+
+    @Test
+    fun `text matches come with the text around them`() {
+        val matches = searchText("Invoice for ACME.\nTotal: 12 EUR. Paid to acme bank.", "acme", context = 6)
+        assertEquals(2, matches.size)
+        assertEquals(SearchMatch.InText("e for ", "ACME", ". Tota"), matches[0])
+        assertEquals("acme", matches[1].match)
+        assertEquals(emptyList<SearchMatch>(), searchText("text", " "))
+    }
 }

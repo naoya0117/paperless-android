@@ -94,4 +94,12 @@
         <item quantity="one">Its document is deleted permanently. This cannot be undone.</item>
         <item quantity="other">All %1$d documents in it are deleted permanently. This cannot be undone.</item>
     </plurals>
+    <string name="viewer_search">Search in document</string>
+    <string name="viewer_search_hint">Search in document</string>
+    <string name="viewer_search_close">Close search</string>
+    <string name="viewer_search_none">No matches</string>
+    <string name="viewer_search_position">%1$d / %2$d</string>
+    <string name="viewer_search_previous">Previous match</string>
+    <string name="viewer_search_next">Next match</string>
+    <string name="viewer_search_in_text">In the document\'s text</string>
 </resources>
