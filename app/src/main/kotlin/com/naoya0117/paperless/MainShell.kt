@@ -402,6 +402,8 @@ fun MainShell(
                         ) { padding ->
                             DocumentListScreen(
                                 onOpenDocument = { navController.navigate("document/${it.id}") },
+                                onEditDocument = { id -> navController.navigate("document/$id/edit") },
+                                snackbar = snackbar,
                                 modifier = Modifier.padding(padding),
                                 // The inbox count is shown on the documents tab only.
                                 onRefresh = { if (path == DOCUMENTS_ROUTE) inbox.refresh(force = true) },
@@ -428,6 +430,8 @@ fun MainShell(
                     ) { padding ->
                         DocumentListScreen(
                             onOpenDocument = { navController.navigate("document/${it.id}") },
+                            onEditDocument = { id -> navController.navigate("document/$id/edit") },
+                            snackbar = snackbar,
                             modifier = Modifier.padding(padding),
                         )
                     }

@@ -102,4 +102,7 @@
     <string name="viewer_search_previous">Previous match</string>
     <string name="viewer_search_next">Next match</string>
     <string name="viewer_search_in_text">In the document\'s text</string>
+    <string name="documents_moved_to_trash">Moved to the trash</string>
+    <string name="documents_open">Open</string>
+    <string name="documents_menu">More actions</string>
 </resources>

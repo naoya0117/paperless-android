@@ -413,7 +413,7 @@ private fun ViewerMenu(
     }
 }
 
-private fun ViewerEvent.Failed.message(): Int =
+internal fun ViewerEvent.Failed.message(): Int =
     when (action) {
         FileAction.SHARE, FileAction.OPEN ->
             if (reason == FailureReason.STORAGE) R.string.viewer_file_storage_failed else R.string.viewer_file_failed
@@ -425,7 +425,7 @@ private fun ViewerEvent.Failed.message(): Int =
     }
 
 /** Starts an app for the file (a chooser to share it); `false` if there is none. */
-private fun Context.sendFile(event: ViewerEvent.SendFile): Boolean {
+internal fun Context.sendFile(event: ViewerEvent.SendFile): Boolean {
     val intent =
         if (event.open) {
             Intent(Intent.ACTION_VIEW).setDataAndType(event.uri, event.mimeType)

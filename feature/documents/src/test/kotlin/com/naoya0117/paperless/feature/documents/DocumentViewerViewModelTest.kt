@@ -143,12 +143,18 @@ class DocumentViewerViewModelTest {
     private fun viewModel() =
         DocumentViewerViewModel(
             DocumentRepository(accounts, cache),
-            DocumentFileRepository(accounts, DocumentFileStorage(filesDir)),
+            fileRepository,
             LabelRepository(accounts, cache),
             SavedStateHandle(mapOf(DocumentViewerViewModel.DOCUMENT_ID_ARGUMENT to 1L)),
-            ApplicationProvider.getApplicationContext(),
+            DocumentActions(
+                fileRepository,
+                DocumentRepository(accounts, cache),
+                ApplicationProvider.getApplicationContext(),
+            ),
             applicationScope,
         )
+
+    private val fileRepository by lazy { DocumentFileRepository(accounts, DocumentFileStorage(filesDir)) }
 
     private suspend fun DocumentViewerViewModel.awaitState(predicate: (ViewerState) -> Boolean): ViewerState =
         withContext(Dispatchers.Default.limitedParallelism(1)) { withTimeout(10_000) { state.first(predicate) } }

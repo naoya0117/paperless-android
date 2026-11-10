@@ -5,6 +5,8 @@ import androidx.paging.testing.asSnapshot
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import com.naoya0117.paperless.core.data.AccountRepository
+import com.naoya0117.paperless.core.data.DocumentFileRepository
+import com.naoya0117.paperless.core.data.DocumentFileStorage
 import com.naoya0117.paperless.core.data.DocumentRepository
 import com.naoya0117.paperless.core.data.LabelRepository
 import com.naoya0117.paperless.core.data.PaperlessClientFactory
@@ -13,8 +15,10 @@ import com.naoya0117.paperless.core.datastore.AccountStore
 import com.naoya0117.paperless.core.datastore.SecretCipher
 import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.AuthToken
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -73,12 +77,22 @@ class DocumentListViewModelTest {
     private fun page(vararg items: String) =
         json("""{"count": ${items.size}, "next": null, "results": [${items.joinToString()}]}""")
 
+    private val deletes = java.util.concurrent.CopyOnWriteArrayList<String>()
+
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         server.dispatcher =
             object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse =
+                    if (request.method == "DELETE") {
+                        deletes += request.url.encodedPath
+                        MockResponse.Builder().code(204).build()
+                    } else {
+                        dispatchGet(request)
+                    }
+
+                private fun dispatchGet(request: RecordedRequest): MockResponse =
                     when (request.url.encodedPath) {
                         "/api/ui_settings/" -> json("""{"user": {"id": 3, "username": "alice"}, "settings": {}}""")
                         "/api/tags/" ->
@@ -137,7 +151,15 @@ class DocumentListViewModelTest {
             LabelRepository(accounts, cache),
             accounts,
             savedState,
+            DocumentActions(
+                DocumentFileRepository(accounts, DocumentFileStorage(folder.newFolder())),
+                DocumentRepository(accounts, cache),
+                ApplicationProvider.getApplicationContext(),
+            ),
+            applicationScope,
         )
+
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private fun viewModel(mode: DocumentListMode) =
         viewModel(SavedStateHandle(mapOf(DocumentListViewModel.MODE_ARGUMENT to mode.name)))
@@ -376,5 +398,42 @@ class DocumentListViewModelTest {
                 )
 
             withContext(Dispatchers.Default) { withTimeout(10_000) { viewModel.savedViewMissing.first { it } } }
+        }
+
+    @Test
+    fun `the long-press menu moves a document to the trash`() =
+        runTest {
+            accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls())
+            val viewModel = viewModel(DocumentListMode.ALL)
+
+            viewModel.delete(
+                com.naoya0117.paperless.core.model.Document(
+                    id = 5,
+                    title = "Doc",
+                    content = "",
+                    created = java.time.LocalDate.of(2026, 1, 1),
+                    added = java.time.Instant.EPOCH,
+                    modified = java.time.Instant.EPOCH,
+                    correspondentId = null,
+                    documentTypeId = null,
+                    storagePathId = null,
+                    tagIds = emptyList(),
+                    archiveSerialNumber = null,
+                    originalFileName = null,
+                    archivedFileName = null,
+                    mimeType = null,
+                    pageCount = null,
+                    customFields = emptyList(),
+                    notes = null,
+                    owner = null,
+                    userCanChange = true,
+                    deletedAt = null,
+                    searchHit = null,
+                ),
+            )
+
+            val event = withContext(Dispatchers.Default) { withTimeout(10_000) { viewModel.events.first() } }
+            assertEquals(ViewerEvent.Deleted, event)
+            assertTrue(deletes.toString(), deletes.contains("/api/documents/5/"))
         }
 }
