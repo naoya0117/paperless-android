@@ -18,6 +18,7 @@ import com.naoya0117.paperless.core.database.OfflineCache
 import com.naoya0117.paperless.core.database.UploadQueue
 import com.naoya0117.paperless.core.datastore.AccountStore
 import com.naoya0117.paperless.core.datastore.AndroidKeystoreCipher
+import com.naoya0117.paperless.feature.documents.DocumentFileExport
 import dagger.Lazy
 import dagger.Module
 import dagger.Provides
@@ -28,6 +29,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Provider
 import javax.inject.Singleton
@@ -63,6 +65,7 @@ object DataModule {
     /** Lazy: these repositories themselves depend on the accounts, which use this cleaner. */
     @Provides
     fun accountDataCleaner(
+        @ApplicationContext context: Context,
         cache: OfflineCache,
         uploads: Lazy<UploadRepository>,
         files: Lazy<DocumentFileRepository>,
@@ -71,6 +74,8 @@ object DataModule {
             uploads.get().clear(accountId)
             files.get().clear(accountId)
             cache.clear(accountId)
+            // Copies handed to other apps are not kept per account: all go.
+            withContext(Dispatchers.IO) { DocumentFileExport.clearShared(context) }
         }
 
     @Provides

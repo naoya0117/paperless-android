@@ -77,7 +77,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import coil3.compose.AsyncImage
 import com.naoya0117.paperless.core.model.Document
 import kotlinx.coroutines.CancellationException
@@ -104,19 +107,23 @@ fun DocumentViewerScreen(
     val context = LocalContext.current
     val resources = LocalResources.current
     val currentOnBack by rememberUpdatedState(onBack)
-    LaunchedEffect(viewModel) {
-        viewModel.events.collect { event ->
-            when (event) {
-                is ViewerEvent.SendFile ->
-                    if (!context.sendFile(event)) {
-                        snackbar.showSnackbar(resources.getString(R.string.viewer_no_app))
-                    }
-                is ViewerEvent.Saved ->
-                    snackbar.showSnackbar(
-                        resources.getString(R.string.viewer_saved, event.fileName),
-                    )
-                ViewerEvent.Deleted -> currentOnBack()
-                is ViewerEvent.Failed -> snackbar.showSnackbar(resources.getString(event.message()))
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(viewModel, lifecycle) {
+        // Only while visible: another app cannot be started from the background (the event waits).
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.events.collect { event ->
+                when (event) {
+                    is ViewerEvent.SendFile ->
+                        if (!context.sendFile(event)) {
+                            snackbar.showSnackbar(resources.getString(R.string.viewer_no_app))
+                        }
+                    is ViewerEvent.Saved ->
+                        snackbar.showSnackbar(
+                            resources.getString(R.string.viewer_saved, event.fileName),
+                        )
+                    ViewerEvent.Deleted -> currentOnBack()
+                    is ViewerEvent.Failed -> snackbar.showSnackbar(resources.getString(event.message()))
+                }
             }
         }
     }
@@ -268,7 +275,8 @@ private fun Context.sendFile(event: ViewerEvent.SendFile): Boolean {
                 Intent(Intent.ACTION_SEND)
                     .setType(event.mimeType)
                     .putExtra(Intent.EXTRA_STREAM, event.uri)
-            // The chooser passes the grant on to the chosen app (ClipData).
+                    // Set before the chooser is made: it passes the grant on only if the shared intent has it.
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             send.clipData = ClipData.newRawUri(null, event.uri)
             Intent.createChooser(send, null)
         }

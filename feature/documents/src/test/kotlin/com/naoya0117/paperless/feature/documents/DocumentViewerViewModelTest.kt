@@ -15,8 +15,11 @@ import com.naoya0117.paperless.core.datastore.SecretCipher
 import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.AuthToken
 import com.naoya0117.paperless.core.model.Document
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -55,6 +58,7 @@ class DocumentViewerViewModelTest {
     private lateinit var accounts: AccountRepository
     private val offline = AtomicBoolean(false)
     private val deleted = AtomicBoolean(false)
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     @Volatile private var previewType = "image/png"
 
@@ -124,6 +128,7 @@ class DocumentViewerViewModelTest {
 
     @After
     fun tearDown() {
+        applicationScope.cancel()
         Dispatchers.resetMain()
         server.close()
     }
@@ -137,6 +142,7 @@ class DocumentViewerViewModelTest {
             LabelRepository(accounts, cache),
             SavedStateHandle(mapOf(DocumentViewerViewModel.DOCUMENT_ID_ARGUMENT to 1L)),
             ApplicationProvider.getApplicationContext(),
+            applicationScope,
         )
 
     private suspend fun DocumentViewerViewModel.awaitState(predicate: (ViewerState) -> Boolean): ViewerState =
@@ -253,6 +259,12 @@ class DocumentViewerViewModelTest {
     fun `file names are made safe for file systems`() {
         assertEquals("a_b_c.pdf", DocumentFileExport.safeFileName("a/b:c.pdf"))
         assertEquals("document", DocumentFileExport.safeFileName(" .. "))
+        // At most 200 bytes (UTF-8), keeping the extension.
+        val long = DocumentFileExport.safeFileName("請求書".repeat(40) + ".pdf")
+        assertTrue(long.toByteArray().size <= 200)
+        assertTrue(long.endsWith(".pdf") && long.startsWith("請求書"))
+        assertEquals("Invoice.pdf", DocumentFileExport.fileName(null, "Invoice", "application/pdf"))
+        assertEquals("scan.png", DocumentFileExport.fileName("scan.png", "Invoice", "application/pdf"))
     }
 
     @Test

@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.naoya0117.paperless.core.data.ApplicationScope
 import com.naoya0117.paperless.core.data.CachedDocumentFile
 import com.naoya0117.paperless.core.data.DocumentFileRepository
 import com.naoya0117.paperless.core.data.DocumentRepository
@@ -15,6 +16,7 @@ import com.naoya0117.paperless.core.network.PaperlessException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
@@ -105,6 +107,7 @@ class DocumentViewerViewModel
         labels: LabelRepository,
         savedState: SavedStateHandle,
         @ApplicationContext private val context: Context,
+        @ApplicationScope private val applicationScope: CoroutineScope,
     ) : ViewModel() {
         val documentId: Long = checkNotNull(savedState.get<Long>(DOCUMENT_ID_ARGUMENT)) { "No document ID" }
 
@@ -156,52 +159,76 @@ class DocumentViewerViewModel
         /** Opens the document's file in another app (e.g. a PDF reader). */
         fun openExternally() = sendFile(FileAction.OPEN)
 
-        /** Saves the document's file to the device's Downloads. */
+        /** Saves the document's file to the device's Downloads; finished even if the viewer is left. */
         fun download() =
-            runAction(FileAction.DOWNLOAD) { document ->
+            runAction(FileAction.DOWNLOAD, applicationScope) { document ->
                 val file = files.file(document, DocumentFileKind.DOWNLOAD)
-                val name = fileName(document, file)
-                DocumentFileExport.saveToDownloads(context, file, name, mimeType(document, file))
-                ViewerEvent.Saved(DocumentFileExport.safeFileName(name))
+                val type = mimeType(document, file)
+                val saved =
+                    local { DocumentFileExport.saveToDownloads(context, file, fileName(document, file, type), type) }
+                ViewerEvent.Saved(saved)
             }
 
-        /** Moves the document to the trash. */
+        /**
+         * Moves the document to the trash; finished even if the viewer is left, so that the cached lists follow
+         * what the server did.
+         */
         fun delete() =
-            runAction(FileAction.DELETE) { document ->
+            runAction(FileAction.DELETE, applicationScope) { document ->
                 documents.delete(document.id)
                 ViewerEvent.Deleted
             }
 
         private fun sendFile(action: FileAction) =
-            runAction(action) { document ->
+            runAction(action, viewModelScope) { document ->
                 val file = files.file(document, DocumentFileKind.DOWNLOAD)
-                val uri = DocumentFileExport.shareable(context, file, fileName(document, file))
-                ViewerEvent.SendFile(uri, mimeType(document, file) ?: ANY_TYPE, open = action == FileAction.OPEN)
+                val type = mimeType(document, file)
+                val uri = local { DocumentFileExport.shareable(context, file, fileName(document, file, type)) }
+                ViewerEvent.SendFile(uri, type ?: ANY_TYPE, open = action == FileAction.OPEN)
+            }
+
+        /** A failure on the device (storing or copying the file), not of the server or the connection. */
+        private class LocalFailure(
+            cause: Throwable,
+        ) : Exception(cause)
+
+        private inline fun <T> local(block: () -> T): T =
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Exception,
+            ) {
+                throw LocalFailure(e)
             }
 
         /** Runs one action at a time; failures become an event. */
         private fun runAction(
             action: FileAction,
+            scope: CoroutineScope,
             block: suspend (Document) -> ViewerEvent,
         ) {
             val document = state.value.document ?: return
             if (!busy.compareAndSet(expect = false, update = true)) return
-            viewModelScope.launch {
+            scope.launch {
                 val event =
                     try {
                         block(document)
                     } catch (e: CancellationException) {
                         throw e
-                    } catch (_: IOException) {
+                    } catch (_: LocalFailure) {
                         ViewerEvent.Failed(action, FailureReason.STORAGE)
                     } catch (
                         @Suppress("TooGenericExceptionCaught") _: Exception,
                     ) {
-                        // PaperlessException, NotSignedInException (signed out meanwhile), ...
+                        // Downloading or deleting failed: PaperlessException, NotSignedInException (signed out
+                        // meanwhile), or the file could not be cached.
                         ViewerEvent.Failed(action, FailureReason.SERVER)
                     } finally {
                         busy.value = false
                     }
+                // Not waiting: the viewer may be gone (then the event is dropped).
                 eventChannel.trySend(event)
             }
         }
@@ -209,8 +236,15 @@ class DocumentViewerViewModel
         private fun fileName(
             document: Document,
             file: CachedDocumentFile,
-        ): String = file.fileName ?: document.archivedFileName ?: document.originalFileName ?: "${document.title}.pdf"
+            mimeType: String?,
+        ): String =
+            DocumentFileExport.fileName(
+                file.fileName ?: document.archivedFileName ?: document.originalFileName,
+                document.title,
+                mimeType,
+            )
 
+        /** Without parameters such as "; charset=binary". */
         private fun mimeType(
             document: Document,
             file: CachedDocumentFile,
@@ -246,8 +280,7 @@ class DocumentViewerViewModel
         private suspend fun openFile(document: Document): ViewerContent =
             try {
                 val file = files.file(document, DocumentFileKind.PREVIEW)
-                // Without parameters such as "; charset=binary".
-                val type = (file.contentType ?: document.mimeType)?.substringBefore(';')?.trim()?.lowercase()
+                val type = mimeType(document, file)
                 when {
                     type == PDF -> ViewerContent.Pdf(openPdf(file.file))
                     type?.startsWith("image/") == true -> ViewerContent.Image(file.file)
