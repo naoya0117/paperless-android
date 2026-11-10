@@ -69,8 +69,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -342,14 +344,14 @@ fun MainShell(
                 composable(
                     LABELS_ROUTE,
                     arguments = listOf(navArgument(LabelListViewModel.KIND_ARGUMENT) { type = NavType.StringType }),
-                ) {
+                ) { entry ->
                     LabelListScreen(
-                        onBack = { navController.navigateUp() },
-                        onOpen = {
-                            kind,
-                            id,
-                            ->
-                            navController.navigate("labels/${kind.key}/edit?id=${id ?: NEW_LABEL}")
+                        // Once only (e.g. not again when tapped twice during the exit animation).
+                        onBack = dropUnlessResumed { navController.navigateUp() },
+                        onOpen = { kind, id ->
+                            if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                navController.navigate("labels/${kind.key}/edit?id=${id ?: NEW_LABEL}")
+                            }
                         },
                     )
                 }
@@ -364,7 +366,7 @@ fun MainShell(
                             },
                         ),
                 ) {
-                    LabelEditScreen(onClose = { navController.navigateUp() })
+                    LabelEditScreen(onClose = dropUnlessResumed { navController.navigateUp() })
                 }
                 composable(UPLOADS_ROUTE) {
                     UploadsScreen(viewModel = uploads, onOpenDocument = { id ->

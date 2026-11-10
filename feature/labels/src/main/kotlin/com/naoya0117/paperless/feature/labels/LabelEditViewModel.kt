@@ -8,6 +8,7 @@ import com.naoya0117.paperless.core.data.NotSignedInException
 import com.naoya0117.paperless.core.model.Matching
 import com.naoya0117.paperless.core.model.MatchingLabel
 import com.naoya0117.paperless.core.model.Tag
+import com.naoya0117.paperless.core.model.descendantsAndSelf
 import com.naoya0117.paperless.core.network.PaperlessException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -15,7 +16,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -54,7 +54,17 @@ data class LabelEditState(
 
     val changed: Boolean get() = form != (original?.let(LabelForm::of) ?: LabelForm())
 
-    val canSave: Boolean get() = loaded && !missing && editable && !saving && form.name.isNotBlank() && changed
+    val canSave: Boolean
+        get() = loaded && !missing && editable && !saving && form.name.isNotBlank() && changed && validColor
+
+    /** Only tags have a color; for the others it stays the (valid) default. */
+    private val validColor: Boolean get() = isColor(form.color)
+
+    companion object {
+        private val COLOR = Regex("#[0-9a-fA-F]{6}")
+
+        fun isColor(value: String): Boolean = COLOR.matches(value)
+    }
 }
 
 /** Creates a label of a [LabelKind], or edits or deletes one. */
@@ -74,26 +84,64 @@ class LabelEditViewModel
 
         /** Tags that can be the parent of this one: not itself or one of its descendants. */
         val parentOptions: StateFlow<List<Tag>> =
-            repository.tags.items
-                .map { tags ->
-                    val excluded = labelId?.let { descendantsAndSelf(tags, it) }.orEmpty()
-                    tags.filter { it.id !in excluded }.sortedBy { it.name.lowercase() }
-                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
+            if (kind != LabelKind.TAGS) {
+                MutableStateFlow(emptyList())
+            } else {
+                repository.tags.items
+                    .map { tags ->
+                        val excluded = labelId?.let { tags.descendantsAndSelf(it) }.orEmpty()
+                        tags.filter { it.id !in excluded }.sortedBy { it.name.lowercase() }
+                    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
+            }
+
+        /** Tags below this one, which the server deletes with it. */
+        val subTagCount: StateFlow<Int> =
+            if (kind != LabelKind.TAGS || labelId == null) {
+                MutableStateFlow(0)
+            } else {
+                repository.tags.items
+                    .map { it.descendantsAndSelf(labelId).size - 1 }
+                    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), 0)
+            }
 
         init {
             if (labelId != null) {
+                // The cache may be older than the server (changes are sent against the original), so it is
+                // refreshed; the form follows as long as the user did not change it.
                 viewModelScope.launch {
-                    val label = store.items.first().firstOrNull { it.id == labelId }
-                    mutableState.update {
-                        if (label == null) {
-                            it.copy(loaded = true, missing = true)
-                        } else {
-                            it.copy(loaded = true, original = label, form = LabelForm.of(label))
-                        }
+                    store.items.collect { items ->
+                        val label = items.firstOrNull { it.id == labelId }
+                        mutableState.update { it.following(label) }
+                    }
+                }
+                viewModelScope.launch {
+                    try {
+                        store.refresh()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (
+                        @Suppress("TooGenericExceptionCaught") _: Exception,
+                    ) {
+                        // Offline: the cached label is edited.
                     }
                 }
             }
         }
+
+        private fun LabelEditState.following(label: MatchingLabel?): LabelEditState =
+            when {
+                // Saved or deleted here: the cache follows, the screen closes.
+                done || saving -> this
+                label == null -> copy(loaded = true, missing = true)
+                !loaded || !changed ->
+                    copy(
+                        loaded = true,
+                        missing = false,
+                        original = label,
+                        form = LabelForm.of(label),
+                    )
+                else -> copy(missing = false, original = label)
+            }
 
         fun setName(name: String) = edit("name") { it.copy(name = name) }
 
@@ -113,7 +161,7 @@ class LabelEditViewModel
         fun save() {
             val current = mutableState.value
             if (!current.canSave) return
-            mutableState.update { it.copy(saving = true, error = null) }
+            mutableState.update { it.copy(saving = true, error = null, fieldErrors = emptyMap()) }
             viewModelScope.launch {
                 try {
                     store.save(current.original, current.form)
@@ -180,19 +228,5 @@ class LabelEditViewModel
             const val LABEL_ID_ARGUMENT = "id"
             const val NON_FIELD_ERRORS = "non_field_errors"
             private const val STOP_TIMEOUT_MILLIS = 5_000L
-
-            internal fun descendantsAndSelf(
-                tags: List<Tag>,
-                id: Long,
-            ): Set<Long> {
-                val children = tags.groupBy { it.parentId }
-                val result = mutableSetOf<Long>()
-                val pending = ArrayDeque(listOf(id))
-                while (pending.isNotEmpty()) {
-                    val next = pending.removeFirst()
-                    if (result.add(next)) children[next].orEmpty().forEach { pending.add(it.id) }
-                }
-                return result
-            }
         }
     }

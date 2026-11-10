@@ -65,4 +65,8 @@
         <item quantity="one">“%1$s” will be deleted. It is removed from %2$d document.</item>
         <item quantity="other">“%1$s” will be deleted. It is removed from %2$d documents.</item>
     </plurals>
+    <plurals name="labels_delete_sub_tags">
+        <item quantity="one">Its sub-tag is deleted too.</item>
+        <item quantity="other">Its %1$d sub-tags are deleted too.</item>
+    </plurals>
 </resources>

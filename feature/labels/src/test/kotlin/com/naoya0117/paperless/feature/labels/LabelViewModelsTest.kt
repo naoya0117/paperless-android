@@ -224,6 +224,10 @@ class LabelViewModelsTest {
 
             viewModel.setName("Dup 2")
             assertTrue("name" !in viewModel.state.value.fieldErrors)
+            viewModel.setColor("#12")
+            assertFalse(viewModel.state.value.canSave)
+            viewModel.setColor("#123456")
+            assertTrue(viewModel.state.value.canSave)
         }
 
     @Test
@@ -259,6 +263,7 @@ class LabelViewModelsTest {
             val options = viewModel.parentOptions.await { it.isNotEmpty() }
 
             assertEquals(listOf(3L), options.map(Tag::id))
+            assertEquals(1, viewModel.subTagCount.await { it > 0 })
             viewModel.setMatching(Matching(MatchingAlgorithm.REGEX, "^Tax"))
             assertEquals(MatchingAlgorithm.REGEX, viewModel.state.value.form.matching.algorithm)
         }

@@ -115,3 +115,15 @@ fun Correspondent.toDraft(): CorrespondentDraft = CorrespondentDraft(name, match
 fun DocumentType.toDraft(): DocumentTypeDraft = DocumentTypeDraft(name, matching)
 
 fun StoragePath.toDraft(): StoragePathDraft = StoragePathDraft(name, path, matching)
+
+/** The tag [id] and every tag below it (by [Tag.parentId]); the server deletes these together. */
+fun List<Tag>.descendantsAndSelf(id: Long): Set<Long> {
+    val childrenOf = groupBy { it.parentId }
+    val result = mutableSetOf<Long>()
+    val pending = ArrayDeque(listOf(id))
+    while (pending.isNotEmpty()) {
+        val next = pending.removeFirst()
+        if (result.add(next)) childrenOf[next]?.forEach { pending += it.id }
+    }
+    return result
+}

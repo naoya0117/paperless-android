@@ -63,6 +63,7 @@ fun LabelListScreen(
     viewModel: LabelListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val query by viewModel.query.collectAsStateWithLifecycle()
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -93,7 +94,7 @@ fun LabelListScreen(
             LazyColumn(contentPadding = PaddingValues(bottom = 88.dp), modifier = Modifier.fillMaxSize()) {
                 item(key = "search") {
                     OutlinedTextField(
-                        value = state.query,
+                        value = query,
                         onValueChange = viewModel::search,
                         placeholder = { Text(stringResource(R.string.labels_search)) },
                         leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },

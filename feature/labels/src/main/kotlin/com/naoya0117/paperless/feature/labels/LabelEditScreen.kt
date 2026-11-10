@@ -76,7 +76,9 @@ fun LabelEditScreen(
     var confirmDiscard by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     val close = { if (state.changed && !state.done) confirmDiscard = true else onClose() }
-    BackHandler(enabled = state.changed && !state.done) { confirmDiscard = true }
+    // Not while saving or deleting: leaving would cancel it halfway (the server may have done it already).
+    BackHandler(enabled = state.saving || (state.changed && !state.done)) { if (!state.saving) confirmDiscard = true }
+    val subTagCount by viewModel.subTagCount.collectAsStateWithLifecycle()
 
     val snackbar = remember { SnackbarHostState() }
     val resources = LocalResources.current
@@ -97,7 +99,7 @@ fun LabelEditScreen(
             TopAppBar(
                 title = { Text(stringResource(if (state.original == null) kind.newTitle else kind.editTitle)) },
                 navigationIcon = {
-                    IconButton(onClick = close) {
+                    IconButton(onClick = close, enabled = !state.saving) {
                         Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.labels_close))
                     }
                 },
@@ -164,13 +166,19 @@ fun LabelEditScreen(
             title = { Text(stringResource(R.string.labels_delete_title)) },
             text = {
                 val count = original.documentCount ?: 0
-                Text(
+                val message =
                     if (count > 0) {
                         resources.getQuantityString(R.plurals.labels_delete_message_used, count, original.name, count)
                     } else {
                         stringResource(R.string.labels_delete_message, original.name)
-                    },
-                )
+                    }
+                val subTags =
+                    if (subTagCount > 0) {
+                        "\n" + resources.getQuantityString(R.plurals.labels_delete_sub_tags, subTagCount, subTagCount)
+                    } else {
+                        ""
+                    }
+                Text(message + subTags)
             },
             confirmButton = {
                 TextButton(
@@ -213,7 +221,13 @@ private fun LabelFields(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        state.fieldErrors[LabelEditViewModel.NON_FIELD_ERRORS]?.let { ErrorText(it) }
+        // Errors not shown at a field (e.g. non_field_errors, detail) are shown here.
+        val otherErrors =
+            state.fieldErrors
+                .filterKeys { it !in FIELDS_SHOWN }
+                .values
+                .flatten()
+        if (otherErrors.isNotEmpty()) ErrorText(otherErrors)
         OutlinedTextField(
             value = form.name,
             onValueChange = viewModel::setName,
@@ -344,7 +358,7 @@ private fun ColorField(
             leadingIcon = { ColorDot(color) },
             singleLine = true,
             enabled = enabled,
-            isError = errors != null || parseColor(color) == null,
+            isError = errors != null || !LabelEditState.isColor(color),
             supportingText = errors?.let { { Text(it.joinToString("\n")) } },
             modifier = Modifier.fillMaxWidth(),
         )
@@ -403,6 +417,9 @@ private fun ParentField(
         }
     }
 }
+
+/** Server fields with an input here (their errors are shown at it). */
+private val FIELDS_SHOWN = setOf("name", "color", "parent", "path", "match", "matching_algorithm")
 
 private val ALGORITHMS =
     listOf(

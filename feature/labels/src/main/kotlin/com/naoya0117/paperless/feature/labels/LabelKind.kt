@@ -13,6 +13,7 @@ import com.naoya0117.paperless.core.model.StoragePath
 import com.naoya0117.paperless.core.model.StoragePathDraft
 import com.naoya0117.paperless.core.model.Tag
 import com.naoya0117.paperless.core.model.TagDraft
+import kotlinx.coroutines.flow.Flow
 
 /** The kinds of labels managed here; [key] is used in navigation routes. */
 enum class LabelKind(
@@ -80,21 +81,15 @@ internal class LabelStore(
     private val repository: LabelRepository,
     val kind: LabelKind,
 ) {
-    val items =
-        when (kind) {
-            LabelKind.TAGS -> repository.tags.items
-            LabelKind.CORRESPONDENTS -> repository.correspondents.items
-            LabelKind.DOCUMENT_TYPES -> repository.documentTypes.items
-            LabelKind.STORAGE_PATHS -> repository.storagePaths.items
-        }
-
-    private val labels: Labels<*, *> =
+    private val labels: Labels<out MatchingLabel, *> =
         when (kind) {
             LabelKind.TAGS -> repository.tags
             LabelKind.CORRESPONDENTS -> repository.correspondents
             LabelKind.DOCUMENT_TYPES -> repository.documentTypes
             LabelKind.STORAGE_PATHS -> repository.storagePaths
         }
+
+    val items: Flow<List<MatchingLabel>> = labels.items
 
     suspend fun refresh() = labels.refresh()
 

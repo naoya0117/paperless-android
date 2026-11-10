@@ -36,7 +36,8 @@ class LabelListViewModel
         val kind: LabelKind = LabelKind.of(savedState.get<String>(KIND_ARGUMENT))
         private val store = LabelStore(repository, kind)
 
-        private val query = savedState.getStateFlow(QUERY_KEY, "")
+        /** As typed; read directly by the search field (not through [state], which may lag a frame). */
+        val query: StateFlow<String> = savedState.getStateFlow(QUERY_KEY, "")
         private val refreshing = MutableStateFlow(false)
         private val refreshFailed = MutableStateFlow(false)
         private val collator = Collator.getInstance().apply { strength = Collator.PRIMARY }
