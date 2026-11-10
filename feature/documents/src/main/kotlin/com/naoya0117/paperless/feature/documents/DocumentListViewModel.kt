@@ -116,7 +116,17 @@ class DocumentListViewModel
 
         private val searchInput = MutableStateFlow(savedState.get<String>(SEARCH_KEY).orEmpty())
 
-        /** The search text as typed (for [DocumentListMode.SEARCH]). */
+        private val mutableFilter = MutableStateFlow(DocumentFilter.restore(savedState))
+
+        /** The conditions and order of the list ([DocumentListMode.ALL]). */
+        val filter: StateFlow<DocumentFilter> = mutableFilter.asStateFlow()
+
+        fun setFilter(filter: DocumentFilter) {
+            mutableFilter.value = filter
+            filter.save(savedState)
+        }
+
+        /** The search text as typed ([DocumentListMode.ALL] and [DocumentListMode.SEARCH]). */
         val searchText: StateFlow<String> = searchInput.asStateFlow()
 
         /** The entered search text once typing pauses ([DocumentListMode.SEARCH]); empty when none. */
@@ -166,7 +176,11 @@ class DocumentListViewModel
         @OptIn(ExperimentalCoroutinesApi::class)
         val documentPages: Flow<PagingData<Document>> =
             when (mode) {
-                DocumentListMode.ALL -> documents.documents(DocumentQuery())
+                // The search field and the filter chips above the list.
+                DocumentListMode.ALL ->
+                    combine(activeSearch, mutableFilter) { text, filter -> filter.toQuery(text) }
+                        .distinctUntilChanged()
+                        .flatMapLatest { query -> documents.documents(query) }
                 DocumentListMode.INBOX -> documents.documents(DocumentQuery(inInbox = true))
                 DocumentListMode.VIEW ->
                     viewQuery.flatMapLatest { query ->

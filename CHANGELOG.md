@@ -77,3 +77,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The lists' top bars and tabs belong to their screens, so the back gesture shows the screen underneath with them
 - Long press on a document in a list: a menu to edit, share, open in another app, download or delete it
 - Home tab (shown first): the saved views of the web interface's dashboard, each with its first documents
+- Search field on top of the home and documents tabs (the search tab is gone): text search, order, and filter chips
+  (tags, correspondent, document type, storage path, created date) from the button inside the field's right end

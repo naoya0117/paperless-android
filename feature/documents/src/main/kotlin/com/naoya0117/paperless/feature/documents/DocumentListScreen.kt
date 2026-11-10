@@ -172,6 +172,7 @@ fun DocumentListScreen(
     val searchText by viewModel.searchText.collectAsStateWithLifecycle()
     val accountId by viewModel.accountId.collectAsStateWithLifecycle()
     val viewMissing by viewModel.savedViewMissing.collectAsStateWithLifecycle()
+    val filter by viewModel.filter.collectAsStateWithLifecycle()
     Column(modifier.fillMaxSize()) {
         if (viewModel.mode == DocumentListMode.SEARCH) {
             OutlinedTextField(
@@ -192,6 +193,9 @@ fun DocumentListScreen(
             activeSearch = activeSearch,
             accountId = accountId,
             viewMissing = viewMissing,
+            // The documents tab: narrowed by its search field and filter chips.
+            filtered =
+                viewModel.mode == DocumentListMode.ALL && (activeSearch.isNotEmpty() || filter.conditionCount > 0),
             onRefresh = {
                 viewModel.refreshLabels()
                 pages.refresh()
@@ -263,6 +267,7 @@ private fun DocumentList(
     activeSearch: String,
     accountId: String?,
     viewMissing: Boolean,
+    filtered: Boolean,
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onOpenDocument: (Document) -> Unit,
@@ -274,7 +279,9 @@ private fun DocumentList(
     var menuFor by rememberSaveable { mutableStateOf<Long?>(null) }
     // Text typed but not searched yet (typing pauses first): show progress, not the prompt.
     val searchPending =
-        mode == DocumentListMode.SEARCH && typedSearch.isNotBlank() && typedSearch.trim() != activeSearch
+        (mode == DocumentListMode.SEARCH || mode == DocumentListMode.ALL) &&
+            typedSearch.isNotBlank() &&
+            typedSearch.trim() != activeSearch
     // Nothing to refresh on the search tab before a search.
     val canRefresh = mode != DocumentListMode.SEARCH || activeSearch.isNotEmpty()
     PullToRefreshBox(
@@ -329,7 +336,7 @@ private fun DocumentList(
             viewMissing -> EmptyState(Icons.Outlined.SearchOff, stringResource(R.string.documents_view_missing))
             mode == DocumentListMode.SEARCH && typedSearch.isBlank() ->
                 EmptyState(Icons.Outlined.Search, stringResource(R.string.documents_search_prompt))
-            mode == DocumentListMode.SEARCH ->
+            mode == DocumentListMode.SEARCH || filtered ->
                 EmptyState(
                     Icons.Outlined.SearchOff,
                     stringResource(R.string.documents_no_results),
