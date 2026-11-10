@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.work.WorkManager
 import com.naoya0117.paperless.core.data.AccountDataCleaner
 import com.naoya0117.paperless.core.data.ClientCertificateSource
+import com.naoya0117.paperless.core.data.DocumentFileRepository
+import com.naoya0117.paperless.core.data.DocumentFileStorage
 import com.naoya0117.paperless.core.data.KeyChainClientCertificateSource
 import com.naoya0117.paperless.core.data.UploadProcessor
 import com.naoya0117.paperless.core.data.UploadRepository
@@ -46,16 +48,23 @@ object DataModule {
         @ApplicationContext context: Context,
     ): OfflineCache = OfflineCache.create(context)
 
-    /** Lazy: the upload repository itself depends on the accounts, which use this cleaner. */
+    /** Lazy: these repositories themselves depend on the accounts, which use this cleaner. */
     @Provides
     fun accountDataCleaner(
         cache: OfflineCache,
         uploads: Lazy<UploadRepository>,
+        files: Lazy<DocumentFileRepository>,
     ): AccountDataCleaner =
         AccountDataCleaner { accountId ->
             uploads.get().clear(accountId)
+            files.get().clear(accountId)
             cache.clear(accountId)
         }
+
+    @Provides
+    fun documentFileStorage(
+        @ApplicationContext context: Context,
+    ): DocumentFileStorage = DocumentFileStorage(File(context.cacheDir, "document-files"))
 
     @Provides
     @Singleton
