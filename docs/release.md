@@ -32,6 +32,8 @@ chmod 600 ~/keys/paperless-android-release.jks
 ```
 
 - パスワードは長くランダムなものにし、パスワードマネージャーに保存します。
+- 鍵ストアの形式は PKCS12 になる（JDK 9 以降の既定。拡張子が `.jks` でも同じ）ため、鍵のパスワードは
+  ストアのパスワードと同じになります（keytool も別に尋ねません）。
 - 鍵ファイルは**リポジトリの外**に置きます（`.jks` / `.keystore` をコミットしない）。
 
 ### バックアップ
@@ -57,15 +59,23 @@ keytool -list -v -keystore ~/keys/paperless-android-release.jks -alias paperless
 paperless.signing.storeFile=/Users/naoya/keys/paperless-android-release.jks
 paperless.signing.storePassword=...
 paperless.signing.keyAlias=paperless-android
-paperless.signing.keyPassword=...
+paperless.signing.keyPassword=...   # storePassword と同じ値
 ```
 
-ファイルに書かない場合は、環境変数 `ORG_GRADLE_PROJECT_paperless.signing.storePassword` などでも渡せます。
+ファイルに書かない場合は、環境変数でも渡せます。名前にドットを含むため `export` では設定できず、`env` を使います。
+
+```bash
+env 'ORG_GRADLE_PROJECT_paperless.signing.storePassword=…' 'ORG_GRADLE_PROJECT_paperless.signing.keyPassword=…' \
+  ./gradlew :app:assembleRelease
+```
+
+`-Ppaperless.signing.storePassword=…` でも渡せますが、コマンドの履歴やプロセスの一覧にパスワードが残ります。
 
 ## 2. バージョンと変更履歴
 
-- バージョンは `gradle.properties` の `paperless.versionName`（SemVer の `MAJOR.MINOR.PATCH`）です。
-  versionCode はそこから `major * 10000 + minor * 100 + patch` で計算されます（0.1.0 → 100、1.2.3 → 10203）。
+- バージョンは `gradle.properties` の `paperless.versionName`（SemVer の `MAJOR.MINOR.PATCH`）と
+  `paperless.versionCode` です。versionCode は `major * 10000 + minor * 100 + patch`（0.1.0 → 100、1.2.3 → 10203）
+  にします。両方を書き換え、一致しなければビルドが失敗します。
 - `CHANGELOG.md` の `## [Unreleased]` を `## [x.y.z] - YYYY-MM-DD` にし、空の `## [Unreleased]` を上に追加します。
   末尾に比較リンク（`[x.y.z]: https://…/compare/…`）を置く場合はそれも更新します。
 - F-Droid 用の変更履歴 `fastlane/metadata/android/{en-US,ja-JP}/changelogs/<versionCode>.txt` を追加します
@@ -86,14 +96,16 @@ paperless.signing.keyPassword=...
 確認：
 
 ```bash
+BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
 # 署名とフィンガープリント（1 で控えたものと一致すること）
-"$ANDROID_HOME"/build-tools/36.0.0/apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
+"$BT"/apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
 # バージョン
-"$ANDROID_HOME"/build-tools/36.0.0/aapt2 dump badging app/build/outputs/apk/release/app-release.apk | head -1
+"$BT"/aapt2 dump badging app/build/outputs/apk/release/app-release.apk | head -1
 ```
 
 - `package: name='com.naoya0117.paperless' versionCode='…' versionName='…'` で、debug の接尾辞（`.debug` / `-debug`）がないこと。
-- 依存関係の情報（Google の鍵で暗号化されたブロック）は含めない設定です（`dependenciesInfo`）。F-Droid はこれがあると拒否します。
+- apksigner はフィンガープリントを小文字・コロンなしで、keytool は大文字・コロン区切りで表示します。比べるときは書式を揃えます。
+- 依存関係の情報（Google の鍵で暗号化されたブロック）は含めない設定です（`dependenciesInfo`）。F-Droid がこの無効化を求めています。
 
 ## 4. 実機での確認
 
@@ -193,7 +205,14 @@ adb shell am broadcast -a com.android.systemui.demo -e command exit
 
 ## 6. タグと公開
 
-[4](#4-実機での確認) の確認が済んでから行います。タグはミラーにも公開され、F-Droid の更新のきっかけになるため、
+[4](#4-実機での確認) の確認が済んでから行います。その前に、次を確かめます。
+
+- [ ] main で `./gradlew build`（テスト・Lint・ktlint・ライセンス表示の検査）が通る（CI の main の結果でもよい）
+- [ ] `gradle.properties` の `paperless.versionName` がタグ名（`v` を除く）と一致する
+- [ ] `gradle/gradle-daemon-jvm.properties` がリポジトリにない（ホストの Android Studio が書き込むことがある。
+  JDK 25 を要求するため、F-Droid のビルドサーバーで失敗する）
+
+タグはミラーにも公開され、F-Droid の更新のきっかけになるため、
 **付けたタグは動かしません**（間違えたら次のパッチバージョンを出します）。
 
 ```bash
@@ -202,15 +221,22 @@ git tag -a v0.1.0 -m "paperless-android 0.1.0"
 git push origin v0.1.0
 ```
 
-- GitHub のミラーへ、main とタグを push します（`git push <github のリモート> main v0.1.0`）。
+- GitHub のミラーへ、main とタグを手動で push します（`git push <github のリモート> main v0.1.0`）。
 - GitHub でリリースを作り、署名した APK（`paperless-android-0.1.0.apk` に名前を変える）、
-  `CHANGELOG.md` の該当部分、証明書の SHA-256 フィンガープリントを載せます。
+  `CHANGELOG.md` の該当部分、証明書の SHA-256 フィンガープリント、APK ファイルの SHA-256（`sha256sum`）を載せます。
 
 ## 7. F-Droid への申請
 
-F-Droid は自前のサーバーでソースからビルドし、F-Droid の鍵で署名して配布します。
-そのため **GitHub のリリースの APK と F-Droid の APK は署名が異なり、互いに上書き更新できません**
-（入れ替えるときはアンインストールが必要。README に記載するとよい）。
+F-Droid は自前のサーバーでソースからビルドします。署名は、**初回の申請時に**次のどちらかに決めます
+（後から変えると、利用者にアンインストールと入れ直しを強いることになります）。
+
+- **F-Droid の鍵で署名する**（既定）：申請が簡単です。GitHub のリリースの APK とは署名が異なり、
+  互いに上書き更新できません（README に記載する）。
+- **作者の鍵で署名した APK をそのまま配布する**（再現可能なビルド）：F-Droid がビルドした APK と、作者が署名した APK
+  の中身が一致することを F-Droid が検証し、作者の APK を配布します。レシピに `Binaries:`（GitHub のリリースの APK の URL）
+  と `AllowedAPKSigningKeys:`（証明書の SHA-256、小文字・コロンなし）を書きます。GitHub 版と F-Droid 版の署名が揃います。
+  このプロジェクトは再現可能なビルドのための設定（`vcsInfo.include = false` など）をしてありますが、
+  JDK やビルド環境の違いで一致しないことがあるため、事前に `fdroid build` の結果と比べて確かめます。
 
 ### 事前の確認
 
@@ -218,17 +244,17 @@ F-Droid は自前のサーバーでソースからビルドし、F-Droid の鍵�
 - [ ] `./gradlew :app:assembleRelease` が署名の設定なしで通る
 - [ ] `fastlane/metadata/android/` のタイトル・説明・アイコン・スクリーンショット・変更履歴が揃っている
 - [ ] 反機能（Anti-Features）：なし。ユーザーが指定したサーバーとだけ通信し、追跡はない
-- [ ] versionCode の扱いを決める（下記）
+- [ ] versionCode を `gradle.properties` から読み取れる（下記）
 
 ### versionCode について
 
 F-Droid の更新チェック（`UpdateCheckMode: Tags`）は、タグの時点の `build.gradle(.kts)` から versionCode と
 versionName を読み取ろうとします。このプロジェクトは versionCode を versionName から計算しているため、そのままでは
-読み取れません。次のどちらかにします。
+読み取れません。そのため `gradle.properties` に `paperless.versionCode` も書き（ビルドで計算した値と一致することを検証する）、
+更新チェックは `UpdateCheckData` で `gradle.properties` から両方を読みます（形式は `ファイル|正規表現|ファイル|正規表現`。
+3 つ目の `.` は 1 つ目と同じファイルの意味。正規表現に `|` は使えません）。
 
-- `gradle.properties` に `paperless.versionCode=100` も書き、ビルドでは計算した値と一致することを検証する。
-  更新チェックは `UpdateCheckData` で `gradle.properties` から両方を読む（推奨）。
-- 更新を自動にせず、リリースごとに fdroiddata にマージリクエストを出す。
+自動で更新しない場合は `AutoUpdateMode: None` とし、リリースごとに fdroiddata にマージリクエストを出します。
 
 ### レシピの下書き
 
@@ -238,7 +264,7 @@ versionName を読み取ろうとします。このプロジェクトは version
 
 ```yaml
 Categories:
-  - Office
+  - Cloud Storage & File Sync
 License: GPL-3.0-or-later
 AuthorName: Naoya Matsuhashi
 SourceCode: https://github.com/naoya0117/paperless-android
@@ -260,13 +286,12 @@ Builds:
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-# versionCode を gradle.properties に書いた場合：
-# UpdateCheckData: gradle.properties|paperless\.versionCode=(\d+)|gradle.properties|paperless\.versionName=(.+)
+UpdateCheckData: gradle.properties|paperless\.versionCode=(\d+)|.|paperless\.versionName=(.+)
 CurrentVersion: 0.1.0
 CurrentVersionCode: 100
 ```
 
 - 説明・スクリーンショットはリポジトリの `fastlane/metadata` から自動で取り込まれるため、レシピには書きません。
 - `IssueTracker` は GitHub の Issue を受け付ける場合に記載します（受け付けない場合は省略）。
-- ビルドに JDK 17 以上と Android SDK の platform 37 が必要です。F-Droid のビルドサーバーにない場合は、
-  マージリクエストのレビューで `sudo` などによる追加を相談します。
+- ビルドに JDK 17 以上が必要です（Android SDK の platform はビルド時に自動で入ります）。ビルドサーバーの JDK が
+  合わない場合は、マージリクエストのレビューで `sudo` による追加を相談します。

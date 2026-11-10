@@ -13,6 +13,12 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
             pluginManager.apply("org.jetbrains.kotlin.plugin.compose")
 
             val versionName = providers.gradleProperty("paperless.versionName").get()
+            // Written out in gradle.properties so that F-Droid's update check can read it; must match the formula.
+            val versionCode = providers.gradleProperty("paperless.versionCode").get().toInt()
+            val expected = versionCodeOf(versionName)
+            check(versionCode == expected) {
+                "paperless.versionCode must be $expected for versionName $versionName, was $versionCode"
+            }
 
             extensions.configure<ApplicationExtension> {
                 configureAndroid(this)
@@ -20,7 +26,7 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                 defaultConfig {
                     targetSdk = libs.sdk("targetSdk")
                     this.versionName = versionName
-                    versionCode = versionCodeOf(versionName)
+                    this.versionCode = versionCode
                 }
 
                 buildFeatures {
