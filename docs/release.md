@@ -374,9 +374,15 @@ Builds:
 自動更新では最後のビルドの設定が引き継がれますが、v0.1.1 以降のソースにはミラーの部分がないため、この `prebuild` は
 何も削除せずに終わります（後から削除してもかまいません）。
 
-作者の鍵で署名した APK をそのまま配布する場合は、ビルドに `Binaries:`（GitHub のリリースの APK の URL、
-例：`https://github.com/naoya0117/paperless-android/releases/download/v%v/paperless-android-%v.apk`）を、
-レシピに `AllowedAPKSigningKeys: 562b808b01754f9ec21450e68d4c77eb095f32b63692b6d951b9265f00c2b047` を追加します。
+作者の鍵で署名した APK をそのまま配布する場合は、レシピの最上位（`Repo:` と `Builds:` の間）に
+`Binaries:`（GitHub のリリースの APK の URL。`%v` は versionName に置き換わる。
+例：`https://github.com/naoya0117/paperless-android/releases/download/v%v/paperless-android-%v.apk`）と
+`AllowedAPKSigningKeys: 562b808b01754f9ec21450e68d4c77eb095f32b63692b6d951b9265f00c2b047` を追加します
+（ビルドごとに指定する場合は小文字の `binary:`）。
+
+- 申請するときは `commit:` をタグのコミットのハッシュ（`git rev-parse v0.1.1^{commit}`）にしておくと、
+  タグが動かされる心配がなく、レビューで指摘されにくくなります。自動更新のビルドは F-Droid がハッシュにします。
+- v0.1.1 では `fastlane/metadata/android/{en-US,ja-JP}/changelogs/101.txt` を用意します（[2](#2-バージョンと変更履歴)）。
 
 - 説明・スクリーンショットはリポジトリの `fastlane/metadata` から自動で取り込まれるため、レシピには書きません。
 - `IssueTracker` は GitHub の Issue を受け付ける場合に記載します（受け付けない場合は省略）。
