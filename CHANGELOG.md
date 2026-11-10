@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-10
+
 ### Added
 
 - App name: paperless-android
@@ -94,3 +96,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   store icon for F-Droid in `fastlane/metadata/android/en-US/images/icon.png`
 - README: the GitHub repository is a mirror (development on the author's Gitea); the goals became a list of
   features. F-Droid store texts (English, Japanese) in `fastlane/metadata/android/`
+
+[Unreleased]: https://github.com/naoya0117/paperless-android/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/naoya0117/paperless-android/releases/tag/v0.1.0
