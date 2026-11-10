@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-10
+
 ### Added
 
+- Screenshots for the F-Droid listing
 - Demo build without a server, built locally only and not released (`./gradlew :app:assembleDemo`): a server
   built into the app with sample documents, labels and saved views; changes are kept in memory
 
@@ -16,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Monetary custom fields were rounded to whole numbers when the device's language uses a currency without
   decimals (e.g. Japanese: `EUR18.75` was shown as `€19`)
+- The build declares only the `google()` and `mavenCentral()` repositories, as F-Droid requires (the mirror the
+  CI uses for Robolectric is added there only)
 
 ## [0.1.0] - 2026-11-10
 
@@ -107,5 +112,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README: the GitHub repository is a mirror (development on the author's Gitea); the goals became a list of
   features. F-Droid store texts (English, Japanese) in `fastlane/metadata/android/`
 
-[Unreleased]: https://github.com/naoya0117/paperless-android/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/naoya0117/paperless-android/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/naoya0117/paperless-android/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/naoya0117/paperless-android/releases/tag/v0.1.0

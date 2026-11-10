@@ -1,0 +1,2 @@
+- Amounts in custom fields keep their decimals in every language (they were rounded, e.g. in Japanese)
+- Screenshots for the F-Droid listing
