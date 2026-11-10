@@ -34,3 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Android Keystore
 - Per-account TLS settings: a client certificate from the Android KeyChain (mutual TLS) and certificates
   (PEM or DER) trusted in addition to the device's trust store, e.g. a private CA or a self-signed certificate
+- Offline cache (Room) of tags, correspondents, document types, storage paths, custom fields and saved views per
+  account, refreshed from the server; changes are applied to the cache after the server accepted them, and the
+  cache of an account is deleted when signing out

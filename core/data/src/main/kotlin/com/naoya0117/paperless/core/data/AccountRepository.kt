@@ -30,6 +30,7 @@ class AccountRepository
         private val store: AccountStore,
         private val clientFactory: PaperlessClientFactory,
         private val clientCertificates: ClientCertificateSource,
+        private val accountData: AccountDataCleaner,
     ) {
         val state: Flow<AccountsState> = store.state
 
@@ -121,11 +122,27 @@ class AccountRepository
 
         /**
          * Forgets the account and its secrets on this device. The token stays valid on the server (Paperless
-         * has no API to revoke it); it can be regenerated in the web UI's profile settings.
+         * has no API to revoke it); it can be regenerated in the web UI's profile settings. Cached server data
+         * of the account is deleted too.
          */
         suspend fun signOut(accountId: String) {
             store.remove(accountId)
             clients.remove(accountId)
+            accountData.clear(accountId)
+        }
+
+        /**
+         * Deletes data stored for [accountId] if the account no longer exists, e.g. when a refresh finished
+         * after the account was signed out.
+         */
+        internal suspend fun clearDataIfRemoved(accountId: String) {
+            if (store.state
+                    .first()
+                    .accounts
+                    .none { it.id == accountId }
+            ) {
+                accountData.clear(accountId)
+            }
         }
 
         /**
@@ -161,11 +178,13 @@ class AccountRepository
         }
 
         /** The client of the active account at this moment. */
-        suspend fun currentClient(): PaperlessClient? =
-            store.state
-                .first()
-                .activeAccount
-                ?.let { client(it) }
+        suspend fun currentClient(): PaperlessClient? = currentSession()?.client
+
+        /** The active account with its client, or `null` if there is none or it needs to sign in again. */
+        suspend fun currentSession(): AccountSession? {
+            val account = store.state.first().activeAccount ?: return null
+            return client(account)?.let { AccountSession(account, it) }
+        }
 
         private fun unauthenticatedClient(
             serverUrl: String,

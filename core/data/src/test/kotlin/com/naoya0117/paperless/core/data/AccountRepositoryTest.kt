@@ -28,6 +28,7 @@ class AccountRepositoryTest {
 
     private val server = MockWebServer()
     private lateinit var repository: AccountRepository
+    private val clearedAccounts = mutableListOf<String>()
 
     private object XorCipher : SecretCipher {
         override fun encrypt(plain: ByteArray) = plain.map { (it.toInt() xor 0x33).toByte() }.toByteArray()
@@ -44,6 +45,7 @@ class AccountRepositoryTest {
                 store,
                 PaperlessClientFactory(OkHttpClient.Builder().proxy(Proxy.NO_PROXY).build()),
                 { error("no client certificates in this test") },
+                { clearedAccounts += it },
             )
     }
 
@@ -161,6 +163,7 @@ class AccountRepositoryTest {
 
             repository.signOut(other.id)
             assertNull(repository.activeClient.first())
+            assertEquals("cached data is deleted on sign-out", listOf(alice.id, other.id), clearedAccounts)
         }
 
     @Test
