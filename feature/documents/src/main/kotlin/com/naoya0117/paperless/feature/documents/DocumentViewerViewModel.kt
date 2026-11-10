@@ -11,6 +11,7 @@ import com.naoya0117.paperless.core.data.DocumentFileRepository
 import com.naoya0117.paperless.core.data.DocumentRepository
 import com.naoya0117.paperless.core.data.LabelRepository
 import com.naoya0117.paperless.core.model.Document
+import com.naoya0117.paperless.core.model.Note
 import com.naoya0117.paperless.core.network.DocumentFileKind
 import com.naoya0117.paperless.core.network.PaperlessException
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,6 +31,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -73,13 +75,18 @@ sealed interface ViewerEvent {
 
     data object Deleted : ViewerEvent
 
+    /** The note with [text] was added (the input can be cleared, unless typed on meanwhile). */
+    data class NoteAdded(
+        val text: String,
+    ) : ViewerEvent
+
     data class Failed(
         val action: FileAction,
         val reason: FailureReason,
     ) : ViewerEvent
 }
 
-enum class FileAction { SHARE, OPEN, DOWNLOAD, DELETE }
+enum class FileAction { SHARE, OPEN, DOWNLOAD, DELETE, ADD_NOTE, DELETE_NOTE }
 
 enum class FailureReason {
     /** The server could not be reached or refused (e.g. offline, no permission). */
@@ -179,6 +186,29 @@ class DocumentViewerViewModel
                 ViewerEvent.Deleted
             }
 
+        /** Adds a note; `false` if not sent (e.g. empty, or another action is running). */
+        fun addNote(text: String): Boolean {
+            val trimmed = text.trim()
+            if (trimmed.isEmpty() || state.value.document == null || busy.value) return false
+            runAction(FileAction.ADD_NOTE, viewModelScope) { document ->
+                val notes = documents.addNote(document.id, trimmed)
+                setNotes(notes)
+                ViewerEvent.NoteAdded(trimmed)
+            }
+            return true
+        }
+
+        fun deleteNote(noteId: Long) =
+            runAction(FileAction.DELETE_NOTE, viewModelScope) { document ->
+                setNotes(documents.deleteNote(document.id, noteId))
+                null
+            }
+
+        /** The repository updated the cached copy; the fetched one (if any) follows. */
+        private fun setNotes(notes: List<Note>) {
+            fetched.update { it?.copy(notes = notes) }
+        }
+
         private fun sendFile(action: FileAction) =
             runAction(action, viewModelScope) { document ->
                 val file = files.file(document, DocumentFileKind.DOWNLOAD)
@@ -207,7 +237,7 @@ class DocumentViewerViewModel
         private fun runAction(
             action: FileAction,
             scope: CoroutineScope,
-            block: suspend (Document) -> ViewerEvent,
+            block: suspend (Document) -> ViewerEvent?,
         ) {
             val document = state.value.document ?: return
             if (!busy.compareAndSet(expect = false, update = true)) return
@@ -229,7 +259,7 @@ class DocumentViewerViewModel
                         busy.value = false
                     }
                 // Not waiting: the viewer may be gone (then the event is dropped).
-                eventChannel.trySend(event)
+                event?.let(eventChannel::trySend)
             }
         }
 
@@ -321,7 +351,7 @@ class DocumentViewerViewModel
         companion object {
             /**
              * The fetched copy has the full content and notes, but the cache follows edits: the newer one wins
-             * (by modification time), the fetched one on a tie.
+             * (by modification time), the fetched one on a tie; the notes come from the fetched copy.
              */
             internal fun newer(
                 cached: Document?,
@@ -330,7 +360,15 @@ class DocumentViewerViewModel
                 when {
                     cached == null -> fetched
                     fetched == null -> cached
-                    cached.modified > fetched.modified -> cached
+                    // A cached copy without notes (e.g. from a list) keeps those of the fetched copy.
+                    cached.modified > fetched.modified ->
+                        if (cached.notes ==
+                            null
+                        ) {
+                            cached.copy(notes = fetched.notes)
+                        } else {
+                            cached
+                        }
                     else -> fetched
                 }
 

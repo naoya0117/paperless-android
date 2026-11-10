@@ -79,7 +79,7 @@ class DocumentViewerViewModelTest {
 
     private val documentJson =
         """{"id": 1, "title": "Invoice", "content": "full text", "created": "2026-01-01",""" +
-            """ "added": "2026-01-01T00:00:00Z", "modified": "2026-01-01T00:00:00Z", "original_file_name": "scan.docx"}"""
+            """ "added": "2026-01-01T00:00:00Z", "modified": "2026-01-01T00:00:00Z", "original_file_name": "scan.docx", "notes": []}"""
 
     @Before
     fun setUp() {
@@ -99,6 +99,11 @@ class DocumentViewerViewModelTest {
                                 .code(503)
                                 .body("{}")
                                 .build()
+                        path == "/api/documents/1/notes/" && request.method == "POST" ->
+                            json(
+                                """[{"id": 4, "note": "Paid", "created": "2026-02-01T10:00:00Z", "user": {"id": 3, "username": "alice"}}]""",
+                            )
+                        path == "/api/documents/1/notes/" && request.method == "DELETE" -> json("[]")
                         path == "/api/documents/1/" && request.method == "DELETE" -> {
                             deleted.set(true)
                             MockResponse.Builder().code(204).build()
@@ -211,7 +216,8 @@ class DocumentViewerViewModelTest {
         runTest {
             signIn()
             val viewModel = viewModel()
-            viewModel.awaitState { it.document?.content == "full text" }
+            // The file is the preview the viewer loads (cached): shared once it is there.
+            viewModel.awaitState { it.document?.content == "full text" && it.content is ViewerContent.Image }
 
             viewModel.share()
 
@@ -318,4 +324,41 @@ class DocumentViewerViewModelTest {
         deletedAt = null,
         searchHit = null,
     )
+
+    @Test
+    fun `notes are added and deleted`() =
+        runTest {
+            signIn()
+            val viewModel = viewModel()
+            viewModel.awaitState { it.document?.notes != null }
+
+            assertFalse(viewModel.addNote("   "))
+            assertTrue(viewModel.addNote(" Paid "))
+
+            assertEquals(ViewerEvent.NoteAdded("Paid"), viewModel.nextEvent())
+            val note =
+                viewModel
+                    .awaitState { it.document?.notes?.isNotEmpty() == true }
+                    .document!!
+                    .notes!!
+                    .single()
+            assertEquals("Paid", note.text)
+            assertEquals("alice", note.user?.username)
+
+            viewModel.deleteNote(note.id)
+            viewModel.awaitState { it.document?.notes?.isEmpty() == true }
+        }
+
+    @Test
+    fun `money is shown in its currency`() {
+        val default = java.util.Locale.getDefault()
+        java.util.Locale.setDefault(java.util.Locale.US)
+        try {
+            assertEquals("€120.50", formatMoney("EUR120.50", null))
+            assertEquals("$3.00", formatMoney("3", "USD"))
+            assertEquals("12.30", formatMoney("12.3", null))
+        } finally {
+            java.util.Locale.setDefault(default)
+        }
+    }
 }

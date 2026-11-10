@@ -14,6 +14,7 @@ import com.naoya0117.paperless.core.database.OfflineCache
 import com.naoya0117.paperless.core.model.Document
 import com.naoya0117.paperless.core.model.DocumentDraft
 import com.naoya0117.paperless.core.model.DocumentQuery
+import com.naoya0117.paperless.core.model.Note
 import com.naoya0117.paperless.core.network.PaperlessException
 import com.naoya0117.paperless.core.network.toQueryParameters
 import kotlinx.coroutines.CancellationException
@@ -167,6 +168,53 @@ class DocumentRepository internal constructor(
             writeThrough(session) { cache.update(session.account.id, updated.copy(searchHit = null)) }
         }
         return updated
+    }
+
+    /**
+     * Adds a note to the document.
+     *
+     * @return all notes of the document, oldest first
+     * @throws NotSignedInException
+     */
+    suspend fun addNote(
+        documentId: Long,
+        text: String,
+    ): List<Note> {
+        val session = accounts.currentSession() ?: throw NotSignedInException()
+        return session.client.documents
+            .addNote(documentId, text)
+            .also { updateCachedNotes(session, documentId, it) }
+    }
+
+    /**
+     * Deletes a note of the document.
+     *
+     * @return the remaining notes, oldest first
+     * @throws NotSignedInException
+     */
+    suspend fun deleteNote(
+        documentId: Long,
+        noteId: Long,
+    ): List<Note> {
+        val session = accounts.currentSession() ?: throw NotSignedInException()
+        return session.client.documents
+            .deleteNote(
+                documentId,
+                noteId,
+            ).also { updateCachedNotes(session, documentId, it) }
+    }
+
+    /** The cached copy (if any) gets the notes too, e.g. to show them offline later. */
+    private suspend fun updateCachedNotes(
+        session: AccountSession,
+        documentId: Long,
+        notes: List<Note>,
+    ) {
+        writeThrough(session) {
+            // Read under the write lock: a list refresh in between is not undone.
+            val cached = cache.observe(session.account.id, documentId).first()
+            if (cached != null) cache.update(session.account.id, cached.copy(notes = notes))
+        }
     }
 
     /**
