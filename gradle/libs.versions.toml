@@ -26,6 +26,8 @@ okhttp = "5.5.1"
 paging = "3.5.3"
 navigation = "2.10.2"
 coil = "3.6.3"
+camerax = "1.6.2"
+exifinterface = "1.4.2"
 # The last release; icons are copied into the app by R8 as needed.
 material-icons = "1.7.8"
 retrofit = "3.0.0"
@@ -38,6 +40,10 @@ sqlite = "2.6.2"
 androidx-test-core = "1.7.0"
 
 [libraries]
+androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
+camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }
 androidx-lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel", version.ref = "androidx-lifecycle" }

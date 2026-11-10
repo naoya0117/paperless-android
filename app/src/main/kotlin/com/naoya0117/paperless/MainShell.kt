@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FilterList
@@ -53,7 +54,9 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationBar
@@ -126,6 +129,7 @@ import com.naoya0117.paperless.feature.labels.LabelKind
 import com.naoya0117.paperless.feature.labels.LabelListScreen
 import com.naoya0117.paperless.feature.labels.LabelListViewModel
 import com.naoya0117.paperless.feature.uploads.EnqueueResult
+import com.naoya0117.paperless.feature.uploads.ScanScreen
 import com.naoya0117.paperless.feature.uploads.UploadsScreen
 import com.naoya0117.paperless.feature.uploads.UploadsViewModel
 import kotlinx.coroutines.flow.first
@@ -136,6 +140,7 @@ private const val DOCUMENTS_ROUTE = "documents"
 private const val INBOX_ROUTE = "inbox"
 private const val UPLOADS_ROUTE = "uploads"
 private const val TRASH_ROUTE = "trash"
+private const val SCAN_ROUTE = "scan?camera={camera}"
 private const val VIEW_ROUTE = "view/{${DocumentListViewModel.VIEW_ID_ARGUMENT}}"
 private const val LABELS_ROUTE = "labels/{${LabelListViewModel.KIND_ARGUMENT}}"
 private const val LABEL_EDIT_ROUTE =
@@ -255,8 +260,56 @@ fun MainShell(
             }
         }
     }
+    val resolver = LocalContext.current.contentResolver
+
+    /** Several images picked: whether to put them together into one document (they wait here meanwhile). */
+    var picked by remember { mutableStateOf<List<Uri>>(emptyList()) }
+
+    /** Images to put into one document on the scan screen (handed over once). */
+    var imagesToScan by remember { mutableStateOf<List<Uri>>(emptyList()) }
     val pickFiles =
-        rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> enqueue(uris) }
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            val images = uris.all { resolver.getType(it)?.startsWith("image/") == true }
+            if (uris.size > 1 && images) picked = uris else enqueue(uris)
+        }
+    var addMenu by rememberSaveable { mutableStateOf(false) }
+    if (addMenu) {
+        AddSheet(
+            onDismiss = { addMenu = false },
+            onFiles = {
+                addMenu = false
+                pickFiles.launch(UPLOAD_MIME_TYPES)
+            },
+            onScan = {
+                addMenu = false
+                navController.navigate("scan?camera=true")
+            },
+        )
+    }
+    if (picked.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { picked = emptyList() },
+            title = { Text(stringResource(R.string.upload_combine_title)) },
+            text = { Text(pluralStringResource(R.plurals.upload_combine_message, picked.size, picked.size)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        imagesToScan = picked
+                        picked = emptyList()
+                        navController.navigate("scan?camera=false")
+                    },
+                ) { Text(stringResource(R.string.upload_combine)) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        enqueue(picked)
+                        picked = emptyList()
+                    },
+                ) { Text(stringResource(R.string.upload_separately)) }
+            },
+        )
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -429,7 +482,7 @@ fun MainShell(
                             floatingActionButton = {
                                 if (shown == Tab.DOCUMENTS) {
                                     FloatingActionButton(
-                                        onClick = dropUnlessResumed { pickFiles.launch(UPLOAD_MIME_TYPES) },
+                                        onClick = dropUnlessResumed { addMenu = true },
                                     ) {
                                         Icon(
                                             Icons.Outlined.UploadFile,
@@ -542,6 +595,23 @@ fun MainShell(
                         ),
                 ) {
                     LabelEditScreen(onClose = dropUnlessResumed { navController.navigateUp() })
+                }
+                composable(
+                    SCAN_ROUTE,
+                    arguments =
+                        listOf(
+                            navArgument("camera") {
+                                type = NavType.BoolType
+                                defaultValue = true
+                            },
+                        ),
+                ) { entry ->
+                    ScanScreen(
+                        startWithCamera = entry.arguments?.getBoolean("camera") ?: true,
+                        initialImages = imagesToScan,
+                        onImagesTaken = { imagesToScan = emptyList() },
+                        onClose = dropUnlessResumed { navController.navigateUp() },
+                    )
                 }
                 composable(TRASH_ROUTE) {
                     TrashScreen(onBack = dropUnlessResumed { navController.navigateUp() })
@@ -830,6 +900,32 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.popExit(): ExitTra
     } else {
         slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End)
     }
+
+/** Adding documents: picking files, or scanning paper with the camera. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddSheet(
+    onDismiss: () -> Unit,
+    onFiles: () -> Unit,
+    onScan: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.navigationBarsPadding().padding(bottom = 16.dp)) {
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.upload_pick_files)) },
+                supportingContent = { Text(stringResource(R.string.upload_pick_files_description)) },
+                leadingContent = { Icon(Icons.Outlined.UploadFile, contentDescription = null) },
+                modifier = Modifier.clickable(onClick = onFiles),
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.upload_scan)) },
+                supportingContent = { Text(stringResource(R.string.upload_scan_description)) },
+                leadingContent = { Icon(Icons.Outlined.DocumentScanner, contentDescription = null) },
+                modifier = Modifier.clickable(onClick = onScan),
+            )
+        }
+    }
+}
 
 /** The height of the tab bar (Material 3 navigation bar), which the snackbar stays above. */
 private val TAB_BAR_HEIGHT = 80.dp
