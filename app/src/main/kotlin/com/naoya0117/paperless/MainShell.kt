@@ -9,6 +9,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
@@ -92,6 +94,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -337,7 +340,7 @@ fun MainShell(
             NavHost(
                 navController = navController,
                 startDestination = DOCUMENTS_ROUTE,
-                // One animation for both back button and back gesture (predictive back plays the pop transitions):
+                // One animation for the back button and the back gesture (its own transitions are set to the same):
                 // screens slide in from the right and back out to it. Between tabs they fade.
                 enterTransition = {
                     if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
@@ -357,24 +360,11 @@ fun MainShell(
                             fadeOut()
                     }
                 },
-                popEnterTransition = {
-                    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
-                        fadeIn()
-                    } else {
-                        slideIntoContainer(
-                            AnimatedContentTransitionScope.SlideDirection.End,
-                            initialOffset = { it / 4 },
-                        ) +
-                            fadeIn()
-                    }
-                },
-                popExitTransition = {
-                    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
-                        fadeOut()
-                    } else {
-                        slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End)
-                    }
-                },
+                popEnterTransition = { popEnter() },
+                popExitTransition = { popExit() },
+                // The back gesture: the same as the back button (by default it shrinks the screen instead).
+                predictivePopEnterTransition = { popEnter() },
+                predictivePopExitTransition = { popExit() },
             ) {
                 LIST_ROUTES.forEach { (path, mode) ->
                     composable(
@@ -764,6 +754,22 @@ private fun ListScaffold(
     floatingActionButton = floatingActionButton,
     content = content,
 )
+
+/** Back to the previous screen: it comes back from the left (between tabs they fade). */
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.popEnter(): EnterTransition =
+    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
+        fadeIn()
+    } else {
+        slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, initialOffset = { it / 4 }) + fadeIn()
+    }
+
+/** Back to the previous screen: the current one slides out to the right (between tabs they fade). */
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.popExit(): ExitTransition =
+    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
+        fadeOut()
+    } else {
+        slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End)
+    }
 
 /** The height of the tab bar (Material 3 navigation bar), which the snackbar stays above. */
 private val TAB_BAR_HEIGHT = 80.dp
