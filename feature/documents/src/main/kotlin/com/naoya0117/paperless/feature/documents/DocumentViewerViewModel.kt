@@ -33,7 +33,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -223,7 +222,8 @@ class DocumentViewerViewModel
                 content,
             ) { request, content ->
                 request to content
-            }.distinctUntilChanged()
+            }
+                // Every request (also the same text again after another one): its results may have been dropped.
                 .collectLatest { (request, content) ->
                     val query = request.query
                     if (query.isEmpty()) {
@@ -270,21 +270,33 @@ class DocumentViewerViewModel
             return withContext(Dispatchers.Default) { searchText(fullText(), query) }
         }
 
+        /** The full text fetched for searching (not shown: the fetched copy is left to [load]). */
+        private var searchText: String? = null
+
+        /** A fetch for searching failed: the cached text is searched from then on (no wait for each query). */
+        private var searchFetchFailed = false
+
         /** The document's full text: lists cache it shortened, so the fetched copy (or a fetch) is used. */
         private suspend fun fullText(): String {
             fetched.value?.content?.let { return it }
-            val document =
+            searchText?.let { return it }
+            if (!searchFetchFailed) {
                 try {
-                    documents.fetch(documentId).also { fetched.value = it }
+                    return documents.fetch(documentId).content.also { searchText = it }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (
                     @Suppress("TooGenericExceptionCaught") _: Exception,
                 ) {
-                    // Offline: the cached text (perhaps shortened) is better than nothing.
-                    documents.cached(documentId).first()
+                    searchFetchFailed = true
                 }
-            return document?.content.orEmpty()
+            }
+            // Offline: the cached text (perhaps shortened) is better than nothing.
+            return documents
+                .cached(documentId)
+                .first()
+                ?.content
+                .orEmpty()
         }
 
         fun toggleInfo() {
