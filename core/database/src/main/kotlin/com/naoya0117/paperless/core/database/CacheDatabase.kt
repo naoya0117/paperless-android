@@ -11,6 +11,7 @@ import androidx.room.RoomDatabase
         StoragePathEntity::class,
         CustomFieldEntity::class,
         SavedViewEntity::class,
+        CacheMetaEntity::class,
     ],
     version = 1,
 )
@@ -26,4 +27,6 @@ internal abstract class CacheDatabase : RoomDatabase() {
     abstract fun customFields(): CustomFieldDao
 
     abstract fun savedViews(): SavedViewDao
+
+    abstract fun cacheMeta(): CacheMetaDao
 }

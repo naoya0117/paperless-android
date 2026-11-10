@@ -4,9 +4,11 @@ import com.naoya0117.paperless.core.model.Account
 import com.naoya0117.paperless.core.network.PaperlessClient
 
 /** An account together with the client for it, taken at the same moment. */
-class AccountSession(
+class AccountSession internal constructor(
     val account: Account,
     val client: PaperlessClient,
+    /** How often the account had been signed out when the session was taken. */
+    internal val epoch: Long,
 )
 
 /** Deletes what is stored on the device for an account besides the account itself (e.g. cached data). */

@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -35,6 +37,12 @@ class AccountRepository
         val state: Flow<AccountsState> = store.state
 
         private val clients = ConcurrentHashMap<String, CachedClient>()
+
+        /** Per account, how often it was signed out in this process; see [writeData]. */
+        private val epochs = ConcurrentHashMap<String, Long>()
+
+        /** Serializes [signOut] with [writeData]. */
+        private val dataLock = Mutex()
 
         /** Shared per settings, so the SSL context (and with it pooled connections) is reused. */
         private val tlsConfigs = ConcurrentHashMap<AccountTls, TlsConfig>()
@@ -126,24 +134,34 @@ class AccountRepository
          * of the account is deleted too.
          */
         suspend fun signOut(accountId: String) {
-            store.remove(accountId)
-            clients.remove(accountId)
-            accountData.clear(accountId)
+            dataLock.withLock {
+                // Sessions taken before this point can no longer write data (see writeData).
+                epochs.merge(accountId, 1, Long::plus)
+                // Data first: if the process dies in between, the account still exists and refills its cache.
+                accountData.clear(accountId)
+                store.remove(accountId)
+                clients.remove(accountId)
+            }
         }
 
         /**
-         * Deletes data stored for [accountId] if the account no longer exists, e.g. when a refresh finished
-         * after the account was signed out.
+         * Runs [block], which writes data of [session]'s account (e.g. to the offline cache), unless the account
+         * was signed out since the session was taken: then nothing is written, so that a request finishing
+         * late does not leave data behind (even if the same user has signed in again meanwhile).
+         *
+         * @return whether [block] ran
          */
-        internal suspend fun clearDataIfRemoved(accountId: String) {
-            if (store.state
-                    .first()
-                    .accounts
-                    .none { it.id == accountId }
-            ) {
-                accountData.clear(accountId)
+        internal suspend fun writeData(
+            session: AccountSession,
+            block: suspend () -> Unit,
+        ): Boolean =
+            dataLock.withLock {
+                if (epoch(session.account.id) != session.epoch) return false
+                block()
+                true
             }
-        }
+
+        private fun epoch(accountId: String): Long = epochs[accountId] ?: 0
 
         /**
          * A client for the account with [account]'s ID as currently stored (so an outdated [Account] does not
@@ -182,8 +200,10 @@ class AccountRepository
 
         /** The active account with its client, or `null` if there is none or it needs to sign in again. */
         suspend fun currentSession(): AccountSession? {
+            // Read before the account: a sign-out in between then makes the session outdated, not current.
+            val epochs = epochs.toMap()
             val account = store.state.first().activeAccount ?: return null
-            return client(account)?.let { AccountSession(account, it) }
+            return client(account)?.let { AccountSession(account, it, epochs[account.id] ?: 0) }
         }
 
         private fun unauthenticatedClient(

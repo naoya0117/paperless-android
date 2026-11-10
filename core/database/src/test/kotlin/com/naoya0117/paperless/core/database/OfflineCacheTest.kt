@@ -20,6 +20,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.time.Instant
 import java.time.LocalDate
 
 @RunWith(RobolectricTestRunner::class)
@@ -28,6 +29,8 @@ class OfflineCacheTest {
 
     @After
     fun tearDown() = cache.close()
+
+    private val now = Instant.parse("2026-11-10T00:00:00Z")
 
     private val matching = Matching(MatchingAlgorithm.REGEX, "^inv", isInsensitive = false)
 
@@ -69,12 +72,16 @@ class OfflineCacheTest {
                     true,
                 )
 
-            cache.tags.replaceAll("a", listOf(tag))
-            cache.correspondents.replaceAll("a", listOf(correspondent))
-            cache.documentTypes.replaceAll("a", listOf(documentType))
-            cache.storagePaths.replaceAll("a", listOf(storagePath))
-            cache.customFields.replaceAll("a", listOf(customField))
-            cache.savedViews.replaceAll("a", listOf(savedView, savedView.copy(id = 7, displayFields = listOf("title"))))
+            cache.tags.replaceAll("a", listOf(tag), now)
+            cache.correspondents.replaceAll("a", listOf(correspondent), now)
+            cache.documentTypes.replaceAll("a", listOf(documentType), now)
+            cache.storagePaths.replaceAll("a", listOf(storagePath), now)
+            cache.customFields.replaceAll("a", listOf(customField), now)
+            cache.savedViews.replaceAll(
+                "a",
+                listOf(savedView, savedView.copy(id = 7, displayFields = listOf("title"))),
+                now,
+            )
 
             assertEquals(listOf(tag), cache.tags.observe("a").first())
             assertEquals(listOf(correspondent), cache.correspondents.observe("a").first())
@@ -90,8 +97,8 @@ class OfflineCacheTest {
     @Test
     fun `lists are per account and ordered by name`() =
         runTest {
-            cache.tags.replaceAll("a", listOf(tag(1, "b"), tag(2, "A"), tag(3, "c")))
-            cache.tags.replaceAll("b", listOf(tag(1, "other")))
+            cache.tags.replaceAll("a", listOf(tag(1, "b"), tag(2, "A"), tag(3, "c")), now)
+            cache.tags.replaceAll("b", listOf(tag(1, "other")), now)
 
             assertEquals(
                 listOf("A", "b", "c"),
@@ -112,9 +119,9 @@ class OfflineCacheTest {
     @Test
     fun `replacing drops items the server no longer has`() =
         runTest {
-            cache.tags.replaceAll("a", listOf(tag(1, "one"), tag(2, "two")))
+            cache.tags.replaceAll("a", listOf(tag(1, "one"), tag(2, "two")), now)
 
-            cache.tags.replaceAll("a", listOf(tag(2, "two (renamed)")))
+            cache.tags.replaceAll("a", listOf(tag(2, "two (renamed)")), now)
 
             assertEquals(listOf(tag(2, "two (renamed)")), cache.tags.observe("a").first())
         }
@@ -122,12 +129,12 @@ class OfflineCacheTest {
     @Test
     fun `upsert and delete change single items`() =
         runTest {
-            cache.tags.replaceAll("a", listOf(tag(1, "one")))
-            cache.tags.replaceAll("b", listOf(tag(1, "one")))
+            cache.tags.replaceAll("a", listOf(tag(1, "one")), now)
+            cache.tags.replaceAll("b", listOf(tag(1, "one")), now)
 
-            cache.tags.upsert("a", tag(2, "two"))
-            cache.tags.upsert("a", tag(1, "uno"))
-            cache.tags.delete("a", 2)
+            cache.tags.upsert("a", listOf(tag(2, "two"), tag(3, "three")))
+            cache.tags.upsert("a", listOf(tag(1, "uno")))
+            cache.tags.delete("a", listOf(2, 3))
 
             assertEquals(listOf(tag(1, "uno")), cache.tags.observe("a").first())
             assertEquals(listOf(tag(1, "one")), cache.tags.observe("b").first())
@@ -136,12 +143,13 @@ class OfflineCacheTest {
     @Test
     fun `clearing removes only that account`() =
         runTest {
-            cache.tags.replaceAll("a", listOf(tag(1, "one")))
+            cache.tags.replaceAll("a", listOf(tag(1, "one")), now)
             cache.savedViews.replaceAll(
                 "a",
                 listOf(SavedView(1, "v", null, null, false, emptyList(), null, null, null, null, true)),
+                now,
             )
-            cache.tags.replaceAll("b", listOf(tag(1, "one")))
+            cache.tags.replaceAll("b", listOf(tag(1, "one")), now)
 
             cache.clear("a")
 
@@ -153,6 +161,35 @@ class OfflineCacheTest {
                     .observe("b")
                     .first()
                     .size,
+            )
+        }
+
+    @Test
+    fun `the refresh time is kept per account and kind until cleared`() =
+        runTest {
+            assertEquals(null, cache.tags.observeRefreshedAt("a").first())
+
+            cache.tags.replaceAll("a", emptyList(), now)
+            cache.tags.upsert("a", listOf(tag(1, "one")))
+
+            assertEquals(now, cache.tags.observeRefreshedAt("a").first())
+            assertEquals(null, cache.correspondents.observeRefreshedAt("a").first())
+            assertEquals(null, cache.tags.observeRefreshedAt("b").first())
+            cache.clear("a")
+            assertEquals(null, cache.tags.observeRefreshedAt("a").first())
+        }
+
+    @Test
+    fun `names are sorted for people, not by code point`() =
+        runTest {
+            cache.tags.replaceAll("a", listOf(tag(1, "Zebra"), tag(2, "Été"), tag(3, "apple")), now)
+
+            assertEquals(
+                listOf("apple", "Été", "Zebra"),
+                cache.tags
+                    .observe("a")
+                    .first()
+                    .map { it.name },
             )
         }
 }

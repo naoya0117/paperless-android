@@ -97,3 +97,13 @@ internal data class SavedViewEntity(
     val owner: Long?,
     val userCanChange: Boolean,
 )
+
+/** When a kind of label was last replaced with the server's full list, per account. */
+@Entity(tableName = "cache_meta", primaryKeys = ["accountId", "kind"])
+internal data class CacheMetaEntity(
+    val accountId: String,
+    /** The table name of the kind. */
+    val kind: String,
+    /** Epoch milliseconds. */
+    val refreshedAt: Long,
+)

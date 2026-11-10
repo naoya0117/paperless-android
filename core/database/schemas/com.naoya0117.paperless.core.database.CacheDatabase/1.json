@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "3eabcdf6e12bd8c71835caab84e89d39",
+    "identityHash": "3578ba2dda3620b8b12784f142c75414",
     "entities": [
       {
         "tableName": "tags",
@@ -459,11 +459,42 @@
             "id"
           ]
         }
+      },
+      {
+        "tableName": "cache_meta",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` TEXT NOT NULL, `kind` TEXT NOT NULL, `refreshedAt` INTEGER NOT NULL, PRIMARY KEY(`accountId`, `kind`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refreshedAt",
+            "columnName": "refreshedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "accountId",
+            "kind"
+          ]
+        }
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3eabcdf6e12bd8c71835caab84e89d39')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3578ba2dda3620b8b12784f142c75414')"
     ]
   }
 }
