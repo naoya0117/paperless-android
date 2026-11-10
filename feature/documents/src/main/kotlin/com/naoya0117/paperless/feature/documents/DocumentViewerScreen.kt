@@ -504,6 +504,8 @@ private fun NotesSection(
             text = { Text(stringResource(R.string.info_note_delete_message)) },
             confirmButton = {
                 TextButton(
+                    // Not while another action runs (it would be ignored).
+                    enabled = !actions.busy,
                     onClick = {
                         confirmDelete = null
                         actions.onDelete(noteId)

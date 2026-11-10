@@ -204,9 +204,9 @@ class DocumentViewerViewModel
                 null
             }
 
-        /** The repository updated the cached copy; the fetched one (or the cached one, if offline before) follows. */
+        /** The repository updated the cached copy; the fetched one (if any) follows. */
         private fun setNotes(notes: List<Note>) {
-            fetched.update { (it ?: state.value.document)?.copy(notes = notes) }
+            fetched.update { it?.copy(notes = notes) }
         }
 
         private fun sendFile(action: FileAction) =

@@ -210,8 +210,11 @@ class DocumentRepository internal constructor(
         documentId: Long,
         notes: List<Note>,
     ) {
-        val cached = cache.observe(session.account.id, documentId).first() ?: return
-        writeThrough(session) { cache.update(session.account.id, cached.copy(notes = notes)) }
+        writeThrough(session) {
+            // Read under the write lock: a list refresh in between is not undone.
+            val cached = cache.observe(session.account.id, documentId).first()
+            if (cached != null) cache.update(session.account.id, cached.copy(notes = notes))
+        }
     }
 
     /**
