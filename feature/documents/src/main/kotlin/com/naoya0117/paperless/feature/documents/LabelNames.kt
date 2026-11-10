@@ -1,6 +1,7 @@
 package com.naoya0117.paperless.feature.documents
 
 import com.naoya0117.paperless.core.data.LabelRepository
+import com.naoya0117.paperless.core.model.CustomField
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 
@@ -10,6 +11,7 @@ data class LabelNames(
     val documentTypes: Map<Long, String> = emptyMap(),
     val storagePaths: Map<Long, String> = emptyMap(),
     val tags: Map<Long, TagLabel> = emptyMap(),
+    val customFields: Map<Long, CustomField> = emptyMap(),
 )
 
 data class TagLabel(
@@ -26,11 +28,13 @@ fun LabelRepository.names(): Flow<LabelNames> =
         documentTypes.items,
         storagePaths.items,
         tags.items,
-    ) { correspondents, types, paths, tags ->
+        customFields.items,
+    ) { correspondents, types, paths, tags, fields ->
         LabelNames(
             correspondents = correspondents.associate { it.id to it.name },
             documentTypes = types.associate { it.id to it.name },
             storagePaths = paths.associate { it.id to it.name },
             tags = tags.associate { it.id to TagLabel(it.name, it.color, it.textColor) },
+            customFields = fields.associateBy { it.id },
         )
     }

@@ -59,4 +59,14 @@
     <string name="viewer_save_failed">ダウンロードに保存できませんでした</string>
     <string name="viewer_delete_failed">文書を削除できませんでした。接続を確認して、もう一度お試しください。</string>
     <string name="documents_view_missing">このビューはもうありません。</string>
+    <string name="info_custom_fields">カスタムフィールド</string>
+    <string name="info_custom_field_unknown">フィールド #%1$d</string>
+    <string name="info_yes">はい</string>
+    <string name="info_no">いいえ</string>
+    <string name="info_linked_documents">文書 %1$s</string>
+    <string name="info_note_hint">メモを追加</string>
+    <string name="info_note_add">メモを追加</string>
+    <string name="info_note_delete">メモを削除</string>
+    <string name="viewer_note_add_failed">メモを追加できませんでした。接続を確認して、もう一度お試しください。</string>
+    <string name="viewer_note_delete_failed">メモを削除できませんでした。接続を確認して、もう一度お試しください。</string>
 </resources>

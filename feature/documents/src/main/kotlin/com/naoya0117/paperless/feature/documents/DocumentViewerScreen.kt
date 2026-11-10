@@ -30,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
@@ -47,6 +48,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -83,6 +85,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import coil3.compose.AsyncImage
 import com.naoya0117.paperless.core.model.Document
+import com.naoya0117.paperless.core.model.Note
 import kotlinx.coroutines.CancellationException
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -107,6 +110,9 @@ fun DocumentViewerScreen(
     val context = LocalContext.current
     val resources = LocalResources.current
     val currentOnBack by rememberUpdatedState(onBack)
+
+    /** The note being written (kept while the details are hidden, cleared once added). */
+    var noteText by rememberSaveable { mutableStateOf("") }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(viewModel, lifecycle) {
         // Only while visible: another app cannot be started from the background (the event waits).
@@ -122,6 +128,7 @@ fun DocumentViewerScreen(
                             resources.getString(R.string.viewer_saved, event.fileName),
                         )
                     ViewerEvent.Deleted -> currentOnBack()
+                    ViewerEvent.NoteAdded -> noteText = ""
                     is ViewerEvent.Failed -> snackbar.showSnackbar(resources.getString(event.message()))
                 }
             }
@@ -220,6 +227,14 @@ fun DocumentViewerScreen(
                     viewModel.hideInfo()
                     onEdit(document.id)
                 },
+                notes =
+                    NoteActions(
+                        text = noteText,
+                        onTextChange = { noteText = it },
+                        busy = state.busy,
+                        onAdd = { viewModel.addNote(noteText) },
+                        onDelete = viewModel::deleteNote,
+                    ),
             )
         }
     }
@@ -263,6 +278,8 @@ private fun ViewerEvent.Failed.message(): Int =
         FileAction.DOWNLOAD ->
             if (reason == FailureReason.STORAGE) R.string.viewer_save_failed else R.string.viewer_file_failed
         FileAction.DELETE -> R.string.viewer_delete_failed
+        FileAction.ADD_NOTE -> R.string.viewer_note_add_failed
+        FileAction.DELETE_NOTE -> R.string.viewer_note_delete_failed
     }
 
 /** Starts an app for the file (a chooser to share it); `false` if there is none. */
@@ -390,6 +407,7 @@ private fun DocumentInfo(
     document: Document,
     labels: LabelNames,
     onEdit: () -> Unit,
+    notes: NoteActions,
 ) {
     val date = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
     val dateTime =
@@ -435,20 +453,89 @@ private fun DocumentInfo(
         InfoRow(R.string.info_original_file_name, document.originalFileName)
         InfoRow(R.string.info_added, dateTime.format(document.added))
         InfoRow(R.string.info_modified, dateTime.format(document.modified))
-        document.notes?.takeIf { it.isNotEmpty() }?.let { InfoRow(R.string.info_notes, it.size.toString()) }
+        CustomFieldRows(document, labels)
+        // Without notes from the server (offline, or not allowed to see them) there is no notes section.
+        document.notes?.let { NotesSection(it, notes) }
         androidx.compose.foundation.layout
             .Spacer(Modifier.size(16.dp))
     }
 }
 
+/** What the notes section can do; [onAdd] adds [text]. */
+private class NoteActions(
+    val text: String,
+    val onTextChange: (String) -> Unit,
+    val busy: Boolean,
+    val onAdd: () -> Unit,
+    val onDelete: (Long) -> Unit,
+)
+
+@Composable
+private fun CustomFieldRows(
+    document: Document,
+    labels: LabelNames,
+) {
+    if (document.customFields.isEmpty()) return
+    HorizontalDivider()
+    Text(stringResource(R.string.info_custom_fields), style = MaterialTheme.typography.titleSmall)
+    document.customFields.forEach { value ->
+        val field = labels.customFields[value.fieldId]
+        InfoRow(
+            label = field?.name ?: stringResource(R.string.info_custom_field_unknown, value.fieldId),
+            value = formatFieldValue(field, value.value),
+        )
+    }
+}
+
+@Composable
+private fun NotesSection(
+    notes: List<Note>,
+    actions: NoteActions,
+) {
+    val dateTime =
+        DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withZone(ZoneId.systemDefault())
+    HorizontalDivider()
+    Text(stringResource(R.string.info_notes), style = MaterialTheme.typography.titleSmall)
+    notes.forEach { note ->
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                Text(note.text, style = MaterialTheme.typography.bodyMedium)
+                val author =
+                    note.user?.let { user ->
+                        listOfNotNull(user.firstName, user.lastName).joinToString(" ").ifBlank { user.username }
+                    }
+                Text(
+                    listOfNotNull(author, dateTime.format(note.created)).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = { actions.onDelete(note.id) }, enabled = !actions.busy) {
+                Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.info_note_delete))
+            }
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = actions.text,
+            onValueChange = actions.onTextChange,
+            placeholder = { Text(stringResource(R.string.info_note_hint)) },
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = actions.onAdd, enabled = !actions.busy && actions.text.isNotBlank()) {
+            Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = stringResource(R.string.info_note_add))
+        }
+    }
+}
+
 @Composable
 private fun InfoRow(
-    label: Int,
+    label: String,
     value: String?,
 ) {
     Row {
         Text(
-            stringResource(label),
+            label,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.width(140.dp),
@@ -456,6 +543,12 @@ private fun InfoRow(
         Text(value ?: "—", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
     }
 }
+
+@Composable
+private fun InfoRow(
+    label: Int,
+    value: String?,
+) = InfoRow(stringResource(label), value)
 
 /**
  * Taps toggle the details, but not a tap that stops a fling (it was scrolling when the finger went down).

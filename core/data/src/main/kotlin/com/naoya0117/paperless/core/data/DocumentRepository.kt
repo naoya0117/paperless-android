@@ -14,6 +14,7 @@ import com.naoya0117.paperless.core.database.OfflineCache
 import com.naoya0117.paperless.core.model.Document
 import com.naoya0117.paperless.core.model.DocumentDraft
 import com.naoya0117.paperless.core.model.DocumentQuery
+import com.naoya0117.paperless.core.model.Note
 import com.naoya0117.paperless.core.network.PaperlessException
 import com.naoya0117.paperless.core.network.toQueryParameters
 import kotlinx.coroutines.CancellationException
@@ -167,6 +168,34 @@ class DocumentRepository internal constructor(
             writeThrough(session) { cache.update(session.account.id, updated.copy(searchHit = null)) }
         }
         return updated
+    }
+
+    /**
+     * Adds a note to the document.
+     *
+     * @return all notes of the document, oldest first
+     * @throws NotSignedInException
+     */
+    suspend fun addNote(
+        documentId: Long,
+        text: String,
+    ): List<Note> {
+        val session = accounts.currentSession() ?: throw NotSignedInException()
+        return session.client.documents.addNote(documentId, text)
+    }
+
+    /**
+     * Deletes a note of the document.
+     *
+     * @return the remaining notes, oldest first
+     * @throws NotSignedInException
+     */
+    suspend fun deleteNote(
+        documentId: Long,
+        noteId: Long,
+    ): List<Note> {
+        val session = accounts.currentSession() ?: throw NotSignedInException()
+        return session.client.documents.deleteNote(documentId, noteId)
     }
 
     /**

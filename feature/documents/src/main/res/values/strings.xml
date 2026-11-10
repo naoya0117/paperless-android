@@ -59,4 +59,14 @@
     <string name="viewer_save_failed">The file could not be saved to Downloads</string>
     <string name="viewer_delete_failed">The document could not be deleted. Check the connection and try again.</string>
     <string name="documents_view_missing">This view no longer exists.</string>
+    <string name="info_custom_fields">Custom fields</string>
+    <string name="info_custom_field_unknown">Field #%1$d</string>
+    <string name="info_yes">Yes</string>
+    <string name="info_no">No</string>
+    <string name="info_linked_documents">Documents %1$s</string>
+    <string name="info_note_hint">Add a note</string>
+    <string name="info_note_add">Add note</string>
+    <string name="info_note_delete">Delete note</string>
+    <string name="viewer_note_add_failed">The note could not be added. Check the connection and try again.</string>
+    <string name="viewer_note_delete_failed">The note could not be deleted. Check the connection and try again.</string>
 </resources>
