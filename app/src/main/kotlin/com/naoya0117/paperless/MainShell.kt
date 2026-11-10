@@ -385,10 +385,23 @@ fun MainShell(
                     }
                 },
                 popEnterTransition = {
-                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, initialOffset = { it / 4 }) +
+                    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
                         fadeIn()
+                    } else {
+                        slideIntoContainer(
+                            AnimatedContentTransitionScope.SlideDirection.End,
+                            initialOffset = { it / 4 },
+                        ) +
+                            fadeIn()
+                    }
                 },
-                popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End) },
+                popExitTransition = {
+                    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
+                        fadeOut()
+                    } else {
+                        slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End)
+                    }
+                },
             ) {
                 LIST_ROUTES.forEach { (path, mode) ->
                     composable(

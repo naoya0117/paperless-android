@@ -74,21 +74,25 @@ class PdfPages private constructor(
             }
         }
 
+    /** On Android 12–14 the search renderer could not open this PDF: page search is not tried again. */
+    @Volatile private var searcherFailed = false
+
     /**
-     * Where [query] occurs, page by page (Android 15+: PdfRenderer finds text in the PDF's text layer, e.g. the
-     * OCR layer of archived documents). Other work (rendering) may run between pages.
+     * Where [query] occurs, page by page: PdfRenderer finds text in the PDF's text layer (e.g. the OCR layer of
+     * archived documents); other work (rendering) may run between pages. `null` if the pages cannot be
+     * searched (see [canSearchPages]; on Android 12–14 also if the search renderer cannot open the PDF).
      *
      * @throws IllegalStateException if closed meanwhile
      */
     @SuppressLint("NewApi") // canSearchPages checks the API level and the SDK extension.
-    suspend fun search(query: String): List<SearchMatch.InPage> {
-        check(canSearchPages) { "Page search needs Android 15, or 12+ with SDK extension 13" }
+    suspend fun search(query: String): List<SearchMatch.InPage>? {
+        if (!canSearchPages || searcherFailed) return null
         val matches = mutableListOf<SearchMatch.InPage>()
         for (index in 0 until pageCount) {
             if (matches.size >= MAX_TEXT_MATCHES) break
             currentCoroutineContext().ensureActive()
             matches +=
-                lock.withLock {
+                lock.withLock<List<SearchMatch.InPage>?> {
                     withContext(Dispatchers.IO) {
                         check(!closed) { "closed" }
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
@@ -96,12 +100,21 @@ class PdfPages private constructor(
                                 pageMatches(index, page.width, page.height, page.searchText(query))
                             }
                         } else {
-                            preV().openPage(index).use { page ->
+                            val renderer =
+                                try {
+                                    preV()
+                                } catch (
+                                    @Suppress("TooGenericExceptionCaught") _: Exception,
+                                ) {
+                                    searcherFailed = true
+                                    return@withContext null
+                                }
+                            renderer.openPage(index).use { page ->
                                 pageMatches(index, page.width, page.height, page.searchText(query))
                             }
                         }
                     }
-                }
+                } ?: return null
         }
         return matches.take(MAX_TEXT_MATCHES)
     }
@@ -109,9 +122,8 @@ class PdfPages private constructor(
     @RequiresExtension(extension = Build.VERSION_CODES.S, version = PREV_EXTENSION)
     private fun preV(): PdfRendererPreV =
         (searcher as? PreVSearcher)?.renderer
-            ?: PreVSearcher(
-                ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY),
-            ).also { searcher = it }.renderer
+            // The file shown (the cache may have replaced or deleted the one at its path meanwhile).
+            ?: PreVSearcher(descriptor.dup()).also { searcher = it }.renderer
 
     @RequiresExtension(extension = Build.VERSION_CODES.S, version = PREV_EXTENSION)
     private class PreVSearcher(
@@ -170,9 +182,10 @@ class PdfPages private constructor(
         closed = true
         CLOSER.launch {
             lock.withLock {
-                renderer.close()
-                descriptor.close()
-                searcher?.close()
+                // Each on its own: one failing does not leave the others open.
+                runCatching { renderer.close() }
+                runCatching { descriptor.close() }
+                runCatching { searcher?.close() }
             }
         }
     }

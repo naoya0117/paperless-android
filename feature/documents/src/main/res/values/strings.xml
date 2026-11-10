@@ -89,7 +89,7 @@
         <item quantity="other">%1$d documents deleted permanently</item>
     </plurals>
     <string name="trash_gone">That document is no longer in the trash</string>
-    <string name="trash_partial">Shown: %1$d / %2$d</string>
+    <string name="trash_partial">Showing %1$d / %2$d</string>
     <plurals name="trash_empty_message">
         <item quantity="one">Its document is deleted permanently. This cannot be undone.</item>
         <item quantity="other">All %1$d documents in it are deleted permanently. This cannot be undone.</item>

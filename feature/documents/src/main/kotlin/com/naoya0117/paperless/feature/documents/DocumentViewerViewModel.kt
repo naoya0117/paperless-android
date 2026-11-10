@@ -264,11 +264,11 @@ class DocumentViewerViewModel
             query: String,
             content: ViewerContent,
         ): List<SearchMatch> {
-            if (content is ViewerContent.Pdf && PdfPages.canSearchPages) {
+            if (content is ViewerContent.Pdf) {
                 // A PDF without a text layer (e.g. a scan without an archived version) finds nothing there.
                 content.pages
                     .search(query)
-                    .takeIf { it.isNotEmpty() }
+                    ?.takeIf { it.isNotEmpty() }
                     ?.let { return it }
             }
             return withContext(Dispatchers.Default) { searchText(fullText(), query) }
