@@ -87,11 +87,16 @@ Settings → Secrets and variables → Actions に、次を登録します。
 
 | 種類 | 名前 | 値 |
 |---|---|---|
-| Secret | `SIGNING_KEYSTORE_BASE64` | `base64 -i ~/keys/paperless-android-release.jks \| pbcopy` でコピーしたもの |
+| Secret | `SIGNING_KEYSTORE_BASE64` | 鍵ファイルを base64 にしたもの（下のコマンドでクリップボードにコピーされる） |
 | Secret | `SIGNING_STORE_PASSWORD` | ストアのパスワード |
 | Secret | `SIGNING_KEY_ALIAS` | `paperless-android` |
 | Secret | `SIGNING_KEY_PASSWORD` | ストアのパスワードと同じ値 |
 | Variable | `SIGNING_CERT_SHA256` | 証明書の SHA-256 フィンガープリント（`keytool` の表示のまま、コロン区切りでよい） |
+
+```bash
+base64 -i ~/keys/paperless-android-release.jks | pbcopy   # macOS
+pbpaste | head -c 40                                     # 英数字と + / だけが並んでいれば正しい
+```
 
 - Secrets は Settings → Environments で Environment `release` を作ってそこに登録し、Deployment branches and tags を
   「Selected branches and tags」にしてタグ `v*` だけを許可します。こうするとタグのビルド以外からは鍵を読めません
