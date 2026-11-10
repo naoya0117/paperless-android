@@ -154,7 +154,7 @@ class DocumentListViewModelTest {
 
     @Test
     fun `the search text is kept across process death`() {
-        val savedState = SavedStateHandle(mapOf(DocumentListViewModel.MODE_ARGUMENT to DocumentListMode.ALL.name))
+        val savedState = SavedStateHandle(mapOf(DocumentListViewModel.MODE_ARGUMENT to DocumentListMode.SEARCH.name))
         viewModel(savedState).setSearchText("invoice")
 
         assertEquals("invoice", viewModel(savedState).searchText.value)
@@ -284,7 +284,7 @@ class DocumentListViewModelTest {
     @Test
     fun `clearing the search applies at once`() =
         runTest {
-            val viewModel = viewModel(DocumentListMode.ALL)
+            val viewModel = viewModel(DocumentListMode.SEARCH)
             viewModel.setSearchText("invoice")
             withContext(
                 Dispatchers.Default,

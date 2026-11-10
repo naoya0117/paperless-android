@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -21,6 +23,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
@@ -35,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -43,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -61,14 +68,31 @@ import com.naoya0117.paperless.feature.documents.InboxViewModel
 import kotlinx.coroutines.launch
 
 private const val DOCUMENTS_ROUTE = "documents"
+private const val SEARCH_ROUTE = "search"
 private const val INBOX_ROUTE = "inbox"
-private val LIST_ROUTES = listOf(DOCUMENTS_ROUTE to DocumentListMode.ALL, INBOX_ROUTE to DocumentListMode.INBOX)
+private val LIST_ROUTES =
+    listOf(
+        DOCUMENTS_ROUTE to DocumentListMode.ALL,
+        SEARCH_ROUTE to DocumentListMode.SEARCH,
+        INBOX_ROUTE to DocumentListMode.INBOX,
+    )
+
+/** The bottom tabs: only what is used most; everything else is in the drawer (hamburger menu). */
+private enum class Tab(
+    val route: String,
+    val icon: ImageVector,
+    val label: Int,
+) {
+    DOCUMENTS(DOCUMENTS_ROUTE, Icons.Outlined.Description, R.string.title_documents),
+    SEARCH(SEARCH_ROUTE, Icons.Outlined.Search, R.string.title_search),
+}
+
 private const val DOCUMENT_ROUTE = "document/{${DocumentViewerViewModel.DOCUMENT_ID_ARGUMENT}}"
 private const val EDIT_ROUTE = "document/{${DocumentEditViewModel.DOCUMENT_ID_ARGUMENT}}/edit"
 
 /**
- * The signed-in app: the document list (with search) under a top bar with the drawer (hamburger menu) and the
- * inbox button, and the screens opened from it.
+ * The signed-in app: bottom tabs (documents, search) under a top bar with the drawer (hamburger menu) and, on
+ * the documents tab, the inbox button; and the screens opened from them.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,6 +104,7 @@ fun MainShell(
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
+    val tab = Tab.entries.firstOrNull { it.route == route }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val inboxCount by inbox.count.collectAsStateWithLifecycle()
@@ -108,7 +133,7 @@ fun MainShell(
     ModalNavigationDrawer(
         drawerState = drawerState,
         // Only from the list; elsewhere the edge swipe is the system's back gesture.
-        gesturesEnabled = route == DOCUMENTS_ROUTE,
+        gesturesEnabled = tab != null,
         drawerContent = {
             Drawer(
                 account = account,
@@ -119,21 +144,22 @@ fun MainShell(
             )
         },
     ) {
-        val listScreen = route == DOCUMENTS_ROUTE || route == INBOX_ROUTE
+        val listScreen = tab != null || route == INBOX_ROUTE
         Scaffold(
             // The lists share this bar; other screens (e.g. the viewer) bring their own.
             topBar = {
                 when (route) {
-                    DOCUMENTS_ROUTE ->
+                    DOCUMENTS_ROUTE, SEARCH_ROUTE ->
                         CenterAlignedTopAppBar(
-                            title = { Text(stringResource(R.string.title_documents)) },
+                            title = { Text(stringResource(tab?.label ?: R.string.title_documents)) },
                             navigationIcon = {
                                 IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                     Icon(Icons.Outlined.Menu, contentDescription = stringResource(R.string.menu_open))
                                 }
                             },
                             actions = {
-                                if (inboxCount > 0) {
+                                // The inbox belongs to the documents tab.
+                                if (route == DOCUMENTS_ROUTE && inboxCount > 0) {
                                     InboxButton(inboxCount) {
                                         navController.navigate(INBOX_ROUTE) {
                                             launchSingleTop =
@@ -158,6 +184,7 @@ fun MainShell(
                         )
                 }
             },
+            bottomBar = { if (tab != null) TabBar(tab, navController) },
             // Other screens (e.g. the viewer) are a Scaffold of their own and handle the system bars themselves.
             contentWindowInsets = if (listScreen) ScaffoldDefaults.contentWindowInsets else WindowInsets(0),
         ) { padding ->
@@ -208,6 +235,30 @@ fun MainShell(
                     DocumentEditScreen(onClose = { navController.popBackStack() })
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun TabBar(
+    current: Tab,
+    navController: NavHostController,
+) {
+    NavigationBar {
+        Tab.entries.forEach { item ->
+            NavigationBarItem(
+                selected = item == current,
+                onClick = {
+                    navController.navigate(item.route) {
+                        // The documents tab is the root; the others come back to it on Back.
+                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+                icon = { Icon(item.icon, contentDescription = null) },
+                label = { Text(stringResource(item.label)) },
+            )
         }
     }
 }

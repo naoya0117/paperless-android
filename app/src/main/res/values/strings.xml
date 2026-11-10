@@ -4,6 +4,7 @@
     <string name="app_name" translatable="false">Paperless</string>
     <string name="home_sign_out">Sign out</string>
     <string name="title_documents">Documents</string>
+    <string name="title_search">Search</string>
     <string name="title_inbox">Inbox</string>
     <string name="menu_open">Open menu</string>
     <string name="drawer_server_version">Paperless-ngx %1$s</string>

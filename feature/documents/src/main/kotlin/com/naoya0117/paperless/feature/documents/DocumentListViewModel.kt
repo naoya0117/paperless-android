@@ -31,11 +31,13 @@ import javax.inject.Inject
 
 /** Which documents a list shows. */
 enum class DocumentListMode {
-    /** All documents, or full-text search results while search text is entered. */
     ALL,
 
     /** Documents with an inbox tag (new, still to be checked). */
     INBOX,
+
+    /** Full-text search results for the entered text (the search tab). */
+    SEARCH,
 }
 
 @HiltViewModel
@@ -55,16 +57,10 @@ class DocumentListViewModel
 
         private val searchInput = MutableStateFlow(savedState.get<String>(SEARCH_KEY).orEmpty())
 
-        /** The search text as typed (for [DocumentListMode.ALL]). */
+        /** The search text as typed (for [DocumentListMode.SEARCH]). */
         val searchText: StateFlow<String> = searchInput.asStateFlow()
 
-        /** All documents, or the inbox. Kept while searching, so that clearing the search returns to it at once. */
-        val documentPages: Flow<PagingData<Document>> =
-            documents
-                .documents(if (mode == DocumentListMode.INBOX) DocumentQuery(inInbox = true) else DocumentQuery())
-                .cachedIn(viewModelScope)
-
-        /** The entered search text once typing pauses; empty when not searching (all documents only). */
+        /** The entered search text once typing pauses ([DocumentListMode.SEARCH]); empty when none. */
         @OptIn(FlowPreview::class)
         val activeSearch: StateFlow<String> =
             searchInput
@@ -75,19 +71,21 @@ class DocumentListViewModel
                 .distinctUntilChanged()
                 .stateIn(viewModelScope, SharingStarted.Eagerly, searchInput.value.trim())
 
-        /** Full-text search results for [activeSearch]; empty while not searching. */
+        /** The documents of [mode]; for a search without text, none. */
         @OptIn(ExperimentalCoroutinesApi::class)
-        val searchPages: Flow<PagingData<Document>> =
-            activeSearch
-                .flatMapLatest { text ->
-                    if (text.isEmpty()) {
-                        flowOf(
-                            PagingData.empty(),
-                        )
-                    } else {
-                        documents.documents(DocumentQuery(search = DocumentSearch.Text(text)))
+        val documentPages: Flow<PagingData<Document>> =
+            when (mode) {
+                DocumentListMode.ALL -> documents.documents(DocumentQuery())
+                DocumentListMode.INBOX -> documents.documents(DocumentQuery(inInbox = true))
+                DocumentListMode.SEARCH ->
+                    activeSearch.flatMapLatest { text ->
+                        if (text.isEmpty()) {
+                            flowOf(PagingData.empty())
+                        } else {
+                            documents.documents(DocumentQuery(search = DocumentSearch.Text(text)))
+                        }
                     }
-                }.cachedIn(viewModelScope)
+            }.cachedIn(viewModelScope)
 
         /** For thumbnails ([DocumentThumbnail]), which are cached per account. */
         val accountId: StateFlow<String?> =
