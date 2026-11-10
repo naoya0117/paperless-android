@@ -14,13 +14,14 @@ import com.naoya0117.paperless.core.network.PaperlessException
 import com.naoya0117.paperless.core.network.ServerUrl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.Base64
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 enum class LoginMethod { PASSWORD, TOKEN }
@@ -163,7 +164,7 @@ data class LoginState(
 /**
  * Signing in to a Paperless-ngx server, independent of how the screen looks. Non-secret input survives the
  * process being killed (e.g. while the user looks up a code in another app); passwords, tokens, codes and
- * header values do not.
+ * header values do not, and neither do trusted certificates (too large for saved state).
  */
 @HiltViewModel
 class LoginViewModel
@@ -175,6 +176,9 @@ class LoginViewModel
         private val mutableState = MutableStateFlow(restore())
         val state: StateFlow<LoginState> = mutableState.asStateFlow()
 
+        /** The account [signInAgain] last prepared the form for; reset by a successful sign-in. */
+        private var prefilledFor: String? = null
+
         /**
          * Prepares signing in again to an account (e.g. one that needs to sign in again): its server, user,
          * custom headers and TLS settings are kept. Only the first call per account has an effect, so it is safe
@@ -182,7 +186,9 @@ class LoginViewModel
          */
         fun signInAgain(accountId: String) {
             val current = mutableState.value
-            if (current.inProgress || current.reSignInAccountId == accountId) return
+            if (current.inProgress || prefilledFor == accountId) return
+            // Not saved: after process death the secret header values are read again.
+            prefilledFor = accountId
             mutableState.value = LoginState(reSignInAccountId = accountId)
             viewModelScope.launch {
                 val account =
@@ -249,18 +255,29 @@ class LoginViewModel
         /** The KeyChain alias chosen by the user, or `null` for no client certificate. */
         fun setClientCertificate(alias: String?) = edit { it.copy(tls = it.tls.copy(clientCertificateAlias = alias)) }
 
-        /** Adds the certificates in a PEM or DER file; sets [LoginError.INVALID_CERTIFICATE] if there are none. */
+        /**
+         * Adds the certificates in a PEM or DER file (parsed off the main thread); sets
+         * [LoginError.INVALID_CERTIFICATE] if there are none or there would be more than [MAX_TRUSTED_CERTIFICATES].
+         */
         fun addTrustedCertificates(bytes: ByteArray) {
-            val added =
-                try {
-                    TrustedCertificates.parse(bytes)
-                } catch (_: IllegalArgumentException) {
-                    edit { it.copy(error = LoginError.INVALID_CERTIFICATE) }
-                    return
+            if (mutableState.value.inProgress) return
+            viewModelScope.launch {
+                val added =
+                    withContext(Dispatchers.Default) {
+                        try {
+                            TrustedCertificates.parse(bytes)
+                        } catch (_: IllegalArgumentException) {
+                            null
+                        }
+                    }
+                edit { state ->
+                    val certificates = added?.let { (state.tls.trustedCertificates + it).distinct() }
+                    if (certificates == null || certificates.size > MAX_TRUSTED_CERTIFICATES) {
+                        state.copy(error = LoginError.INVALID_CERTIFICATE)
+                    } else {
+                        state.copy(tls = state.tls.copy(trustedCertificates = certificates))
+                    }
                 }
-            edit { state ->
-                val certificates = (state.tls.trustedCertificates + added).distinct()
-                state.copy(tls = state.tls.copy(trustedCertificates = certificates))
             }
         }
 
@@ -320,9 +337,9 @@ class LoginViewModel
                 mutableState.update { current ->
                     result.fold(
                         onSuccess = { account ->
-                            current
-                                .copy(inProgress = false, signedIn = account, password = "", token = "", mfaCode = "")
-                                .withoutError()
+                            // Nothing of the input is needed anymore (secrets included); the screen leaves.
+                            prefilledFor = null
+                            LoginState(signedIn = account)
                         },
                         onFailure = { current.failed(it) },
                     )
@@ -453,8 +470,6 @@ class LoginViewModel
             savedState[KEY_USERNAME] = state.username
             savedState[KEY_HEADER_NAMES] = ArrayList(state.headers.map { it.name })
             savedState[KEY_CLIENT_CERTIFICATE] = state.tls.clientCertificateAlias
-            savedState[KEY_CERTIFICATES] =
-                ArrayList(state.tls.trustedCertificates.map { BASE64.encodeToString(it.der) })
             savedState[KEY_RE_SIGN_IN] = state.reSignInAccountId
         }
 
@@ -471,24 +486,20 @@ class LoginViewModel
                 tls =
                     AccountTls(
                         clientCertificateAlias = savedState.get<String>(KEY_CLIENT_CERTIFICATE),
-                        trustedCertificates =
-                            savedState.get<ArrayList<String>>(KEY_CERTIFICATES).orEmpty().map {
-                                TrustedCertificate(BASE64_DECODER.decode(it))
-                            },
                     ),
                 reSignInAccountId = savedState.get<String>(KEY_RE_SIGN_IN),
             ).withServerUrl(url)
         }
 
-        private companion object {
-            const val KEY_URL = "login.serverUrl"
-            const val KEY_METHOD = "login.method"
-            const val KEY_USERNAME = "login.username"
-            const val KEY_HEADER_NAMES = "login.headerNames"
-            const val KEY_CLIENT_CERTIFICATE = "login.clientCertificate"
-            const val KEY_CERTIFICATES = "login.trustedCertificates"
-            const val KEY_RE_SIGN_IN = "login.reSignInAccountId"
-            val BASE64: Base64.Encoder = Base64.getEncoder()
-            val BASE64_DECODER: Base64.Decoder = Base64.getDecoder()
+        companion object {
+            /** Certificates per account; certificate files are small (see the screen's file size limit). */
+            const val MAX_TRUSTED_CERTIFICATES = 16
+
+            private const val KEY_URL = "login.serverUrl"
+            private const val KEY_METHOD = "login.method"
+            private const val KEY_USERNAME = "login.username"
+            private const val KEY_HEADER_NAMES = "login.headerNames"
+            private const val KEY_CLIENT_CERTIFICATE = "login.clientCertificate"
+            private const val KEY_RE_SIGN_IN = "login.reSignInAccountId"
         }
     }

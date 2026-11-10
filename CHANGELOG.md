@@ -46,3 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sign-in logic for the login screen (`:feature:login`): server URL check with a warning for plain HTTP,
   password or token, two-factor authentication codes, custom headers, client certificate and trusted
   certificates, errors by kind, and signing in again with an account's settings
+- Theme like the Paperless-ngx web interface: white or black surfaces with its green accent
+- Login screen with advanced settings for custom
+  headers, a client certificate from the KeyChain and trusted certificate files; English and Japanese
+- The app shows the login screen without an account (or when the active account must sign in again), and
+  otherwise a provisional home screen with sign-out

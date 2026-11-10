@@ -21,6 +21,7 @@ import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
 import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
+import okhttp3.tls.certificatePem
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -325,26 +326,84 @@ class LoginViewModelTest {
             assertEquals(LoginState(), viewModel.state.value)
         }
 
+    /** Waits until the state matches, on real time (certificates are parsed on another dispatcher). */
+    private suspend fun awaitState(predicate: (LoginState) -> Boolean): LoginState =
+        withContext(Dispatchers.Default.limitedParallelism(1)) {
+            withTimeout(10_000) { viewModel.state.first(predicate) }
+        }
+
     @Test
-    fun `certificates can be added and removed`() {
-        viewModel.addTrustedCertificates("not a certificate".encodeToByteArray())
-        assertEquals(LoginError.INVALID_CERTIFICATE, viewModel.state.value.error)
+    fun `certificates can be added and removed`() =
+        runTest {
+            viewModel.addTrustedCertificates("not a certificate".encodeToByteArray())
+            awaitState { it.error == LoginError.INVALID_CERTIFICATE }
 
-        val certificate =
-            HeldCertificate
-                .Builder()
-                .build()
-                .certificate.encoded
-        viewModel.addTrustedCertificates(certificate)
-        viewModel.addTrustedCertificates(certificate)
-        val added = viewModel.state.value.tls.trustedCertificates
-        assertEquals("duplicates are ignored", 1, added.size)
-        assertNull(viewModel.state.value.error)
+            val certificate =
+                HeldCertificate
+                    .Builder()
+                    .build()
+                    .certificate.encoded
+            viewModel.addTrustedCertificates(certificate)
+            awaitState { it.tls.trustedCertificates.size == 1 }
+            viewModel.addTrustedCertificates(certificate)
+            viewModel.setClientCertificate("my-cert") // queued after the second add
+            val added = awaitState { it.tls.clientCertificateAlias == "my-cert" }.tls.trustedCertificates
+            assertEquals("duplicates are ignored", 1, added.size)
 
-        viewModel.setClientCertificate("my-cert")
-        viewModel.removeTrustedCertificate(added.single())
-        assertEquals(AccountTls(clientCertificateAlias = "my-cert"), viewModel.state.value.tls)
-    }
+            viewModel.removeTrustedCertificate(added.single())
+            assertEquals(AccountTls(clientCertificateAlias = "my-cert"), viewModel.state.value.tls)
+        }
+
+    @Test
+    fun `at most a limited number of certificates is kept`() =
+        runTest {
+            val pem =
+                (1..LoginViewModel.MAX_TRUSTED_CERTIFICATES + 1).joinToString("") {
+                    HeldCertificate.Builder().build().certificatePem()
+                }
+
+            viewModel.addTrustedCertificates(pem.encodeToByteArray())
+
+            assertEquals(emptyList<Any>(), awaitState { it.error != null }.tls.trustedCertificates)
+        }
+
+    @Test
+    fun `after process death signing in again reads the header values again`() =
+        runTest {
+            server.enqueue(uiSettings)
+            val account = accounts.signInWithToken(url(), AuthToken("abc"), listOf("X-Proxy" to "secret"), AccountTls())
+            viewModel.signInAgain(account.id)
+            awaitState { it.headers.isNotEmpty() }
+
+            val restored = LoginViewModel(accounts, savedState)
+            assertEquals(listOf(HeaderInput("X-Proxy", "")), restored.state.value.headers)
+            restored.signInAgain(account.id)
+
+            val state =
+                withContext(Dispatchers.Default.limitedParallelism(1)) {
+                    withTimeout(10_000) { restored.state.first { it.headers.singleOrNull()?.value == "secret" } }
+                }
+            assertEquals(account.id, state.reSignInAccountId)
+        }
+
+    @Test
+    fun `a sign-in clears the form and allows preparing the same account again`() =
+        runTest {
+            server.enqueue(uiSettings)
+            val account = accounts.signInWithToken(url(), AuthToken("abc"), tls = AccountTls())
+            viewModel.signInAgain(account.id)
+            awaitState { it.username == "alice" }
+            server.enqueue(uiSettings)
+            viewModel.setMethod(LoginMethod.TOKEN)
+            viewModel.setToken("new")
+            viewModel.submit()
+            val signedIn = awaitDone()
+            assertEquals(LoginState(signedIn = signedIn.signedIn), signedIn)
+
+            viewModel.signInAgain(account.id) // e.g. the token expired again before the screen was left
+
+            assertEquals("alice", awaitState { it.username == "alice" }.username)
+        }
 
     @Test
     fun `signing in again keeps the account's settings and headers, once`() =

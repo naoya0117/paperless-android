@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_signed_in_as">%2$s に %1$s としてサインインしています</string>
+    <string name="home_server_version">Paperless-ngx %1$s</string>
+    <string name="home_sign_out">サインアウト</string>
+</resources>
