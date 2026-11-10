@@ -7,4 +7,20 @@
     <string name="documents_empty">文書はまだありません。</string>
     <string name="documents_load_error">文書を読み込めませんでした。</string>
     <string name="documents_retry">再試行</string>
+    <string name="viewer_back">戻る</string>
+    <string name="viewer_info">詳細</string>
+    <string name="viewer_edit">編集</string>
+    <string name="viewer_page">%2$d ページ中 %1$d ページ目</string>
+    <string name="viewer_unsupported">この形式のファイルはここでは表示できません（%1$s）。</string>
+    <string name="viewer_failed">文書を読み込めませんでした。</string>
+    <string name="info_created">作成日</string>
+    <string name="info_correspondent">担当者</string>
+    <string name="info_document_type">文書種別</string>
+    <string name="info_storage_path">保存パス</string>
+    <string name="info_archive_serial_number">ASN</string>
+    <string name="info_pages">ページ数</string>
+    <string name="info_original_file_name">元のファイル</string>
+    <string name="info_added">追加日時</string>
+    <string name="info_modified">更新日時</string>
+    <string name="info_notes">メモ</string>
 </resources>

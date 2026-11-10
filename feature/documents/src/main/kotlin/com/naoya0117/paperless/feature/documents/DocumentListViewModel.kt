@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -40,20 +39,6 @@ enum class DocumentListMode {
     /** Full-text search results for the typed text. */
     SEARCH,
 }
-
-/** Names and colors to show for the IDs on a document. */
-data class LabelNames(
-    val correspondents: Map<Long, String> = emptyMap(),
-    val documentTypes: Map<Long, String> = emptyMap(),
-    val tags: Map<Long, TagLabel> = emptyMap(),
-)
-
-data class TagLabel(
-    val name: String,
-    /** `#rrggbb` */
-    val color: String,
-    val textColor: String,
-)
 
 @HiltViewModel
 class DocumentListViewModel
@@ -103,17 +88,7 @@ class DocumentListViewModel
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
         val labelNames: StateFlow<LabelNames> =
-            combine(
-                labels.correspondents.items,
-                labels.documentTypes.items,
-                labels.tags.items,
-            ) { correspondents, types, tags ->
-                LabelNames(
-                    correspondents = correspondents.associate { it.id to it.name },
-                    documentTypes = types.associate { it.id to it.name },
-                    tags = tags.associate { it.id to TagLabel(it.name, it.color, it.textColor) },
-                )
-            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), LabelNames())
+            labels.names().stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), LabelNames())
 
         init {
             refreshLabels()

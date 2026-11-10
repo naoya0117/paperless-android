@@ -7,4 +7,20 @@
     <string name="documents_empty">No documents yet.</string>
     <string name="documents_load_error">Could not load documents.</string>
     <string name="documents_retry">Retry</string>
+    <string name="viewer_back">Back</string>
+    <string name="viewer_info">Details</string>
+    <string name="viewer_edit">Edit</string>
+    <string name="viewer_page">Page %1$d of %2$d</string>
+    <string name="viewer_unsupported">This file type cannot be shown here (%1$s).</string>
+    <string name="viewer_failed">The document could not be loaded.</string>
+    <string name="info_created">Created</string>
+    <string name="info_correspondent">Correspondent</string>
+    <string name="info_document_type">Document type</string>
+    <string name="info_storage_path">Storage path</string>
+    <string name="info_archive_serial_number">ASN</string>
+    <string name="info_pages">Pages</string>
+    <string name="info_original_file_name">Original file</string>
+    <string name="info_added">Added</string>
+    <string name="info_modified">Modified</string>
+    <string name="info_notes">Notes</string>
 </resources>

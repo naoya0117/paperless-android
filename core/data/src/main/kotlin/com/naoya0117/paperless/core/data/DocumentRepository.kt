@@ -104,6 +104,32 @@ class DocumentRepository internal constructor(
     }
 
     /**
+     * The document as cached for the active account (from a list), or `null` if it is not cached (e.g. it was
+     * opened from a link). Updated when the document is edited or fetched again.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun cached(id: Long): Flow<Document?> =
+        accounts.activeClient.flatMapLatest {
+            flow {
+                val session = accounts.currentSession()
+                if (session == null) emit(null) else emitAll(cache.observe(session.account.id, id))
+            }
+        }
+
+    /**
+     * The document from the server (with its full content and notes); also refreshes the cached copy.
+     *
+     * @throws NotSignedInException
+     * @throws PaperlessException e.g. when offline
+     */
+    suspend fun fetch(id: Long): Document {
+        val session = accounts.currentSession() ?: throw NotSignedInException()
+        val document = session.client.documents.get(id)
+        writeThrough(session) { cache.update(session.account.id, document) }
+        return document
+    }
+
+    /**
      * Updates the document on the server and in the cache.
      *
      * @throws NotSignedInException

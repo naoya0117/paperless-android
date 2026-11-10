@@ -1,0 +1,198 @@
+package com.naoya0117.paperless.feature.documents
+
+import androidx.lifecycle.SavedStateHandle
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.test.core.app.ApplicationProvider
+import com.naoya0117.paperless.core.data.AccountRepository
+import com.naoya0117.paperless.core.data.DocumentFileRepository
+import com.naoya0117.paperless.core.data.DocumentFileStorage
+import com.naoya0117.paperless.core.data.DocumentRepository
+import com.naoya0117.paperless.core.data.LabelRepository
+import com.naoya0117.paperless.core.data.PaperlessClientFactory
+import com.naoya0117.paperless.core.database.OfflineCache
+import com.naoya0117.paperless.core.datastore.AccountStore
+import com.naoya0117.paperless.core.datastore.SecretCipher
+import com.naoya0117.paperless.core.model.AccountTls
+import com.naoya0117.paperless.core.model.AuthToken
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import mockwebserver3.Dispatcher
+import mockwebserver3.MockResponse
+import mockwebserver3.MockWebServer
+import mockwebserver3.RecordedRequest
+import okhttp3.OkHttpClient
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import java.net.Proxy
+import java.time.Instant
+import java.util.concurrent.atomic.AtomicBoolean
+
+@OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
+class DocumentViewerViewModelTest {
+    @get:Rule
+    val folder = TemporaryFolder()
+
+    private val server = MockWebServer()
+    private val cache = OfflineCache.inMemory(ApplicationProvider.getApplicationContext(), BundledSQLiteDriver())
+    private lateinit var accounts: AccountRepository
+    private val offline = AtomicBoolean(false)
+
+    @Volatile private var previewType = "image/png"
+
+    private object XorCipher : SecretCipher {
+        override fun encrypt(plain: ByteArray) = plain.map { (it.toInt() xor 0x33).toByte() }.toByteArray()
+
+        override fun decrypt(encrypted: ByteArray) = encrypt(encrypted)
+    }
+
+    private fun json(body: String) =
+        MockResponse
+            .Builder()
+            .code(200)
+            .addHeader("Content-Type", "application/json")
+            .addHeader("X-Api-Version", "10")
+            .body(body)
+            .build()
+
+    private val documentJson =
+        """{"id": 1, "title": "Invoice", "content": "full text", "created": "2026-01-01",""" +
+            """ "added": "2026-01-01T00:00:00Z", "modified": "2026-01-01T00:00:00Z", "original_file_name": "scan.docx"}"""
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        server.dispatcher =
+            object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    val path = request.url.encodedPath
+                    return when {
+                        path == "/api/ui_settings/" ->
+                            json(
+                                """{"user": {"id": 3, "username": "alice"}, "settings": {}}""",
+                            )
+                        offline.get() ->
+                            MockResponse
+                                .Builder()
+                                .code(503)
+                                .body("{}")
+                                .build()
+                        path == "/api/documents/1/" -> json(documentJson)
+                        path == "/api/documents/1/preview/" ->
+                            MockResponse
+                                .Builder()
+                                .code(200)
+                                .addHeader("Content-Type", previewType)
+                                .addHeader("Content-Disposition", "inline; filename=\"scan.docx\"")
+                                .body("not really an image")
+                                .build()
+                        else -> json("""{"count": 0, "next": null, "results": []}""")
+                    }
+                }
+            }
+        server.start()
+        accounts =
+            AccountRepository(
+                AccountStore.create(folder.root.resolve("accounts.json"), XorCipher),
+                PaperlessClientFactory(OkHttpClient.Builder().proxy(Proxy.NO_PROXY).build()),
+                { error("no client certificates in this test") },
+                { cache.clear(it) },
+            )
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+        server.close()
+    }
+
+    private val filesDir by lazy { folder.newFolder() }
+
+    private fun viewModel() =
+        DocumentViewerViewModel(
+            DocumentRepository(accounts, cache),
+            DocumentFileRepository(accounts, DocumentFileStorage(filesDir)),
+            LabelRepository(accounts, cache),
+            SavedStateHandle(mapOf(DocumentViewerViewModel.DOCUMENT_ID_ARGUMENT to 1L)),
+        )
+
+    private suspend fun DocumentViewerViewModel.awaitState(predicate: (ViewerState) -> Boolean): ViewerState =
+        withContext(Dispatchers.Default.limitedParallelism(1)) { withTimeout(10_000) { state.first(predicate) } }
+
+    private suspend fun signIn() =
+        accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls())
+
+    @Test
+    fun `an image document is shown with its details`() =
+        runTest {
+            signIn()
+
+            val state = viewModel().awaitState { it.content !is ViewerContent.Loading && it.document != null }
+
+            assertTrue(state.content.toString(), state.content is ViewerContent.Image)
+            assertEquals("Invoice", state.document?.title)
+        }
+
+    @Test
+    fun `other file types are reported as unsupported`() =
+        runTest {
+            signIn()
+            previewType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+            val state = viewModel().awaitState { it.content !is ViewerContent.Loading }
+
+            assertEquals(ViewerContent.Unsupported("scan.docx"), state.content)
+        }
+
+    @Test
+    fun `a listed document opened before can be shown offline`() =
+        runTest {
+            val account = signIn()
+            val document = viewModel().awaitState { it.content is ViewerContent.Image }.document!!
+            // As if it had been listed (documents are opened from lists, which cache them).
+            cache.documents.replaceList(account.id, "list", listOf(document), null, Instant.now())
+            offline.set(true)
+
+            val state = viewModel().awaitState { it.content !is ViewerContent.Loading }
+
+            assertTrue(state.content.toString(), state.content is ViewerContent.Image)
+        }
+
+    @Test
+    fun `a document neither cached nor reachable fails and can be retried`() =
+        runTest {
+            signIn()
+            offline.set(true)
+            val viewModel = viewModel()
+
+            assertTrue(viewModel.awaitState { it.content is ViewerContent.Failed }.documentFailed)
+
+            offline.set(false)
+            viewModel.retry()
+            assertTrue(viewModel.awaitState { it.content is ViewerContent.Image }.document != null)
+        }
+
+    @Test
+    fun `tapping toggles the details`() {
+        val viewModel = viewModel()
+
+        viewModel.toggleInfo()
+        assertTrue(viewModel.infoVisible.value)
+        viewModel.toggleInfo()
+        assertEquals(false, viewModel.infoVisible.value)
+    }
+}
