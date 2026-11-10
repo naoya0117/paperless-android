@@ -50,6 +50,7 @@ dependencies {
     implementation(projects.feature.login)
     implementation(projects.feature.documents)
     implementation(projects.feature.uploads)
+    implementation(projects.feature.labels)
     implementation(libs.navigation.compose)
     implementation(libs.compose.material.icons.extended)
     implementation(libs.coil.compose)
