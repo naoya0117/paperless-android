@@ -232,17 +232,21 @@ fun MainShell(
                 account = account,
                 onUploads = {
                     scope.launch { drawerState.close() }
-                    navController.navigate(UPLOADS_ROUTE) { launchSingleTop = true }
+                    if (navController.currentDestination?.route in TAB_ROUTES) navController.navigate(UPLOADS_ROUTE)
                 },
                 savedViews = savedViews,
                 onSavedView = { view ->
                     scope.launch { drawerState.close() }
-                    // Once only: a second tap while the menu closes must not replace the opened view.
+                    // Once only: a second tap while the menu closes must not open another screen on top.
                     if (navController.currentDestination?.route in TAB_ROUTES) navController.navigate("view/${view.id}")
                 },
                 onLabels = { kind ->
                     scope.launch { drawerState.close() }
-                    navController.navigate("labels/${kind.key}") { launchSingleTop = true }
+                    if (navController.currentDestination?.route in
+                        TAB_ROUTES
+                    ) {
+                        navController.navigate("labels/${kind.key}")
+                    }
                 },
                 onSignOut = {
                     scope.launch { drawerState.close() }

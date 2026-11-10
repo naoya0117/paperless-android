@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -22,7 +23,7 @@ import javax.inject.Inject
 class DrawerViewModel
     @Inject
     constructor(
-        labels: LabelRepository,
+        private val labels: LabelRepository,
         private val accounts: AccountRepository,
     ) : ViewModel() {
         /** The views the user shows in the web UI's sidebar, in that order; `null` if unknown (e.g. offline). */
@@ -52,23 +53,30 @@ class DrawerViewModel
             }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
         init {
+            // Again whenever the saved views were refreshed (e.g. pull to refresh, or once back online).
             viewModelScope.launch {
-                sidebarIds.value =
-                    try {
-                        accounts
-                            .currentSession()
-                            ?.client
-                            ?.server
-                            ?.fetchSavedViewVisibility()
-                            ?.sidebarViewIds
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (
-                        @Suppress("TooGenericExceptionCaught") _: Exception,
-                    ) {
-                        // Offline or not allowed: all views are listed.
-                        null
-                    }
+                labels.savedViews.refreshedAt
+                    .distinctUntilChanged()
+                    .collect { fetchSidebar() }
             }
+        }
+
+        private suspend fun fetchSidebar() {
+            sidebarIds.value =
+                try {
+                    accounts
+                        .currentSession()
+                        ?.client
+                        ?.server
+                        ?.fetchSavedViewVisibility()
+                        ?.sidebarViewIds
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (
+                    @Suppress("TooGenericExceptionCaught") _: Exception,
+                ) {
+                    // Offline or not allowed: as known before (all views if never known).
+                    sidebarIds.value
+                }
         }
     }
