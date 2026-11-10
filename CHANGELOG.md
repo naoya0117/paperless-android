@@ -75,3 +75,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page search also on Android 12–14 with the updated PDF renderer; screens slide in and out alike for the back
   button and the back gesture
 - The lists' top bars and tabs belong to their screens, so the back gesture shows the screen underneath with them
+- Long press on a document in a list: a menu to edit, share, open in another app, download or delete it

@@ -100,4 +100,7 @@
     <string name="viewer_search_previous">前の一致</string>
     <string name="viewer_search_next">次の一致</string>
     <string name="viewer_search_in_text">文書の本文から</string>
+    <string name="documents_moved_to_trash">ごみ箱へ移動しました</string>
+    <string name="documents_open">開く</string>
+    <string name="documents_menu">その他の操作</string>
 </resources>

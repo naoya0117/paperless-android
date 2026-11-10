@@ -176,7 +176,8 @@ fun DocumentViewerScreen(
             viewModel.events.collect { event ->
                 when (event) {
                     is ViewerEvent.SendFile ->
-                        if (!context.sendFile(event)) {
+                        // Not long after it was asked for (e.g. back from the editor minutes later).
+                        if (!event.stale && !context.sendFile(event)) {
                             snackbar.showSnackbar(resources.getString(R.string.viewer_no_app))
                         }
                     is ViewerEvent.Saved ->
@@ -323,7 +324,11 @@ fun DocumentViewerScreen(
                                         onShare = viewModel::share,
                                         onOpen = viewModel::openExternally,
                                         onDownload = viewModel::download,
-                                        onDelete = { confirmDelete = true },
+                                        onDelete =
+                                            { confirmDelete = true }.takeIf {
+                                                state.document?.userCanChange ==
+                                                    true
+                                            },
                                         actionsEnabled = !state.busy,
                                     )
                                 }
@@ -384,7 +389,7 @@ private fun ViewerMenu(
     onShare: () -> Unit,
     onOpen: () -> Unit,
     onDownload: () -> Unit,
-    onDelete: () -> Unit,
+    onDelete: (() -> Unit)?,
     /** File actions and deleting wait while one runs; the search does not. */
     actionsEnabled: Boolean,
 ) {
@@ -408,12 +413,15 @@ private fun ViewerMenu(
         item(R.string.viewer_share, Icons.Outlined.Share, onShare)
         item(R.string.viewer_open_with, Icons.AutoMirrored.Outlined.OpenInNew, onOpen)
         item(R.string.viewer_download, Icons.Outlined.Download, onDownload)
-        HorizontalDivider()
-        item(R.string.viewer_delete, Icons.Outlined.Delete, onDelete)
+        // Only with permission to change the document (like in the lists).
+        if (onDelete != null) {
+            HorizontalDivider()
+            item(R.string.viewer_delete, Icons.Outlined.Delete, onDelete)
+        }
     }
 }
 
-private fun ViewerEvent.Failed.message(): Int =
+internal fun ViewerEvent.Failed.message(): Int =
     when (action) {
         FileAction.SHARE, FileAction.OPEN ->
             if (reason == FailureReason.STORAGE) R.string.viewer_file_storage_failed else R.string.viewer_file_failed
@@ -425,7 +433,7 @@ private fun ViewerEvent.Failed.message(): Int =
     }
 
 /** Starts an app for the file (a chooser to share it); `false` if there is none. */
-private fun Context.sendFile(event: ViewerEvent.SendFile): Boolean {
+internal fun Context.sendFile(event: ViewerEvent.SendFile): Boolean {
     val intent =
         if (event.open) {
             Intent(Intent.ACTION_VIEW).setDataAndType(event.uri, event.mimeType)

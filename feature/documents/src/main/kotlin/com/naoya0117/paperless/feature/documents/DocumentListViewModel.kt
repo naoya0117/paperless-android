@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.naoya0117.paperless.core.data.AccountRepository
+import com.naoya0117.paperless.core.data.ApplicationScope
 import com.naoya0117.paperless.core.data.DocumentRepository
 import com.naoya0117.paperless.core.data.LabelRepository
 import com.naoya0117.paperless.core.model.Document
@@ -15,8 +16,10 @@ import com.naoya0117.paperless.core.model.SavedView
 import com.naoya0117.paperless.core.network.toDocumentQuery
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,6 +31,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -54,7 +58,56 @@ class DocumentListViewModel
         private val labels: LabelRepository,
         accounts: AccountRepository,
         private val savedState: SavedStateHandle,
+        private val actions: DocumentActions,
+        @ApplicationScope private val applicationScope: CoroutineScope,
     ) : ViewModel() {
+        private val busy = MutableStateFlow(false)
+
+        /** An action on a document (from the long-press menu) runs; the others wait. */
+        val actionRunning: StateFlow<Boolean> = busy.asStateFlow()
+
+        private val eventChannel = Channel<ViewerEvent>(Channel.BUFFERED)
+
+        /** What came of an action, shown once. */
+        val events: Flow<ViewerEvent> = eventChannel.receiveAsFlow()
+
+        fun share(document: Document) =
+            run(document, FileAction.SHARE, viewModelScope) { actions.send(it, open = false) }
+
+        fun openExternally(document: Document) =
+            run(document, FileAction.OPEN, viewModelScope) { actions.send(it, open = true) }
+
+        /** Finished even if the list is left. */
+        fun download(document: Document) = run(document, FileAction.DOWNLOAD, applicationScope) { actions.download(it) }
+
+        /** Moves it to the trash; finished even if the list is left (the cached lists follow the server). */
+        fun delete(document: Document) = run(document, FileAction.DELETE, applicationScope) { actions.delete(it) }
+
+        private fun run(
+            document: Document,
+            action: FileAction,
+            scope: CoroutineScope,
+            block: suspend (Document) -> ViewerEvent,
+        ) {
+            if (!busy.compareAndSet(expect = false, update = true)) return
+            scope.launch {
+                val event =
+                    try {
+                        block(document)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (
+                        @Suppress("TooGenericExceptionCaught") e: Exception,
+                    ) {
+                        DocumentActions.failed(action, e)
+                    } finally {
+                        busy.value = false
+                    }
+                // Not waiting: the list may be gone; the event is shown when it is visible again.
+                eventChannel.trySend(event)
+            }
+        }
+
         val mode: DocumentListMode =
             savedState.get<String>(MODE_ARGUMENT)?.let { name ->
                 DocumentListMode.entries.firstOrNull { it.name == name }
