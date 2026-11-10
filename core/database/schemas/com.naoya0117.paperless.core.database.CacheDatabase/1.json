@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "3578ba2dda3620b8b12784f142c75414",
+    "identityHash": "e12a0c43ddb1f842ffe3afc317f9a4f7",
     "entities": [
       {
         "tableName": "tags",
@@ -490,11 +490,251 @@
             "kind"
           ]
         }
+      },
+      {
+        "tableName": "documents",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` TEXT NOT NULL, `id` INTEGER NOT NULL, `title` TEXT NOT NULL, `content` TEXT NOT NULL, `created` TEXT NOT NULL, `added` INTEGER NOT NULL, `modified` INTEGER NOT NULL, `correspondentId` INTEGER, `documentTypeId` INTEGER, `storagePathId` INTEGER, `tagIdsJson` TEXT NOT NULL, `archiveSerialNumber` INTEGER, `originalFileName` TEXT, `archivedFileName` TEXT, `mimeType` TEXT, `pageCount` INTEGER, `customFieldsJson` TEXT NOT NULL, `notesJson` TEXT, `owner` INTEGER, `userCanChange` INTEGER NOT NULL, `deletedAt` INTEGER, PRIMARY KEY(`accountId`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "created",
+            "columnName": "created",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "added",
+            "columnName": "added",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modified",
+            "columnName": "modified",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "correspondentId",
+            "columnName": "correspondentId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "documentTypeId",
+            "columnName": "documentTypeId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "storagePathId",
+            "columnName": "storagePathId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "tagIdsJson",
+            "columnName": "tagIdsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archiveSerialNumber",
+            "columnName": "archiveSerialNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "originalFileName",
+            "columnName": "originalFileName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "archivedFileName",
+            "columnName": "archivedFileName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mimeType",
+            "columnName": "mimeType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "pageCount",
+            "columnName": "pageCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "customFieldsJson",
+            "columnName": "customFieldsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notesJson",
+            "columnName": "notesJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "owner",
+            "columnName": "owner",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "userCanChange",
+            "columnName": "userCanChange",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deletedAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "accountId",
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "document_lists",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` TEXT NOT NULL, `listKey` TEXT NOT NULL, `nextPage` INTEGER, `refreshedAt` INTEGER NOT NULL, PRIMARY KEY(`accountId`, `listKey`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "listKey",
+            "columnName": "listKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextPage",
+            "columnName": "nextPage",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "refreshedAt",
+            "columnName": "refreshedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "accountId",
+            "listKey"
+          ]
+        }
+      },
+      {
+        "tableName": "document_list_items",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` TEXT NOT NULL, `listKey` TEXT NOT NULL, `position` INTEGER NOT NULL, `documentId` INTEGER NOT NULL, `searchScore` REAL, `searchRank` INTEGER, `searchHighlights` TEXT, PRIMARY KEY(`accountId`, `listKey`, `position`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "listKey",
+            "columnName": "listKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "documentId",
+            "columnName": "documentId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "searchScore",
+            "columnName": "searchScore",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "searchRank",
+            "columnName": "searchRank",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "searchHighlights",
+            "columnName": "searchHighlights",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "accountId",
+            "listKey",
+            "position"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_document_list_items_accountId_listKey_documentId",
+            "unique": true,
+            "columnNames": [
+              "accountId",
+              "listKey",
+              "documentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_document_list_items_accountId_listKey_documentId` ON `${TABLE_NAME}` (`accountId`, `listKey`, `documentId`)"
+          },
+          {
+            "name": "index_document_list_items_accountId_documentId",
+            "unique": false,
+            "columnNames": [
+              "accountId",
+              "documentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_document_list_items_accountId_documentId` ON `${TABLE_NAME}` (`accountId`, `documentId`)"
+          }
+        ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3578ba2dda3620b8b12784f142c75414')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e12a0c43ddb1f842ffe3afc317f9a4f7')"
     ]
   }
 }
