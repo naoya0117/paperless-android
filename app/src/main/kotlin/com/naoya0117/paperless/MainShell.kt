@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -204,7 +205,7 @@ fun MainShell(
     LaunchedEffect(sharedFiles) {
         if (sharedFiles.isNotEmpty()) {
             enqueue(sharedFiles)
-            // On a cold start the NavHost (inside the Scaffold) may not have its graph yet. Marked handled only
+            // On a cold start the NavHost (in its screen's frame) may not have its graph yet. Marked handled only
             // afterwards: that changes the key, which would cancel this effect.
             navController.currentBackStackEntryFlow.first()
             navController.navigate(UPLOADS_ROUTE) { launchSingleTop = true }
@@ -306,14 +307,22 @@ fun MainShell(
             CenterAlignedTopAppBar(
                 title = { Text(stringResource(shown.label)) },
                 navigationIcon = {
-                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                    IconButton(onClick = dropUnlessResumed { scope.launch { drawerState.open() } }) {
                         Icon(Icons.Outlined.Menu, contentDescription = stringResource(R.string.menu_open))
                     }
                 },
                 actions = {
                     // The inbox belongs to the documents tab.
                     if (shown == Tab.DOCUMENTS && inboxCount > 0) {
-                        InboxButton(inboxCount) { navController.navigate(INBOX_ROUTE) { launchSingleTop = true } }
+                        InboxButton(
+                            inboxCount,
+                            dropUnlessResumed {
+                                navController.navigate(INBOX_ROUTE) {
+                                    launchSingleTop =
+                                        true
+                                }
+                            },
+                        )
                     }
                 },
             )
@@ -377,20 +386,19 @@ fun MainShell(
                     ) {
                         val shown = Tab.entries.firstOrNull { it.route == path }
                         ListScaffold(
-                            snackbar = snackbar,
                             topBar = {
-                                if (shown !=
-                                    null
-                                ) {
-                                    tabBar(shown)
-                                } else {
-                                    backBar(stringResource(R.string.title_inbox))
+                                when {
+                                    shown != null -> tabBar(shown)
+                                    path == INBOX_ROUTE -> backBar(stringResource(R.string.title_inbox))
+                                    else -> error("No bar for $path")
                                 }
                             },
                             bottomBar = { if (shown != null) TabBar(shown, navController) },
                             floatingActionButton = {
                                 if (shown == Tab.DOCUMENTS) {
-                                    FloatingActionButton(onClick = { pickFiles.launch(UPLOAD_MIME_TYPES) }) {
+                                    FloatingActionButton(
+                                        onClick = dropUnlessResumed { pickFiles.launch(UPLOAD_MIME_TYPES) },
+                                    ) {
                                         Icon(
                                             Icons.Outlined.UploadFile,
                                             contentDescription = stringResource(R.string.upload_files),
@@ -422,7 +430,9 @@ fun MainShell(
                     // A saved view is titled with its name.
                     val id = entry.arguments?.getLong(DocumentListViewModel.VIEW_ID_ARGUMENT)
                     val name = allSavedViews.firstOrNull { it.id == id }?.name ?: stringResource(R.string.drawer_views)
-                    ListScaffold(snackbar = snackbar, topBar = { backBar(name) }) { padding ->
+                    ListScaffold(
+                        topBar = { backBar(name) },
+                    ) { padding ->
                         DocumentListScreen(
                             onOpenDocument = { navController.navigate("document/${it.id}") },
                             modifier = Modifier.padding(padding),
@@ -485,7 +495,6 @@ fun MainShell(
                 }
                 composable(UPLOADS_ROUTE) {
                     ListScaffold(
-                        snackbar = snackbar,
                         topBar = { backBar(stringResource(R.string.drawer_uploads)) },
                     ) { padding ->
                         UploadsScreen(
@@ -496,6 +505,22 @@ fun MainShell(
                     }
                 }
             }
+            // One host for every screen: above the tabs (and button) on a tab, otherwise above the navigation bar.
+            SnackbarHost(
+                snackbar,
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(
+                        bottom =
+                            when (tab) {
+                                // Also above the upload button.
+                                Tab.DOCUMENTS -> TAB_BAR_HEIGHT + FAB_SPACE
+                                null -> 0.dp
+                                else -> TAB_BAR_HEIGHT
+                            },
+                    ),
+            )
         }
     }
 }
@@ -509,14 +534,16 @@ private fun TabBar(
         Tab.entries.forEach { item ->
             NavigationBarItem(
                 selected = item == current,
-                onClick = {
-                    navController.navigate(item.route) {
-                        // The documents tab is the root; the others come back to it on Back.
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
+                // Not from a tab screen that is leaving (the bar moves with it, e.g. while a document opens).
+                onClick =
+                    dropUnlessResumed {
+                        navController.navigate(item.route) {
+                            // The documents tab is the root; the others come back to it on Back.
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
                 icon = { Icon(item.icon, contentDescription = null) },
                 label = { Text(stringResource(item.label)) },
             )
@@ -716,10 +743,9 @@ private fun SignOutDialog(
     )
 }
 
-/** The frame of a list: its bars, the snackbar (shared by the lists) and an optional button. */
+/** The frame of a list: its bars and an optional button (the snackbar is the shell's, over every screen). */
 @Composable
 private fun ListScaffold(
-    snackbar: SnackbarHostState,
     topBar: @Composable () -> Unit,
     bottomBar: @Composable () -> Unit = {},
     floatingActionButton: @Composable () -> Unit = {},
@@ -727,10 +753,15 @@ private fun ListScaffold(
 ) = Scaffold(
     topBar = topBar,
     bottomBar = bottomBar,
-    snackbarHost = { SnackbarHost(snackbar) },
     floatingActionButton = floatingActionButton,
     content = content,
 )
+
+/** The height of the tab bar (Material 3 navigation bar), which the snackbar stays above. */
+private val TAB_BAR_HEIGHT = 80.dp
+
+/** A floating action button (56dp) with its margin. */
+private val FAB_SPACE = 72.dp
 
 /** A new label in the label editor (no ID). */
 private const val NEW_LABEL = -1L
