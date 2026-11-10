@@ -160,10 +160,11 @@ fun MainShell(
     LaunchedEffect(sharedFiles) {
         if (sharedFiles.isNotEmpty()) {
             enqueue(sharedFiles)
-            onSharedFilesHandled()
-            // On a cold start the NavHost (inside the Scaffold) may not have its graph yet.
+            // On a cold start the NavHost (inside the Scaffold) may not have its graph yet. Marked handled only
+            // afterwards: that changes the key, which would cancel this effect.
             navController.currentBackStackEntryFlow.first()
             navController.navigate(UPLOADS_ROUTE) { launchSingleTop = true }
+            onSharedFilesHandled()
         }
     }
     val resources = LocalResources.current

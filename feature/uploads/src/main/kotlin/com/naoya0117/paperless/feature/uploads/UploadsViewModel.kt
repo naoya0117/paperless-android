@@ -65,19 +65,25 @@ class UploadsViewModel
         val enqueueResults: Flow<EnqueueResult> = results.receiveAsFlow()
 
         /**
-         * Copies the files into the upload queue. The caller's permission for the URIs only lasts while it is
-         * alive (e.g. the activity a file was shared to), so the copies are made at once; they go on if the
-         * screen is closed meanwhile (only the result is not shown then).
+         * Copies the files into the upload queue of the active account (even if another account becomes active
+         * meanwhile). The caller's permission for the URIs only lasts while it is alive (e.g. the activity a file
+         * was shared to), so the copies are made at once. They are not cancelled with this screen, but files not
+         * read before the activity is gone usually cannot be read any more; that result is then not shown.
          */
         fun enqueue(uris: List<Uri>) {
             if (uris.isEmpty()) return
             applicationScope.launch {
+                val accountId = repository.activeAccountId()
+                if (accountId == null) {
+                    results.trySend(EnqueueResult.NotSignedIn)
+                    return@launch
+                }
                 val files = uris.distinct()
                 var queued = 0
                 var failed = 0
                 for (uri in files) {
                     try {
-                        repository.enqueue(source(uri))
+                        repository.enqueue(source(uri), accountId = accountId)
                         queued++
                     } catch (e: CancellationException) {
                         throw e
