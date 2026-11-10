@@ -656,7 +656,12 @@ fun MainShell(
                 composable(ABOUT_ROUTE) {
                     AboutScreen(
                         onBack = dropUnlessResumed { navController.navigateUp() },
-                        onOpenText = { text -> navController.navigate("about/${text.key}") },
+                        onOpenText = { text ->
+                            // Once only: a double tap must not open the text twice.
+                            if (navController.currentDestination?.route == ABOUT_ROUTE) {
+                                navController.navigate("about/${text.key}")
+                            }
+                        },
                     )
                 }
                 composable(

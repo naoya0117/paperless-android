@@ -75,6 +75,6 @@ GNU 一般公衆利用許諾書（GNU General Public License）バージョン 3
 - [paperless-mobile](https://github.com/astubenbord/paperless-mobile) — GPL-3.0
 - [Paperless-ngx](https://github.com/paperless-ngx/paperless-ngx) — GPL-3.0
 
-アプリに含まれるオープンソースのライブラリ（すべて Apache License 2.0）と、そのライセンス・表示事項は、アプリのメニューの
-**このアプリについて** で確認できます。許可していないライセンスの依存関係があると、ビルドが失敗します
-（`app/build.gradle.kts` の `aboutLibraries`）。
+アプリに含まれるオープンソースのライブラリ（現在はすべて Apache License 2.0）と、そのライセンス・表示事項は、アプリのメニューの
+**このアプリについて** で確認できます。許可していないライセンスの依存関係があるとき（`app/build.gradle.kts` の `aboutLibraries`）や、
+NOTICE ファイルを含むライブラリが `app/src/main/res/raw/third_party_notices.txt` にないときは、ビルドが失敗します。

@@ -33,12 +33,20 @@ class AboutScreenTest {
 
     @Test
     fun `license texts are reflowed into paragraphs`() {
-        val text = "  1. Definitions.\n\n      \"License\" shall mean\n      the terms.\n   \n  END\n"
+        val wrapped = "\"License\" shall mean the terms and conditions for use, reproduction,"
+        val text = "  1. Definitions.\n\n      $wrapped\n      and distribution.\n   \n  END\n"
 
         assertEquals(
-            listOf("1. Definitions.", "\"License\" shall mean the terms.", "END"),
+            listOf("1. Definitions.", "$wrapped and distribution.", "END"),
             paragraphs(text, reflow = true),
         )
+    }
+
+    @Test
+    fun `short lines in license texts are kept`() {
+        val text = "                    GNU GENERAL PUBLIC LICENSE\n                       Version 3, 29 June 2007\n"
+
+        assertEquals(listOf("GNU GENERAL PUBLIC LICENSE\nVersion 3, 29 June 2007"), paragraphs(text, reflow = true))
     }
 
     @Test

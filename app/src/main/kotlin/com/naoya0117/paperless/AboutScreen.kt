@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -38,7 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
@@ -46,6 +48,8 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mikepenz.aboutlibraries.Libs
 import com.mikepenz.aboutlibraries.util.withJson
 import kotlinx.coroutines.Dispatchers
@@ -82,7 +86,7 @@ internal data class OpenSourceLibrary(
     val licenseUrl: String?,
 )
 
-private sealed interface LibrariesState {
+internal sealed interface LibrariesState {
     data object Loading : LibrariesState
 
     data object Failed : LibrariesState
@@ -102,18 +106,13 @@ fun AboutScreen(
     onBack: () -> Unit,
     onOpenText: (BundledText) -> Unit,
     modifier: Modifier = Modifier,
+    viewModel: AboutViewModel = hiltViewModel(),
 ) {
-    val context = LocalContext.current
     val resources = LocalResources.current
     val uriHandler = LocalUriHandler.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val libraries by produceState<LibrariesState>(LibrariesState.Loading) {
-        value =
-            withContext(Dispatchers.Default) {
-                runCatching { loadLibraries(context) }.fold({ LibrariesState.Loaded(it) }, { LibrariesState.Failed })
-            }
-    }
+    val libraries by viewModel.libraries.collectAsStateWithLifecycle()
     val openUrl = { url: String ->
         // No browser (e.g. a restricted profile): tell rather than crash.
         if (runCatching { uriHandler.openUri(url) }.isFailure) {
@@ -267,18 +266,20 @@ fun LicenseTextScreen(
                 CircularProgressIndicator()
             }
         } else {
-            SelectionContainer {
-                LazyColumn(
-                    contentPadding =
-                        PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
-                            top = padding.calculateTopPadding() + 8.dp,
-                            bottom = padding.calculateBottomPadding() + 16.dp,
-                        ),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    items(list) { paragraph ->
+            val direction = LocalLayoutDirection.current
+            LazyColumn(
+                contentPadding =
+                    PaddingValues(
+                        start = padding.calculateStartPadding(direction) + 16.dp,
+                        end = padding.calculateEndPadding(direction) + 16.dp,
+                        top = padding.calculateTopPadding() + 8.dp,
+                        bottom = padding.calculateBottomPadding() + 16.dp,
+                    ),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                // Per paragraph: a selection does not survive items scrolled out of a lazy list.
+                items(list) { paragraph ->
+                    SelectionContainer {
                         Text(
                             paragraph,
                             style = MaterialTheme.typography.bodyMedium,
@@ -291,9 +292,12 @@ fun LicenseTextScreen(
     }
 }
 
+/** Wrapped lines of the license files are longer (~70 columns); a shorter one ends where the author broke it. */
+private const val WRAPPED_LINE = 50
+
 /**
  * Splits a text into its paragraphs (separated by blank lines). With [reflow], the lines of a paragraph are joined,
- * as the line breaks of the license files only wrap them.
+ * as the line breaks of the license files mostly only wrap them.
  */
 internal fun paragraphs(
     text: String,
@@ -303,8 +307,12 @@ internal fun paragraphs(
         .replace("\r\n", "\n")
         .split(Regex("\n[ \t]*\n"))
         .map { paragraph ->
-            if (reflow) {
-                paragraph.lines().joinToString(" ") { it.trim() }.trim()
+            val lines = paragraph.lines().map { it.trim() }.filter { it.isNotEmpty() }
+            // Short lines before the last are deliberate breaks (titles, the sample notices): kept.
+            if (reflow && lines.dropLast(1).all { it.length >= WRAPPED_LINE }) {
+                lines.joinToString(" ")
+            } else if (reflow) {
+                lines.joinToString("\n")
             } else {
                 paragraph.trimEnd().trimStart('\n')
             }

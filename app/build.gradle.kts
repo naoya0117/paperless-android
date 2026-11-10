@@ -1,3 +1,5 @@
+import java.util.zip.ZipFile
+
 plugins {
     alias(libs.plugins.paperless.android.application)
     alias(libs.plugins.paperless.robolectric)
@@ -96,3 +98,74 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.androidx.test.core)
 }
+
+/**
+ * Apache-2.0 section 4 (d): the attribution notices of the libraries' NOTICE files must be shown
+ * (res/raw/third_party_notices.txt, maintained by hand). Fails when a library in the APK ships a NOTICE file but
+ * is not mentioned there, e.g. after adding a dependency.
+ */
+abstract class CheckThirdPartyNotices : DefaultTask() {
+    /** The Java resources (META-INF etc.) of the external libraries in the APK, as packaged by AGP. */
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val javaResources: ConfigurableFileCollection
+
+    /** The library (`group:name`) of each of [javaResources], in the same order. */
+    @get:Input
+    abstract val libraries: ListProperty<String>
+
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val notices: RegularFileProperty
+
+    @get:OutputFile
+    abstract val result: RegularFileProperty
+
+    @TaskAction
+    fun check() {
+        val text = notices.get().asFile.readText()
+        val withNotice =
+            javaResources.files
+                .zip(libraries.get())
+                .filter { (file, _) -> hasNotice(file) }
+                .map { it.second }
+                .toSet()
+        val missing = withNotice.filter { it !in text }
+        check(missing.isEmpty()) {
+            "Libraries with a NOTICE file not in ${notices.get().asFile.name}: $missing"
+        }
+        result.get().asFile.writeText(withNotice.sorted().joinToString("\n"))
+    }
+
+    private fun hasNotice(file: File): Boolean {
+        fun isNotice(path: String) = path.substringAfterLast('/').uppercase().startsWith("NOTICE")
+        return when {
+            file.isDirectory -> file.walkTopDown().any { it.isFile && isNotice(it.name) }
+            file.isFile -> ZipFile(file).use { zip -> zip.entries().asSequence().any { isNotice(it.name) } }
+            else -> false
+        }
+    }
+}
+
+val noticeCheck =
+    tasks.register<CheckThirdPartyNotices>("checkThirdPartyNotices") {
+        val resources =
+            configurations
+                .named("releaseRuntimeClasspath")
+                .get()
+                .incoming
+                .artifactView {
+                    attributes { attribute(Attribute.of("artifactType", String::class.java), "android-java-res") }
+                    // The app's own modules have no NOTICE.
+                    componentFilter { it is ModuleComponentIdentifier }
+                }.artifacts
+        javaResources.from(resources.artifactFiles)
+        libraries.set(
+            resources.resolvedArtifacts.map { artifacts ->
+                artifacts.map { (it.id.componentIdentifier as ModuleComponentIdentifier).moduleIdentifier.toString() }
+            },
+        )
+        notices.set(layout.projectDirectory.file("src/main/res/raw/third_party_notices.txt"))
+        result.set(layout.buildDirectory.file("reports/thirdPartyNotices.txt"))
+    }
+tasks.named("check") { dependsOn(noticeCheck) }
