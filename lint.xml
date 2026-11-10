@@ -4,4 +4,11 @@
     <issue id="GradleDependency">
         <ignore regexp="androidx\.sqlite:sqlite-bundled-jvm" />
     </issue>
+    <!-- Must be exactly the jar Robolectric expects for its SDK; see gradle/libs.versions.toml. -->
+    <issue id="NewerVersionAvailable">
+        <ignore regexp="org\.robolectric:android-all-instrumented" />
+    </issue>
+    <issue id="GradleDependency">
+        <ignore regexp="org\.robolectric:android-all-instrumented" />
+    </issue>
 </lint>
