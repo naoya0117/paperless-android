@@ -17,17 +17,8 @@ dependencyResolutionManagement {
     repositoriesMode = RepositoriesMode.FAIL_ON_PROJECT_REPOS
     repositories {
         google()
-        // Robolectric's Android jars and its native runtime are large (150 MB or more each), and Maven Central
-        // rate-limits the CI runner for them (HTTP 429). Google's mirror of Maven Central serves the same artifacts.
-        exclusiveContent {
-            forRepository {
-                maven("https://maven-central.storage-download.googleapis.com/maven2/") { name = "MavenCentralGoogleMirror" }
-            }
-            filter {
-                includeModule("org.robolectric", "android-all-instrumented")
-                includeModule("org.robolectric", "nativeruntime-dist-compat")
-            }
-        }
+        // Only these two (F-Droid allows no other repositories). CI adds a mirror for Robolectric's large jars in
+        // an init script (.gitea/workflows/ci.yml).
         mavenCentral()
     }
 }

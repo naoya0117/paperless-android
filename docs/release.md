@@ -300,6 +300,8 @@ F-Droid は自前のサーバーでソースからビルドします。署名は
 
 - [ ] 依存関係がすべて自由なソフトウェアで、Google Play Services / Firebase などを含まない
 - [ ] `./gradlew :app:assembleRelease` が署名の設定なしで通る
+- [ ] Gradle のファイルのリポジトリが `google()` と `mavenCentral()` だけ（F-Droid の検査は知らないリポジトリを拒否する。
+  CI で使う Maven Central のミラーは `.gitea/workflows/ci.yml` の初期化スクリプトで追加している）
 - [ ] `fastlane/metadata/android/` のタイトル・説明・アイコン・スクリーンショット・変更履歴が揃っている
 - [ ] 反機能（Anti-Features）：なし。ユーザーが指定したサーバーとだけ通信し、追跡はない
 - [ ] versionCode を `gradle.properties` から読み取れる（下記）

@@ -52,6 +52,30 @@ jobs:
           PROPS
           free -m
 
+      # Robolectric's Android jars and its native runtime are large (150 MB or more each), and Maven Central
+      # rate-limits the runner for them (HTTP 429). Google's mirror of Maven Central serves the same artifacts.
+      # Added here rather than in settings.gradle.kts: F-Droid's scanner rejects repositories it does not know.
+      - name: Fetch Robolectric's large jars from a mirror
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cat > ~/.gradle/init.d/robolectric-mirror.init.gradle.kts <<'INIT'
+          settingsEvaluated {
+              dependencyResolutionManagement.repositories {
+                  exclusiveContent {
+                      forRepository {
+                          maven("https://maven-central.storage-download.googleapis.com/maven2/") {
+                              name = "MavenCentralGoogleMirror"
+                          }
+                      }
+                      filter {
+                          includeModule("org.robolectric", "android-all-instrumented")
+                          includeModule("org.robolectric", "nativeruntime-dist-compat")
+                      }
+                  }
+              }
+          }
+          INIT
+
       - name: Debug build
         run: ./gradlew assembleDebug --console=plain && ./gradlew --stop
 
