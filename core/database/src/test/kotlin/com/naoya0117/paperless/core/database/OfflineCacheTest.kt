@@ -279,7 +279,8 @@ class OfflineCacheTest {
     @Test
     fun `old lists and documents no list contains are dropped`() =
         runTest {
-            for (i in 0..CachedDocuments.MAX_LISTS) {
+            // The list being written is kept besides MAX_LISTS others.
+            for (i in 0..CachedDocuments.MAX_LISTS + 1) {
                 cache.documents.replaceList(
                     "a",
                     "list$i",

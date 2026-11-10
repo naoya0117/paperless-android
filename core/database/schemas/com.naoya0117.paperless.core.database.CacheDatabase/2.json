@@ -1,0 +1,740 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "e12a0c43ddb1f842ffe3afc317f9a4f7",
+    "entities": [
+      {
+        "tableName": "tags",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` TEXT NOT NULL, `id` INTEGER NOT NULL, `name` TEXT NOT NULL, `slug` TEXT NOT NULL, `documentCount` INTEGER, `owner` INTEGER, `userCanChange` INTEGER NOT NULL, `color` TEXT NOT NULL, `textColor` TEXT NOT NULL, `isInboxTag` INTEGER NOT NULL, `parentId` INTEGER, `childIdsJson` TEXT NOT NULL, `matching_algorithm` INTEGER NOT NULL, `matching_pattern` TEXT NOT NULL, `matching_isInsensitive` INTEGER NOT NULL, PRIMARY KEY(`accountId`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "slug",
+            "columnName": "slug",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "documentCount",
+            "columnName": "documentCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "owner",
+            "columnName": "owner",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "userCanChange",
+            "columnName": "userCanChange",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "color",
+            "columnName": "color",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "textColor",
+            "columnName": "textColor",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isInboxTag",
+            "columnName": "isInboxTag",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parentId",
+            "columnName": "parentId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "childIdsJson",
+            "columnName": "childIdsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matching.algorithm",
+            "columnName": "matching_algorithm",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matching.pattern",
+            "columnName": "matching_pattern",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matching.isInsensitive",
+            "columnName": "matching_isInsensitive",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "accountId",
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "correspondents",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` TEXT NOT NULL, `id` INTEGER NOT NULL, `name` TEXT NOT NULL, `slug` TEXT NOT NULL, `documentCount` INTEGER, `owner` INTEGER, `userCanChange` INTEGER NOT NULL, `lastCorrespondence` TEXT, `matching_algorithm` INTEGER NOT NULL, `matching_pattern` TEXT NOT NULL, `matching_isInsensitive` INTEGER NOT NULL, PRIMARY KEY(`accountId`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "slug",
+            "columnName": "slug",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "documentCount",
+            "columnName": "documentCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "owner",
+            "columnName": "owner",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "userCanChange",
+            "columnName": "userCanChange",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastCorrespondence",
+            "columnName": "lastCorrespondence",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "matching.algorithm",
+            "columnName": "matching_algorithm",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matching.pattern",
+            "columnName": "matching_pattern",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matching.isInsensitive",
+            "columnName": "matching_isInsensitive",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "accountId",
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "document_types",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` TEXT NOT NULL, `id` INTEGER NOT NULL, `name` TEXT NOT NULL, `slug` TEXT NOT NULL, `documentCount` INTEGER, `owner` INTEGER, `userCanChange` INTEGER NOT NULL, `matching_algorithm` INTEGER NOT NULL, `matching_pattern` TEXT NOT NULL, `matching_isInsensitive` INTEGER NOT NULL, PRIMARY KEY(`accountId`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "slug",
+            "columnName": "slug",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "documentCount",
+            "columnName": "documentCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "owner",
+            "columnName": "owner",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "userCanChange",
+            "columnName": "userCanChange",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matching.algorithm",
+            "columnName": "matching_algorithm",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matching.pattern",
+            "columnName": "matching_pattern",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matching.isInsensitive",
+            "columnName": "matching_isInsensitive",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "accountId",
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "storage_paths",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` TEXT NOT NULL, `id` INTEGER NOT NULL, `name` TEXT NOT NULL, `slug` TEXT NOT NULL, `documentCount` INTEGER, `owner` INTEGER, `userCanChange` INTEGER NOT NULL, `path` TEXT NOT NULL, `matching_algorithm` INTEGER NOT NULL, `matching_pattern` TEXT NOT NULL, `matching_isInsensitive` INTEGER NOT NULL, PRIMARY KEY(`accountId`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "slug",
+            "columnName": "slug",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "documentCount",
+            "columnName": "documentCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "owner",
+            "columnName": "owner",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "userCanChange",
+            "columnName": "userCanChange",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "path",
+            "columnName": "path",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matching.algorithm",
+            "columnName": "matching_algorithm",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matching.pattern",
+            "columnName": "matching_pattern",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matching.isInsensitive",
+            "columnName": "matching_isInsensitive",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "accountId",
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "custom_fields",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` TEXT NOT NULL, `id` INTEGER NOT NULL, `name` TEXT NOT NULL, `dataType` TEXT NOT NULL, `selectOptionsJson` TEXT NOT NULL, `defaultCurrency` TEXT, `documentCount` INTEGER, PRIMARY KEY(`accountId`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dataType",
+            "columnName": "dataType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "selectOptionsJson",
+            "columnName": "selectOptionsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "defaultCurrency",
+            "columnName": "defaultCurrency",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "documentCount",
+            "columnName": "documentCount",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "accountId",
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "saved_views",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` TEXT NOT NULL, `id` INTEGER NOT NULL, `name` TEXT NOT NULL, `icon` TEXT, `sortField` TEXT, `sortReverse` INTEGER NOT NULL, `filterRulesJson` TEXT NOT NULL, `pageSize` INTEGER, `displayMode` TEXT, `displayFieldsJson` TEXT, `owner` INTEGER, `userCanChange` INTEGER NOT NULL, PRIMARY KEY(`accountId`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "icon",
+            "columnName": "icon",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sortField",
+            "columnName": "sortField",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sortReverse",
+            "columnName": "sortReverse",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "filterRulesJson",
+            "columnName": "filterRulesJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pageSize",
+            "columnName": "pageSize",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "displayMode",
+            "columnName": "displayMode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "displayFieldsJson",
+            "columnName": "displayFieldsJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "owner",
+            "columnName": "owner",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "userCanChange",
+            "columnName": "userCanChange",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "accountId",
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "cache_meta",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` TEXT NOT NULL, `kind` TEXT NOT NULL, `refreshedAt` INTEGER NOT NULL, PRIMARY KEY(`accountId`, `kind`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refreshedAt",
+            "columnName": "refreshedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "accountId",
+            "kind"
+          ]
+        }
+      },
+      {
+        "tableName": "documents",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` TEXT NOT NULL, `id` INTEGER NOT NULL, `title` TEXT NOT NULL, `content` TEXT NOT NULL, `created` TEXT NOT NULL, `added` INTEGER NOT NULL, `modified` INTEGER NOT NULL, `correspondentId` INTEGER, `documentTypeId` INTEGER, `storagePathId` INTEGER, `tagIdsJson` TEXT NOT NULL, `archiveSerialNumber` INTEGER, `originalFileName` TEXT, `archivedFileName` TEXT, `mimeType` TEXT, `pageCount` INTEGER, `customFieldsJson` TEXT NOT NULL, `notesJson` TEXT, `owner` INTEGER, `userCanChange` INTEGER NOT NULL, `deletedAt` INTEGER, PRIMARY KEY(`accountId`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "created",
+            "columnName": "created",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "added",
+            "columnName": "added",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modified",
+            "columnName": "modified",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "correspondentId",
+            "columnName": "correspondentId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "documentTypeId",
+            "columnName": "documentTypeId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "storagePathId",
+            "columnName": "storagePathId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "tagIdsJson",
+            "columnName": "tagIdsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archiveSerialNumber",
+            "columnName": "archiveSerialNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "originalFileName",
+            "columnName": "originalFileName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "archivedFileName",
+            "columnName": "archivedFileName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mimeType",
+            "columnName": "mimeType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "pageCount",
+            "columnName": "pageCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "customFieldsJson",
+            "columnName": "customFieldsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notesJson",
+            "columnName": "notesJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "owner",
+            "columnName": "owner",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "userCanChange",
+            "columnName": "userCanChange",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deletedAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "accountId",
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "document_lists",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` TEXT NOT NULL, `listKey` TEXT NOT NULL, `nextPage` INTEGER, `refreshedAt` INTEGER NOT NULL, PRIMARY KEY(`accountId`, `listKey`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "listKey",
+            "columnName": "listKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextPage",
+            "columnName": "nextPage",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "refreshedAt",
+            "columnName": "refreshedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "accountId",
+            "listKey"
+          ]
+        }
+      },
+      {
+        "tableName": "document_list_items",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` TEXT NOT NULL, `listKey` TEXT NOT NULL, `position` INTEGER NOT NULL, `documentId` INTEGER NOT NULL, `searchScore` REAL, `searchRank` INTEGER, `searchHighlights` TEXT, PRIMARY KEY(`accountId`, `listKey`, `position`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "listKey",
+            "columnName": "listKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "documentId",
+            "columnName": "documentId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "searchScore",
+            "columnName": "searchScore",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "searchRank",
+            "columnName": "searchRank",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "searchHighlights",
+            "columnName": "searchHighlights",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "accountId",
+            "listKey",
+            "position"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_document_list_items_accountId_listKey_documentId",
+            "unique": true,
+            "columnNames": [
+              "accountId",
+              "listKey",
+              "documentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_document_list_items_accountId_listKey_documentId` ON `${TABLE_NAME}` (`accountId`, `listKey`, `documentId`)"
+          },
+          {
+            "name": "index_document_list_items_accountId_documentId",
+            "unique": false,
+            "columnNames": [
+              "accountId",
+              "documentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_document_list_items_accountId_documentId` ON `${TABLE_NAME}` (`accountId`, `documentId`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e12a0c43ddb1f842ffe3afc317f9a4f7')"
+    ]
+  }
+}

@@ -163,6 +163,9 @@ class AccountRepository
 
         private fun epoch(accountId: String): Long = epochs[accountId] ?: 0
 
+        /** Whether the account was not signed out since [session] was taken. */
+        internal fun isCurrent(session: AccountSession): Boolean = epoch(session.account.id) == session.epoch
+
         /**
          * A client for the account with [account]'s ID as currently stored (so an outdated [Account] does not
          * bring back old settings), or `null` if it was removed or its secrets cannot be read anymore.

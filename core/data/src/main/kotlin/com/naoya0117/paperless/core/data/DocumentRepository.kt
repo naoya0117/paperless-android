@@ -15,20 +15,23 @@ import com.naoya0117.paperless.core.model.Document
 import com.naoya0117.paperless.core.model.DocumentDraft
 import com.naoya0117.paperless.core.model.DocumentQuery
 import com.naoya0117.paperless.core.network.PaperlessException
+import com.naoya0117.paperless.core.network.toQueryParameters
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.net.URLEncoder
 import java.security.MessageDigest
 import java.time.Clock
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -47,42 +50,57 @@ class DocumentRepository internal constructor(
 
     private val cache: CachedDocuments = cache.documents
 
-    /** Serializes cache writes with the server requests whose results they store (see [Labels]). */
-    private val mutex = Mutex()
+    /** Serializes cache writes (not the requests, which may be slow). */
+    private val writeLock = Mutex()
+
+    /** Counts update/delete cache writes, so a list fetched before one of them can be fetched again. */
+    private val writeCount = AtomicLong()
+
+    /** Lists with a running pager, per account; they are not dropped from the cache while in use. */
+    private val listsInUse = ConcurrentHashMap<Pair<String, String>, Int>()
 
     /**
      * The documents matching [query] for the active account, shown from the cache first while the first
      * page is fetched again; further pages are fetched while scrolling. [DocumentQuery.page] and
-     * [DocumentQuery.pageSize] are ignored. Failed requests surface as `LoadState.Error` (mediator) with a
-     * [PaperlessException]; the cached list stays visible. Emits empty data while there is no account.
+     * [DocumentQuery.pageSize] are ignored. Failed requests surface as the mediator's `LoadState.Error`
+     * (usually with a [PaperlessException]) while the cached list stays visible. Starts over when the active
+     * account or its connection changes (e.g. signing in again); emits empty data while there is none.
+     *
+     * @throws IllegalArgumentException if [DocumentQuery.extraParams] conflict with the typed properties
      */
     @OptIn(ExperimentalCoroutinesApi::class, ExperimentalPagingApi::class)
     fun documents(query: DocumentQuery): Flow<PagingData<Document>> {
         val listQuery = query.copy(page = 1, pageSize = PAGE_SIZE)
         val listKey = listKey(query)
-        return accounts.state
-            .map { it.activeAccountId }
-            .distinctUntilChanged()
-            .flatMapLatest { accountId ->
-                if (accountId == null) {
-                    flowOf(NO_DOCUMENTS)
-                } else {
-                    flow {
-                        val session = accounts.currentSession()
-                        if (session == null || session.account.id != accountId) {
-                            emit(NO_DOCUMENTS)
-                        } else {
-                            val pager =
-                                Pager(
-                                    config = PagingConfig(pageSize = PAGE_SIZE, initialLoadSize = PAGE_SIZE * 2),
-                                    remoteMediator = Mediator(session, listQuery, listKey),
-                                    pagingSourceFactory = { cache.list(accountId, listKey) },
-                                )
-                            emitAll(pager.flow)
-                        }
+        return accounts.activeClient.flatMapLatest { client ->
+            if (client == null) {
+                flowOf(NO_DOCUMENTS)
+            } else {
+                flow {
+                    // The current session, with the client just emitted unless it changed again meanwhile (then
+                    // activeClient emits the newer one and this flow is replaced).
+                    val session = accounts.currentSession()
+                    if (session == null) {
+                        emit(NO_DOCUMENTS)
+                        return@flow
+                    }
+                    val accountId = session.account.id
+                    val inUse = accountId to listKey
+                    listsInUse.merge(inUse, 1, Int::plus)
+                    try {
+                        val pager =
+                            Pager(
+                                config = PagingConfig(pageSize = PAGE_SIZE, initialLoadSize = PAGE_SIZE * 2),
+                                remoteMediator = Mediator(session, listQuery, listKey),
+                                pagingSourceFactory = { cache.list(accountId, listKey) },
+                            )
+                        emitAll(pager.flow)
+                    } finally {
+                        listsInUse.computeIfPresent(inUse) { _, count -> (count - 1).takeIf { it > 0 } }
                     }
                 }
             }
+        }
     }
 
     /**
@@ -97,12 +115,10 @@ class DocumentRepository internal constructor(
     ): Document {
         val session = accounts.currentSession() ?: throw NotSignedInException()
         val updated = session.client.documents.update(current, draft)
-        if (updated !== current) {
-            // List results carry shortened content; keep the cached content rather than the full text.
-            val forCache = updated.copy(content = current.content, searchHit = null)
-            withContext(NonCancellable) {
-                mutex.withLock { accounts.writeData(session) { cache.update(session.account.id, forCache) } }
-            }
+        if (updated !==
+            current
+        ) {
+            writeThrough(session) { cache.update(session.account.id, updated.copy(searchHit = null)) }
         }
         return updated
     }
@@ -120,10 +136,32 @@ class DocumentRepository internal constructor(
         } catch (_: PaperlessException.Http.NotFound) {
             // Already gone.
         }
-        withContext(NonCancellable) {
-            mutex.withLock { accounts.writeData(session) { cache.delete(session.account.id, id) } }
+        writeThrough(session) { cache.delete(session.account.id, id) }
+    }
+
+    /** Not cancellable: the server already changed, and the cache must not miss it. */
+    private suspend fun writeThrough(
+        session: AccountSession,
+        block: suspend () -> Unit,
+    ) = withContext(NonCancellable) {
+        writeLock.withLock {
+            accounts.writeData(session, block)
+            writeCount.incrementAndGet()
         }
     }
+
+    /** The keys of the account's lists with a running pager. */
+    internal fun inUse(accountId: String): Set<String> =
+        listsInUse.keys
+            .filter { it.first == accountId }
+            .mapTo(mutableSetOf()) { it.second }
+
+    /** The mediator of [query]'s list for [session], e.g. to drive it step by step in tests. */
+    @OptIn(ExperimentalPagingApi::class)
+    internal fun mediator(
+        session: AccountSession,
+        query: DocumentQuery,
+    ): RemoteMediator<Int, Document> = Mediator(session, query.copy(page = 1, pageSize = PAGE_SIZE), listKey(query))
 
     @OptIn(ExperimentalPagingApi::class)
     private inner class Mediator(
@@ -138,31 +176,66 @@ class DocumentRepository internal constructor(
         override suspend fun load(
             loadType: LoadType,
             state: PagingState<Int, Document>,
-        ): MediatorResult =
-            mutex.withLock {
-                val page =
-                    when (loadType) {
-                        LoadType.REFRESH -> 1
-                        LoadType.PREPEND -> return MediatorResult.Success(endOfPaginationReached = true)
-                        LoadType.APPEND ->
-                            cache.listState(accountId, listKey)?.nextPage
-                                ?: return MediatorResult.Success(endOfPaginationReached = true)
-                    }
-                try {
-                    val result = session.client.documents.list(query.copy(page = page))
-                    val nextPage = if (result.hasNext && result.items.isNotEmpty()) page + 1 else null
-                    accounts.writeData(session) {
-                        if (loadType == LoadType.REFRESH) {
-                            cache.replaceList(accountId, listKey, result.items, nextPage, clock.instant())
+        ): MediatorResult {
+            if (loadType == LoadType.PREPEND) return MediatorResult.Success(endOfPaginationReached = true)
+            // A list no longer cached (e.g. after signing in again) starts over from the first page.
+            val list = if (loadType == LoadType.APPEND) cache.listState(accountId, listKey) else null
+            if (list != null && list.nextPage == null) return MediatorResult.Success(endOfPaginationReached = true)
+            val page = list?.nextPage ?: 1
+            return try {
+                load(page, replace = page == 1, retries = 1)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Exception,
+            ) {
+                // PaperlessException, but also e.g. a query the request builder rejects: never crash the UI.
+                MediatorResult.Error(e)
+            }
+        }
+
+        private suspend fun load(
+            page: Int,
+            replace: Boolean,
+            retries: Int,
+        ): MediatorResult {
+            val writesBefore = writeCount.get()
+            val result = session.client.documents.list(query.copy(page = page))
+            val nextPage = if (result.hasNext && result.items.isNotEmpty()) page + 1 else null
+            var retry = false
+            var stored = false
+            writeLock.withLock {
+                // An update or deletion since the request started may be missing from the result.
+                if (writeCount.get() != writesBefore && retries > 0) {
+                    retry = true
+                    return@withLock
+                }
+                accounts.writeData(session) {
+                    stored =
+                        if (replace) {
+                            cache.replaceList(
+                                accountId,
+                                listKey,
+                                result.items,
+                                nextPage,
+                                clock.instant(),
+                                inUse(accountId),
+                            )
+                            true
                         } else {
                             cache.appendToList(accountId, listKey, result.items, nextPage)
                         }
-                    }
-                    MediatorResult.Success(endOfPaginationReached = nextPage == null)
-                } catch (e: PaperlessException) {
-                    MediatorResult.Error(e)
                 }
             }
+            return when {
+                retry -> load(page, replace, retries - 1)
+                // Signed out meanwhile: nothing more to load for this session.
+                !stored && !accounts.isCurrent(session) -> MediatorResult.Success(endOfPaginationReached = true)
+                // The list was dropped while loading a further page: start over.
+                !stored -> load(1, replace = true, retries = 0)
+                else -> MediatorResult.Success(endOfPaginationReached = nextPage == null)
+            }
+        }
     }
 
     companion object {
@@ -175,13 +248,29 @@ class DocumentRepository internal constructor(
             }
 
         /**
-         * Identifies the cached list of [query], ignoring paging. Stable for equal queries within an app
-         * version; a changed format only misses the cache once.
+         * Identifies the cached list of [query]: the request parameters without paging, in a canonical order
+         * (so equal filters built in a different order share the list).
+         *
+         * @throws IllegalArgumentException if the query cannot be sent
          */
         internal fun listKey(query: DocumentQuery): String {
-            val normalized = query.copy(page = 1, pageSize = PAGE_SIZE)
-            val digest = MessageDigest.getInstance("SHA-256").digest(normalized.toString().encodeToByteArray())
+            val canonical =
+                query
+                    .toQueryParameters()
+                    .filterKeys { it != "page" && it != "page_size" }
+                    .toSortedMap()
+                    .entries
+                    .joinToString("&") { (key, value) -> "${encode(key)}=${encode(sortedIdList(value))}" }
+            val digest = MessageDigest.getInstance("SHA-256").digest("v1?$canonical".encodeToByteArray())
             return digest.take(16).joinToString("") { "%02x".format(it) }
+        }
+
+        private fun encode(value: String) = URLEncoder.encode(value, "UTF-8")
+
+        /** ID lists (`1,5,3`) come from sets; their order does not matter. */
+        private fun sortedIdList(value: String): String {
+            val ids = value.split(',').map { it.toLongOrNull() ?: return value }
+            return ids.sorted().joinToString(",")
         }
     }
 }

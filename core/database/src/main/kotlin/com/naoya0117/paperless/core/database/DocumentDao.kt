@@ -26,6 +26,12 @@ internal abstract class DocumentDao {
     ): PagingSource<Int, DocumentListRow>
 
     @Query("SELECT * FROM documents WHERE accountId = :accountId AND id = :id")
+    abstract suspend fun get(
+        accountId: String,
+        id: Long,
+    ): DocumentEntity?
+
+    @Query("SELECT * FROM documents WHERE accountId = :accountId AND id = :id")
     abstract fun observe(
         accountId: String,
         id: Long,
@@ -65,32 +71,33 @@ internal abstract class DocumentDao {
         listKey: String,
     )
 
-    /** Deletes the least recently refreshed lists beyond the newest [keep], with their items. */
-    @Query(
-        """
-        DELETE FROM document_list_items WHERE accountId = :accountId AND listKey IN (
-            SELECT listKey FROM document_lists WHERE accountId = :accountId
-            ORDER BY refreshedAt DESC LIMIT -1 OFFSET :keep
-        )
-        """,
-    )
-    abstract suspend fun deleteOldListItems(
-        accountId: String,
-        keep: Int,
-    )
-
+    /**
+     * Deletes the least recently refreshed lists beyond the newest [keep], except those in [protectedKeys]
+     * (which do not count towards [keep]). Their items are removed by [deleteItemsOfMissingLists].
+     */
     @Query(
         """
         DELETE FROM document_lists WHERE accountId = :accountId AND listKey IN (
-            SELECT listKey FROM document_lists WHERE accountId = :accountId
+            SELECT listKey FROM document_lists
+            WHERE accountId = :accountId AND listKey NOT IN (:protectedKeys)
             ORDER BY refreshedAt DESC LIMIT -1 OFFSET :keep
         )
         """,
     )
     abstract suspend fun deleteOldLists(
         accountId: String,
+        protectedKeys: Collection<String>,
         keep: Int,
     )
+
+    @Query(
+        """
+        DELETE FROM document_list_items WHERE accountId = :accountId AND listKey NOT IN (
+            SELECT listKey FROM document_lists WHERE accountId = :accountId
+        )
+        """,
+    )
+    abstract suspend fun deleteItemsOfMissingLists(accountId: String)
 
     @Query(
         """

@@ -16,7 +16,7 @@ import androidx.room.RoomDatabase
         DocumentListEntity::class,
         DocumentListItemEntity::class,
     ],
-    version = 1,
+    version = 2,
 )
 internal abstract class CacheDatabase : RoomDatabase() {
     abstract fun tags(): TagDao
