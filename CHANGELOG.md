@@ -83,3 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   enhanced for documents) and uploaded as one PDF; several picked images can be put together the same way
 - Scan pages can be trimmed by their four corners (straightening paper photographed at an angle); after
   uploading a scan its progress is shown, and a line under the search field shows uploads still running
+
+### Changed
+
+- App icon: a sheet of paper with lines of text on the Paperless green (with a themed monochrome version);
+  store icon for F-Droid in `fastlane/metadata/android/en-US/images/icon.png`
