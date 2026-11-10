@@ -186,10 +186,12 @@ fun DocumentViewerScreen(
                     .background(MaterialTheme.colorScheme.surfaceContainer),
             contentAlignment = Alignment.Center,
         ) {
+            // Pinch to zoom; reset for other content.
+            val zoom = remember(state.content) { ZoomState() }
             when (val content = state.content) {
                 ViewerContent.Loading -> CircularProgressIndicator()
-                is ViewerContent.Pdf -> PdfPagesView(content.pages, onTap = viewModel::toggleInfo)
-                is ViewerContent.Image -> ImageView(content, onTap = viewModel::toggleInfo)
+                is ViewerContent.Pdf -> PdfPagesView(content.pages, viewModel::toggleInfo, Modifier.zoomable(zoom))
+                is ViewerContent.Image -> ImageView(content, viewModel::toggleInfo, Modifier.zoomable(zoom))
                 is ViewerContent.Unsupported ->
                     Message(stringResource(R.string.viewer_unsupported, content.fileName.orEmpty()))
                 ViewerContent.Failed ->
@@ -312,11 +314,12 @@ private fun Context.sendFile(event: ViewerEvent.SendFile): Boolean {
 private fun PdfPagesView(
     pages: PdfPages,
     onTap: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize().tapWhenNotScrolling({ listState.isScrollInProgress }, onTap),
+        modifier = modifier.fillMaxSize().tapWhenNotScrolling({ listState.isScrollInProgress }, onTap),
         contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -378,10 +381,11 @@ private suspend fun <T> safely(block: suspend () -> T): T? =
 private fun ImageView(
     content: ViewerContent.Image,
     onTap: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier =
-            Modifier
+            modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .tapWhenNotScrolling({ false }, onTap)
