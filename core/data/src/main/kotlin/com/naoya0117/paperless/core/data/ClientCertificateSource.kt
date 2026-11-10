@@ -28,19 +28,29 @@ class KeyChainClientCertificateSource(
 }
 
 /**
- * Presents the certificate with [alias] if it is still available. If it was removed or access was
- * revoked, no certificate is presented and the server decides (usually by failing the handshake).
- * KeyChain calls block, which is fine on the connection threads where the handshake runs.
+ * Presents the certificate with [alias] if it is still available and its key type is one the server
+ * accepts. If it was removed or access was revoked, no certificate is presented and the server decides
+ * (usually by failing the handshake). KeyChain calls block, which is fine on the connection threads where
+ * the handshake runs. The key and chain are kept after the first successful lookup; a new client (e.g.
+ * after changing the account's TLS settings) looks them up again.
  */
 private class KeyChainKeyManager(
     private val context: Context,
     private val alias: String,
 ) : X509ExtendedKeyManager() {
+    @Volatile private var privateKey: PrivateKey? = null
+
+    @Volatile private var chain: Array<X509Certificate>? = null
+
     override fun chooseClientAlias(
         keyType: Array<out String>?,
         issuers: Array<out Principal>?,
         socket: Socket?,
-    ): String? = alias.takeIf { getPrivateKey(it) != null }
+    ): String? {
+        val key = getPrivateKey(alias) ?: return null
+        val accepted = keyType.isNullOrEmpty() || keyType.any { it.equals(key.algorithm, ignoreCase = true) }
+        return alias.takeIf { accepted }
+    }
 
     override fun chooseEngineClientAlias(
         keyType: Array<out String>?,
@@ -51,13 +61,17 @@ private class KeyChainKeyManager(
     override fun getClientAliases(
         keyType: String?,
         issuers: Array<out Principal>?,
-    ): Array<String> = arrayOf(alias)
+    ): Array<String>? = chooseClientAlias(keyType?.let { arrayOf(it) }, issuers, null)?.let { arrayOf(it) }
 
-    override fun getCertificateChain(alias: String?): Array<X509Certificate>? =
-        if (alias == this.alias) keyChain { KeyChain.getCertificateChain(context, alias) } else null
+    override fun getCertificateChain(alias: String?): Array<X509Certificate>? {
+        if (alias != this.alias) return null
+        return chain ?: keyChain { KeyChain.getCertificateChain(context, alias) }?.also { chain = it }
+    }
 
-    override fun getPrivateKey(alias: String?): PrivateKey? =
-        if (alias == this.alias) keyChain { KeyChain.getPrivateKey(context, alias) } else null
+    override fun getPrivateKey(alias: String?): PrivateKey? {
+        if (alias != this.alias) return null
+        return privateKey ?: keyChain { KeyChain.getPrivateKey(context, alias) }?.also { privateKey = it }
+    }
 
     override fun chooseServerAlias(
         keyType: String?,
@@ -70,7 +84,10 @@ private class KeyChainKeyManager(
         issuers: Array<out Principal>?,
     ): Array<String>? = null
 
-    /** `null` on any failure: KeyChainException, a revoked grant, or the key store being unavailable. */
+    /**
+     * `null` on any failure: KeyChainException, a revoked grant, the key store being unavailable, or a call
+     * on the main thread (a programming error, but a handshake is never made there).
+     */
     @Suppress("TooGenericExceptionCaught")
     private inline fun <T> keyChain(block: () -> T?): T? =
         try {

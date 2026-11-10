@@ -9,11 +9,16 @@ import javax.net.ssl.X509TrustManager
 
 /**
  * Trusts a server if either [base] or [additional] does. [base] is asked first with the socket / engine
- * aware checks where it supports them, so that Android's network security config keeps applying.
- * Client certificates are not checked by an app, so those calls go to [base] only.
+ * aware checks where it supports them. Client certificates are not checked by an app, so those calls go
+ * to [base] only. The host name is verified separately by OkHttp.
  *
  * Validation is never skipped: a chain must pass one of the two platform trust managers (Android Lint
- * flags any custom trust manager).
+ * flags any custom trust manager). Limitations:
+ * - Any failure of [base] falls back to [additional], including a certificate pin mismatch of the network
+ *   security config. The app's config has no pins; if pins are added, they do not hold for accounts with
+ *   additionally trusted certificates.
+ * - This class is not one of Android's own trust managers, so OkHttp cleans certificate chains with its
+ *   basic cleaner. That only matters for certificate pinning in OkHttp, which is not used.
  */
 @Suppress("CustomX509TrustManager")
 internal class AdditionalTrustManager(

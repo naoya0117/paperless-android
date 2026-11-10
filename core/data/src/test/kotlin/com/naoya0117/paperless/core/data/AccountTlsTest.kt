@@ -3,6 +3,7 @@ package com.naoya0117.paperless.core.data
 import com.naoya0117.paperless.core.datastore.AccountStore
 import com.naoya0117.paperless.core.datastore.SecretCipher
 import com.naoya0117.paperless.core.model.AccountTls
+import com.naoya0117.paperless.core.model.AuthToken
 import com.naoya0117.paperless.core.model.TrustedCertificate
 import com.naoya0117.paperless.core.network.PaperlessException
 import kotlinx.coroutines.flow.first
@@ -15,6 +16,7 @@ import okhttp3.tls.HeldCertificate
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -42,6 +44,7 @@ class AccountTlsTest {
 
     private val server = MockWebServer()
     private val requestedAliases = mutableListOf<String>()
+    private lateinit var store: AccountStore
     private lateinit var repository: AccountRepository
 
     private val trustCa = AccountTls(trustedCertificates = listOf(TrustedCertificate(ca.certificate.encoded)))
@@ -64,9 +67,10 @@ class AccountTlsTest {
         )
         server.start()
         val clientKeys = HandshakeCertificates.Builder().heldCertificate(clientCertificate, ca.certificate).build()
+        store = AccountStore.create(folder.root.resolve("accounts.json"), XorCipher)
         repository =
             AccountRepository(
-                AccountStore.create(folder.root.resolve("accounts.json"), XorCipher),
+                store,
                 PaperlessClientFactory(OkHttpClient.Builder().proxy(Proxy.NO_PROXY).build()),
                 { alias ->
                     requestedAliases += alias
@@ -121,7 +125,7 @@ class AccountTlsTest {
     @Test
     fun `without trusting the certificate signing in fails with a tls error`() =
         runTest {
-            val result = runCatching { repository.signIn(serverUrl(), "alice", "pw") }
+            val result = runCatching { repository.signIn(serverUrl(), "alice", "pw", tls = AccountTls()) }
 
             assertTrue(result.exceptionOrNull().toString(), result.exceptionOrNull() is PaperlessException.Network.Tls)
             assertTrue(
@@ -214,5 +218,38 @@ class AccountTlsTest {
                     .activeAccount
                     ?.tls,
             )
+        }
+
+    @Test
+    fun `an outdated account object does not bring back old tls settings`() =
+        runTest {
+            server.enqueue(uiSettings())
+            val outdated = repository.signInWithToken(serverUrl(), AuthToken("abc"), tls = trustCa)
+            val tls = trustCa.copy(clientCertificateAlias = "added")
+            repository.setTls(outdated.id, tls)
+
+            val client = repository.client(outdated)!!
+
+            assertSame(repository.activeClient.first(), client)
+            assertEquals(
+                1,
+                client.config.tls
+                    ?.keyManagers
+                    ?.size,
+            )
+        }
+
+    @Test
+    fun `an invalid stored certificate is skipped instead of breaking the client`() =
+        runTest {
+            server.enqueue(uiSettings())
+            val account = repository.signInWithToken(serverUrl(), AuthToken("abc"), tls = trustCa)
+            // As if the file had been edited: bypasses the repository's validation.
+            val broken = TrustedCertificate(byteArrayOf(1, 2, 3))
+            store.setTls(account.id, trustCa.copy(trustedCertificates = trustCa.trustedCertificates + broken))
+
+            val client = repository.activeClient.first()!!
+
+            assertEquals(listOf(ca.certificate), client.config.tls?.additionalTrustedCertificates)
         }
 }

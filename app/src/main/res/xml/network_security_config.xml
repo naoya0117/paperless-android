@@ -3,6 +3,8 @@
     Self-hosted servers:
     - Cleartext HTTP is permitted (e.g. LAN access); the app warns the user when it is used.
     - User-installed CA certificates are trusted so that servers using a private CA work.
+    - Accounts can trust further certificates in the app (TlsConfig.additionalTrustedCertificates). Those
+      are checked after this config fails, so certificate pins added here would not hold for such accounts.
 -->
 <network-security-config xmlns:tools="http://schemas.android.com/tools">
     <!-- Both are intentional for self-hosted servers; see the comment above. -->

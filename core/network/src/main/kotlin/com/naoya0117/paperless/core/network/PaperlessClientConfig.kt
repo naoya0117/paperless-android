@@ -31,7 +31,8 @@ public data class PaperlessClientConfig(
  * @property keyManagers client certificate for mutual TLS.
  * @property trustManager trust anchors; `null` uses the platform default trust manager.
  * @property additionalTrustedCertificates trusted in addition to [trustManager] (e.g. a private CA or a
- *   self-signed server certificate). The host name is still verified.
+ *   self-signed server certificate) for every connection made with this config. The host name is still
+ *   verified.
  */
 public class TlsConfig(
     public val keyManagers: List<KeyManager> = emptyList(),
