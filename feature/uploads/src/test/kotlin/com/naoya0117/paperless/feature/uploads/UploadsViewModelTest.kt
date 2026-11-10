@@ -14,8 +14,11 @@ import com.naoya0117.paperless.core.datastore.SecretCipher
 import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.AuthToken
 import com.naoya0117.paperless.core.model.Upload
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -51,6 +54,7 @@ class UploadsViewModelTest {
     private val scheduled = CopyOnWriteArrayList<String>()
     private lateinit var accounts: AccountRepository
     private lateinit var viewModel: UploadsViewModel
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private object XorCipher : SecretCipher {
         override fun encrypt(plain: ByteArray) = plain.map { (it.toInt() xor 0x33).toByte() }.toByteArray()
@@ -91,11 +95,12 @@ class UploadsViewModelTest {
                 override fun cancel(uploadId: String) = Unit
             }
         val repository = UploadRepository(accounts, queue, scheduler, UploadStorage(folder.newFolder("uploads")))
-        viewModel = UploadsViewModel(repository, ApplicationProvider.getApplicationContext())
+        viewModel = UploadsViewModel(repository, ApplicationProvider.getApplicationContext(), applicationScope)
     }
 
     @After
     fun tearDown() {
+        applicationScope.cancel()
         Dispatchers.resetMain()
         server.close()
     }
@@ -136,6 +141,16 @@ class UploadsViewModelTest {
         }
 
     @Test
+    fun `reports when no file can be read`() =
+        runTest {
+            signIn()
+
+            viewModel.enqueue(listOf(Uri.fromFile(folder.root.resolve("missing.pdf"))))
+
+            assertEquals(EnqueueResult.Failed(1), viewModel.enqueueResults.await())
+        }
+
+    @Test
     fun `reports when no account is signed in`() =
         runTest {
             viewModel.enqueue(listOf(file("a.pdf", "a")))
@@ -149,6 +164,7 @@ class UploadsViewModelTest {
         runTest {
             signIn()
             viewModel.enqueue(listOf(file("a.pdf", "a")))
+            assertEquals(EnqueueResult.Queued(1), viewModel.enqueueResults.await())
             val upload = viewModel.uploads.await { it.isNotEmpty() }.single()
 
             viewModel.remove(upload.id)

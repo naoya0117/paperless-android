@@ -1,6 +1,7 @@
 package com.naoya0117.paperless
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -61,6 +62,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,6 +86,7 @@ import com.naoya0117.paperless.feature.documents.InboxViewModel
 import com.naoya0117.paperless.feature.uploads.EnqueueResult
 import com.naoya0117.paperless.feature.uploads.UploadsScreen
 import com.naoya0117.paperless.feature.uploads.UploadsViewModel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private const val DOCUMENTS_ROUTE = "documents"
@@ -158,6 +161,8 @@ fun MainShell(
         if (sharedFiles.isNotEmpty()) {
             enqueue(sharedFiles)
             onSharedFilesHandled()
+            // On a cold start the NavHost (inside the Scaffold) may not have its graph yet.
+            navController.currentBackStackEntryFlow.first()
             navController.navigate(UPLOADS_ROUTE) { launchSingleTop = true }
         }
     }
@@ -178,16 +183,13 @@ fun MainShell(
                             result.queued,
                             result.failed,
                         )
+                    is EnqueueResult.Failed ->
+                        resources.getQuantityString(R.plurals.uploads_failed_message, result.count, result.count)
                     EnqueueResult.NotSignedIn -> resources.getString(R.string.share_sign_in_first)
                 }
-            val action =
-                if (result is EnqueueResult.NotSignedIn) {
-                    null
-                } else {
-                    resources.getString(
-                        R.string.uploads_view_action,
-                    )
-                }
+            val showsUploads = navController.currentDestination?.route == UPLOADS_ROUTE
+            val queuedAny = result is EnqueueResult.Queued || result is EnqueueResult.PartlyFailed
+            val action = if (queuedAny && !showsUploads) resources.getString(R.string.uploads_view_action) else null
             if (snackbar.showSnackbar(message, actionLabel = action) == SnackbarResult.ActionPerformed) {
                 navController.navigate(UPLOADS_ROUTE) { launchSingleTop = true }
             }
@@ -264,7 +266,7 @@ fun MainShell(
             snackbarHost = { SnackbarHost(snackbar) },
             floatingActionButton = {
                 if (route == DOCUMENTS_ROUTE) {
-                    FloatingActionButton(onClick = { pickFiles.launch(arrayOf("*/*")) }) {
+                    FloatingActionButton(onClick = { pickFiles.launch(UPLOAD_MIME_TYPES) }) {
                         Icon(Icons.Outlined.UploadFile, contentDescription = stringResource(R.string.upload_files))
                     }
                 }
@@ -439,9 +441,32 @@ private fun SignOutDialog(
     )
 }
 
+/** What Paperless-ngx can consume; the same as the share targets in the manifest. */
+private val UPLOAD_MIME_TYPES =
+    arrayOf(
+        "application/pdf",
+        "image/*",
+        "text/plain",
+        "text/csv",
+        "application/rtf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.oasis.opendocument.text",
+        "application/vnd.oasis.opendocument.spreadsheet",
+        "application/vnd.oasis.opendocument.presentation",
+        "message/rfc822",
+    )
+
+private const val PREFERENCES = "ui"
+private const val NOTIFICATION_PERMISSION_ASKED = "notification_permission_asked"
+
 /**
- * Queues files for upload; the first time (Android 13+) it asks for the notification shown while sending.
- * Uploads run either way.
+ * Queues files for upload. Once (Android 13+) it asks for the notification shown while sending; uploads run
+ * either way, so a refusal is not asked again.
  */
 @Composable
 private fun rememberUploadStarter(uploads: UploadsViewModel): (List<Uri>) -> Unit {
@@ -450,10 +475,13 @@ private fun rememberUploadStarter(uploads: UploadsViewModel): (List<Uri>) -> Uni
     return remember(uploads, permission) {
         { uris ->
             if (uris.isNotEmpty()) {
+                val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    !preferences.getBoolean(NOTIFICATION_PERMISSION_ASKED, false) &&
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
                     PackageManager.PERMISSION_GRANTED
                 ) {
+                    preferences.edit { putBoolean(NOTIFICATION_PERMISSION_ASKED, true) }
                     permission.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
                 uploads.enqueue(uris)

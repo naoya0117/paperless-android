@@ -25,4 +25,9 @@
         <item quantity="one">%1$d file queued for upload</item>
         <item quantity="other">%1$d files queued for upload</item>
     </plurals>
+    <plurals name="uploads_failed_message">
+        <item quantity="one">The file could not be read</item>
+        <item quantity="other">%1$d files could not be read</item>
+    </plurals>
+    <string name="share_no_files">No files to upload were shared</string>
 </resources>

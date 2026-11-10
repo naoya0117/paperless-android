@@ -5,16 +5,14 @@ import androidx.work.Configuration
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
+import com.naoya0117.paperless.core.data.ApplicationScope
 import com.naoya0117.paperless.core.data.DocumentFileRepository
 import com.naoya0117.paperless.core.data.UploadRepository
 import com.naoya0117.paperless.core.data.UploadWorkerFactory
 import com.naoya0117.paperless.feature.documents.documentThumbnails
 import dagger.Lazy
 import dagger.hilt.android.HiltAndroidApp
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -29,11 +27,8 @@ class PaperlessApplication :
 
     @Inject lateinit var documentFiles: Lazy<DocumentFileRepository>
 
-    /**
-     * Work that may outlive any screen; lives as long as the process. Failures are not fatal: this is only
-     * housekeeping, repeated at the next start.
-     */
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, _ -> })
+    @Inject @ApplicationScope
+    lateinit var appScope: CoroutineScope
 
     override fun onCreate() {
         super.onCreate()

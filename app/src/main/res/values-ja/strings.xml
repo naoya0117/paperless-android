@@ -21,4 +21,8 @@
     <plurals name="uploads_queued_message">
         <item quantity="other">%1$d 件のファイルをアップロードに追加しました</item>
     </plurals>
+    <plurals name="uploads_failed_message">
+        <item quantity="other">%1$d 件のファイルを読み込めませんでした</item>
+    </plurals>
+    <string name="share_no_files">アップロードできるファイルが共有されませんでした</string>
 </resources>

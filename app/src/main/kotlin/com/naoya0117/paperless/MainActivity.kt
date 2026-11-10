@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.IntentCompat
+import androidx.core.os.BundleCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.DEFAULT_ARGS_KEY
 import androidx.lifecycle.HasDefaultViewModelProviderFactory
@@ -46,8 +47,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        // Not again when recreated (e.g. rotated): the share was handled then.
-        if (savedInstanceState == null) sharedFiles.value = intent.sharedUris()
+        sharedFiles.value =
+            if (savedInstanceState != null) {
+                // Recreated (e.g. rotated): only what was not handled yet.
+                BundleCompat.getParcelableArrayList(savedInstanceState, PENDING_SHARED_FILES, Uri::class.java).orEmpty()
+            } else if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) {
+                // Reopened from the recent apps: the share in the intent was handled before.
+                emptyList()
+            } else {
+                received(intent)
+            }
         setContent {
             PaperlessTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -59,7 +68,27 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        intent.sharedUris().takeIf { it.isNotEmpty() }?.let { sharedFiles.value = it }
+        setIntent(intent)
+        received(intent).takeIf { it.isNotEmpty() }?.let { sharedFiles.value = it }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putParcelableArrayList(PENDING_SHARED_FILES, ArrayList(sharedFiles.value))
+    }
+
+    /** The files shared by [intent]; says so if a share has none (e.g. a link shared as text). */
+    private fun received(intent: Intent): List<Uri> {
+        val uris = intent.sharedUris()
+        if (uris.isEmpty() && intent.action in SHARE_ACTIONS) {
+            Toast.makeText(this, R.string.share_no_files, Toast.LENGTH_LONG).show()
+        }
+        return uris
+    }
+
+    private companion object {
+        const val PENDING_SHARED_FILES = "pending_shared_files"
+        val SHARE_ACTIONS = setOf(Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE)
     }
 }
 

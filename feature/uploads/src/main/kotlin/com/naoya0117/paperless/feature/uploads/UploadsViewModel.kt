@@ -6,6 +6,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.naoya0117.paperless.core.data.ApplicationScope
 import com.naoya0117.paperless.core.data.NotSignedInException
 import com.naoya0117.paperless.core.data.UploadRepository
 import com.naoya0117.paperless.core.data.UploadSource
@@ -13,6 +14,7 @@ import com.naoya0117.paperless.core.model.Upload
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -37,6 +39,11 @@ sealed interface EnqueueResult {
         val failed: Int,
     ) : EnqueueResult
 
+    /** None of the files could be read. */
+    data class Failed(
+        val count: Int,
+    ) : EnqueueResult
+
     data object NotSignedIn : EnqueueResult
 }
 
@@ -47,6 +54,7 @@ class UploadsViewModel
     constructor(
         private val repository: UploadRepository,
         @ApplicationContext private val context: Context,
+        @ApplicationScope private val applicationScope: CoroutineScope,
     ) : ViewModel() {
         val uploads: StateFlow<List<Upload>> =
             repository.uploads.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
@@ -58,22 +66,29 @@ class UploadsViewModel
 
         /**
          * Copies the files into the upload queue. The caller's permission for the URIs only lasts while it is
-         * alive (e.g. the activity a file was shared to), so the copies are made at once.
+         * alive (e.g. the activity a file was shared to), so the copies are made at once; they go on if the
+         * screen is closed meanwhile (only the result is not shown then).
          */
         fun enqueue(uris: List<Uri>) {
             if (uris.isEmpty()) return
-            viewModelScope.launch {
+            applicationScope.launch {
+                val files = uris.distinct()
                 var queued = 0
                 var failed = 0
-                for (uri in uris.distinct()) {
+                for (uri in files) {
                     try {
                         repository.enqueue(source(uri))
                         queued++
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: NotSignedInException) {
-                        results.send(EnqueueResult.NotSignedIn)
-                        return@launch
+                        // Signed out meanwhile: the rest cannot be queued either.
+                        failed = files.size - queued
+                        if (queued == 0) {
+                            results.trySend(EnqueueResult.NotSignedIn)
+                            return@launch
+                        }
+                        break
                     } catch (
                         @Suppress("TooGenericExceptionCaught") _: Exception,
                     ) {
@@ -82,14 +97,13 @@ class UploadsViewModel
                     }
                 }
                 val result =
-                    if (failed ==
-                        0
-                    ) {
-                        EnqueueResult.Queued(queued)
-                    } else {
-                        EnqueueResult.PartlyFailed(queued, failed)
+                    when {
+                        failed == 0 -> EnqueueResult.Queued(queued)
+                        queued == 0 -> EnqueueResult.Failed(failed)
+                        else -> EnqueueResult.PartlyFailed(queued, failed)
                     }
-                results.send(result)
+                // Not waiting: nobody may collect any more (screen closed).
+                results.trySend(result)
             }
         }
 
@@ -103,8 +117,13 @@ class UploadsViewModel
 
         private suspend fun source(uri: Uri): UploadSource {
             val resolver = context.contentResolver
-            val name = withContext(Dispatchers.IO) { displayName(resolver, uri) } ?: uri.lastPathSegment ?: DEFAULT_NAME
-            return UploadSource(name, resolver.getType(uri)) {
+            // Both ask the other app's provider, which may be slow.
+            val (name, type) =
+                withContext(Dispatchers.IO) {
+                    displayName(resolver, uri) to
+                        runCatching { resolver.getType(uri) }.getOrNull()
+                }
+            return UploadSource(name ?: uri.lastPathSegment ?: DEFAULT_NAME, type) {
                 resolver.openInputStream(uri) ?: throw IOException("Cannot open $uri")
             }
         }
