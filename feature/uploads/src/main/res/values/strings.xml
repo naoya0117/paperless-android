@@ -40,4 +40,19 @@
     <string name="uploads_not_signed_in_scan">Sign in to upload</string>
     <string name="scan_camera_unavailable">The camera cannot be used.</string>
     <string name="scan_open_settings">Open the app\'s settings</string>
+    <string name="scan_crop">Trim</string>
+    <string name="scan_crop_title">Trim the page</string>
+    <string name="scan_crop_cancel">Cancel</string>
+    <string name="scan_crop_reset">Reset</string>
+    <string name="scan_crop_apply">Apply</string>
+    <plurals name="upload_banner_sending">
+        <item quantity="one">Uploading %1$d document…</item>
+        <item quantity="other">Uploading %1$d documents…</item>
+    </plurals>
+    <plurals name="upload_banner_processing">
+        <item quantity="one">The server is processing %1$d document…</item>
+        <item quantity="other">The server is processing %1$d documents…</item>
+    </plurals>
+    <string name="scan_crop_invalid">The corners must form a box (not crossed, not too small).</string>
+    <string name="scan_page_unreadable">Cannot read this page</string>
 </resources>

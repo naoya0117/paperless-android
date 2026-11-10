@@ -40,4 +40,17 @@
     <string name="uploads_not_signed_in_scan">アップロードするにはサインインしてください</string>
     <string name="scan_camera_unavailable">カメラを使えません。</string>
     <string name="scan_open_settings">アプリの設定を開く</string>
+    <string name="scan_crop">トリミング</string>
+    <string name="scan_crop_title">ページをトリミング</string>
+    <string name="scan_crop_cancel">キャンセル</string>
+    <string name="scan_crop_reset">リセット</string>
+    <string name="scan_crop_apply">適用</string>
+    <plurals name="upload_banner_sending">
+        <item quantity="other">%1$d 件をアップロード中…</item>
+    </plurals>
+    <plurals name="upload_banner_processing">
+        <item quantity="other">サーバーで %1$d 件を処理中…</item>
+    </plurals>
+    <string name="scan_crop_invalid">4 隅が四角形になるように置いてください（交差したり小さすぎたりしないように）。</string>
+    <string name="scan_page_unreadable">このページを読み込めません</string>
 </resources>

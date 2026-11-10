@@ -164,4 +164,107 @@ class ScanViewModelTest {
         }
         assertEquals(8, entries.size)
     }
+
+    @Test
+    fun `trimming follows a turned page and is kept across process death`() =
+        runTest {
+            viewModel.addImages(listOf(image("a.jpg")))
+            viewModel.state.await { it.pages.size == 1 && !it.working }
+            val corners = listOf(0.1f, 0.2f, 0.9f, 0.2f, 0.9f, 0.8f, 0.1f, 0.8f)
+
+            viewModel.setCorners(0, corners)
+            viewModel.rotate(0)
+
+            // Turned clockwise: the top left (0.1, 0.2) of the old page is now at the top right (0.8, 0.1).
+            val turned =
+                viewModel.state.value.pages
+                    .single()
+                    .corners!!
+            assertEquals(
+                listOf(0.2f, 0.1f, 0.8f, 0.1f, 0.8f, 0.9f, 0.2f, 0.9f),
+                turned.map { Math.round(it * 10) / 10f },
+            )
+            // Four turns: as before.
+            var back = corners
+            repeat(4) { back = ScanViewModel.turnCorners(back) }
+            assertEquals(corners, back.map { Math.round(it * 10) / 10f })
+            // The whole page is no trimming.
+            viewModel.setCorners(0, ScanViewModel.FULL_PAGE)
+            assertEquals(
+                null,
+                viewModel.state.value.pages
+                    .single()
+                    .corners,
+            )
+        }
+
+    @Test
+    fun `a trimmed page is as large as its corners`() =
+        runTest {
+            viewModel.addImages(listOf(image("a.jpg")))
+            val page =
+                viewModel.state
+                    .await { it.pages.size == 1 && !it.working }
+                    .pages
+                    .single()
+
+            val bitmap =
+                viewModel.render(
+                    page.copy(corners = listOf(0f, 0f, 0.5f, 0f, 0.5f, 0.5f, 0f, 0.5f)),
+                    enhance = false,
+                    maxSide = 1000,
+                )
+
+            assertEquals(10, bitmap.width)
+            assertEquals(15, bitmap.height)
+        }
+
+    @Test
+    fun `upload progress counts what is sent and processed`() {
+        fun upload(
+            state: com.naoya0117.paperless.core.model.UploadState,
+            size: Long,
+            sent: Long,
+        ) = com.naoya0117.paperless.core.model.Upload(
+            id = state.name + size,
+            accountId = "a",
+            fileName = "f",
+            mimeType = null,
+            size = size,
+            metadata =
+                com.naoya0117.paperless.core.model
+                    .DocumentUpload(),
+            state = state,
+            sentBytes = sent,
+            taskId = null,
+            documentId = null,
+            duplicateOfDocumentId = null,
+            errorKind = null,
+            error = null,
+            createdAt = java.time.Instant.EPOCH,
+        )
+        val progress =
+            UploadProgress.of(
+                listOf(
+                    upload(com.naoya0117.paperless.core.model.UploadState.UPLOADING, 100, 50),
+                    upload(com.naoya0117.paperless.core.model.UploadState.QUEUED, 100, 0),
+                    upload(com.naoya0117.paperless.core.model.UploadState.PROCESSING, 10, 10),
+                    upload(com.naoya0117.paperless.core.model.UploadState.DONE, 10, 10),
+                ),
+            )
+        assertEquals(UploadProgress(sending = 2, processing = 1, sent = 60f / 210), progress)
+        assertEquals(3, progress.active)
+    }
+
+    @Test
+    fun `only proper quadrilaterals trim`() {
+        assertTrue(ScanViewModel.isValidQuad(ScanViewModel.FULL_PAGE))
+        assertTrue(ScanViewModel.isValidQuad(listOf(0.1f, 0.2f, 0.9f, 0.1f, 0.8f, 0.9f, 0.2f, 0.8f)))
+        // Top left and top right swapped: mirrored.
+        assertTrue(!ScanViewModel.isValidQuad(listOf(1f, 0f, 0f, 0f, 1f, 1f, 0f, 1f)))
+        // Crossed (bow tie).
+        assertTrue(!ScanViewModel.isValidQuad(listOf(0f, 0f, 1f, 0f, 0f, 1f, 1f, 1f)))
+        // Tiny.
+        assertTrue(!ScanViewModel.isValidQuad(listOf(0.5f, 0.5f, 0.55f, 0.5f, 0.55f, 0.55f, 0.5f, 0.55f)))
+    }
 }
