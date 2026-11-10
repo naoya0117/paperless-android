@@ -9,13 +9,18 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -54,7 +59,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScaffoldDefaults
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -89,6 +94,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -203,7 +209,7 @@ fun MainShell(
     LaunchedEffect(sharedFiles) {
         if (sharedFiles.isNotEmpty()) {
             enqueue(sharedFiles)
-            // On a cold start the NavHost (inside the Scaffold) may not have its graph yet. Marked handled only
+            // On a cold start the NavHost (in its screen's frame) may not have its graph yet. Marked handled only
             // afterwards: that changes the key, which would cancel this effect.
             navController.currentBackStackEntryFlow.first()
             navController.navigate(UPLOADS_ROUTE) { launchSingleTop = true }
@@ -234,7 +240,9 @@ fun MainShell(
             val showsUploads = navController.currentDestination?.route == UPLOADS_ROUTE
             val queuedAny = result is EnqueueResult.Queued || result is EnqueueResult.PartlyFailed
             val action = if (queuedAny && !showsUploads) resources.getString(R.string.uploads_view_action) else null
-            if (snackbar.showSnackbar(message, actionLabel = action) == SnackbarResult.ActionPerformed) {
+            // Not indefinitely (the default with an action): it would wait over other screens.
+            val shown = snackbar.showSnackbar(message, actionLabel = action, duration = SnackbarDuration.Long)
+            if (shown == SnackbarResult.ActionPerformed) {
                 navController.navigate(UPLOADS_ROUTE) { launchSingleTop = true }
             }
         }
@@ -287,84 +295,52 @@ fun MainShell(
             )
         },
     ) {
-        val secondaryTitle =
-            when (route) {
-                INBOX_ROUTE -> R.string.title_inbox
-                UPLOADS_ROUTE -> R.string.drawer_uploads
-                VIEW_ROUTE -> R.string.drawer_views
-                else -> null
-            }
-        // A saved view is titled with its name.
-        val viewName =
-            if (route == VIEW_ROUTE) {
-                val id = backStack?.arguments?.getLong(DocumentListViewModel.VIEW_ID_ARGUMENT)
-                allSavedViews.firstOrNull { it.id == id }?.name
-            } else {
-                null
-            }
-        val listScreen = tab != null || secondaryTitle != null
-        Scaffold(
-            // The lists share this bar; other screens (e.g. the viewer) bring their own.
-            topBar = {
-                when (route) {
-                    DOCUMENTS_ROUTE, SEARCH_ROUTE ->
-                        CenterAlignedTopAppBar(
-                            title = { Text(stringResource(checkNotNull(tab).label)) },
-                            navigationIcon = {
-                                IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                    Icon(Icons.Outlined.Menu, contentDescription = stringResource(R.string.menu_open))
-                                }
-                            },
-                            actions = {
-                                // The inbox belongs to the documents tab.
-                                if (route == DOCUMENTS_ROUTE && inboxCount > 0) {
-                                    InboxButton(inboxCount) {
-                                        navController.navigate(INBOX_ROUTE) {
-                                            launchSingleTop =
-                                                true
-                                        }
-                                    }
-                                }
-                            },
-                        )
-                    INBOX_ROUTE, UPLOADS_ROUTE, VIEW_ROUTE ->
-                        CenterAlignedTopAppBar(
-                            title = {
-                                Text(
-                                    viewName ?: stringResource(checkNotNull(secondaryTitle)),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                            navigationIcon = {
-                                // navigateUp never leaves the start destination (e.g. on a double tap).
-                                IconButton(onClick = { navController.navigateUp() }) {
-                                    Icon(
-                                        Icons.AutoMirrored.Outlined.ArrowBack,
-                                        contentDescription = stringResource(R.string.back),
-                                    )
-                                }
-                            },
-                        )
-                }
-            },
-            bottomBar = { if (tab != null) TabBar(tab, navController) },
-            snackbarHost = { SnackbarHost(snackbar) },
-            floatingActionButton = {
-                if (route == DOCUMENTS_ROUTE) {
-                    FloatingActionButton(onClick = { pickFiles.launch(UPLOAD_MIME_TYPES) }) {
-                        Icon(Icons.Outlined.UploadFile, contentDescription = stringResource(R.string.upload_files))
+        /** The bar of a secondary list (inbox, saved view, uploads): back and its title. */
+        val backBar: @Composable (String) -> Unit = { title ->
+            CenterAlignedTopAppBar(
+                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                navigationIcon = {
+                    // navigateUp never leaves the start destination (e.g. on a double tap).
+                    IconButton(onClick = dropUnlessResumed { navController.navigateUp() }) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
-                }
-            },
-            // Other screens (e.g. the viewer) are a Scaffold of their own and handle the system bars themselves.
-            contentWindowInsets = if (listScreen) ScaffoldDefaults.contentWindowInsets else WindowInsets(0),
-        ) { padding ->
+                },
+            )
+        }
+
+        /** The bar of a tab: the menu and, on the documents tab, the inbox. */
+        val tabBar: @Composable (Tab) -> Unit = { shown ->
+            CenterAlignedTopAppBar(
+                title = { Text(stringResource(shown.label)) },
+                navigationIcon = {
+                    IconButton(onClick = dropUnlessResumed { scope.launch { drawerState.open() } }) {
+                        Icon(Icons.Outlined.Menu, contentDescription = stringResource(R.string.menu_open))
+                    }
+                },
+                actions = {
+                    // The inbox belongs to the documents tab.
+                    if (shown == Tab.DOCUMENTS && inboxCount > 0) {
+                        InboxButton(
+                            inboxCount,
+                            dropUnlessResumed {
+                                navController.navigate(INBOX_ROUTE) {
+                                    launchSingleTop =
+                                        true
+                                }
+                            },
+                        )
+                    }
+                },
+            )
+        }
+
+        // Each screen has its bars (in a Scaffold of its own), so that they move with it, e.g. while the back
+        // gesture shows the screen underneath.
+        Box(Modifier.fillMaxSize()) {
             NavHost(
                 navController = navController,
                 startDestination = DOCUMENTS_ROUTE,
-                modifier = Modifier.padding(padding),
-                // One animation for both back button and back gesture (predictive back plays the pop transitions):
+                // One animation for the back button and the back gesture (its own transitions are set to the same):
                 // screens slide in from the right and back out to it. Between tabs they fade.
                 enterTransition = {
                     if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
@@ -384,24 +360,11 @@ fun MainShell(
                             fadeOut()
                     }
                 },
-                popEnterTransition = {
-                    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
-                        fadeIn()
-                    } else {
-                        slideIntoContainer(
-                            AnimatedContentTransitionScope.SlideDirection.End,
-                            initialOffset = { it / 4 },
-                        ) +
-                            fadeIn()
-                    }
-                },
-                popExitTransition = {
-                    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
-                        fadeOut()
-                    } else {
-                        slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End)
-                    }
-                },
+                popEnterTransition = { popEnter() },
+                popExitTransition = { popExit() },
+                // The back gesture: the same as the back button (by default it shrinks the screen instead).
+                predictivePopEnterTransition = { popEnter() },
+                predictivePopExitTransition = { popExit() },
             ) {
                 LIST_ROUTES.forEach { (path, mode) ->
                     composable(
@@ -414,11 +377,36 @@ fun MainShell(
                                 },
                             ),
                     ) {
-                        DocumentListScreen(
-                            onOpenDocument = { navController.navigate("document/${it.id}") },
-                            // The inbox count is shown on the documents tab only.
-                            onRefresh = { if (path == DOCUMENTS_ROUTE) inbox.refresh(force = true) },
-                        )
+                        val shown = Tab.entries.firstOrNull { it.route == path }
+                        ListScaffold(
+                            topBar = {
+                                when {
+                                    shown != null -> tabBar(shown)
+                                    path == INBOX_ROUTE -> backBar(stringResource(R.string.title_inbox))
+                                    else -> error("No bar for $path")
+                                }
+                            },
+                            bottomBar = { if (shown != null) TabBar(shown, navController) },
+                            floatingActionButton = {
+                                if (shown == Tab.DOCUMENTS) {
+                                    FloatingActionButton(
+                                        onClick = dropUnlessResumed { pickFiles.launch(UPLOAD_MIME_TYPES) },
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.UploadFile,
+                                            contentDescription = stringResource(R.string.upload_files),
+                                        )
+                                    }
+                                }
+                            },
+                        ) { padding ->
+                            DocumentListScreen(
+                                onOpenDocument = { navController.navigate("document/${it.id}") },
+                                modifier = Modifier.padding(padding),
+                                // The inbox count is shown on the documents tab only.
+                                onRefresh = { if (path == DOCUMENTS_ROUTE) inbox.refresh(force = true) },
+                            )
+                        }
                     }
                 }
                 composable(
@@ -431,8 +419,18 @@ fun MainShell(
                             },
                             navArgument(DocumentListViewModel.VIEW_ID_ARGUMENT) { type = NavType.LongType },
                         ),
-                ) {
-                    DocumentListScreen(onOpenDocument = { navController.navigate("document/${it.id}") })
+                ) { entry ->
+                    // A saved view is titled with its name.
+                    val id = entry.arguments?.getLong(DocumentListViewModel.VIEW_ID_ARGUMENT)
+                    val name = allSavedViews.firstOrNull { it.id == id }?.name ?: stringResource(R.string.drawer_views)
+                    ListScaffold(
+                        topBar = { backBar(name) },
+                    ) { padding ->
+                        DocumentListScreen(
+                            onOpenDocument = { navController.navigate("document/${it.id}") },
+                            modifier = Modifier.padding(padding),
+                        )
+                    }
                 }
                 composable(
                     DOCUMENT_ROUTE,
@@ -489,10 +487,37 @@ fun MainShell(
                     TrashScreen(onBack = dropUnlessResumed { navController.navigateUp() })
                 }
                 composable(UPLOADS_ROUTE) {
-                    UploadsScreen(viewModel = uploads, onOpenDocument = { id ->
-                        navController.navigate("document/$id")
-                    })
+                    ListScaffold(
+                        topBar = { backBar(stringResource(R.string.drawer_uploads)) },
+                    ) { padding ->
+                        UploadsScreen(
+                            viewModel = uploads,
+                            onOpenDocument = { id -> navController.navigate("document/$id") },
+                            modifier = Modifier.padding(padding),
+                        )
+                    }
                 }
+            }
+            // One host for the lists (other screens have their own): above the tabs (and button) on a tab,
+            // otherwise above the navigation bar. Leaving the lists dismisses it.
+            val onList = route in TAB_ROUTES || route in SECONDARY_LIST_ROUTES
+            LaunchedEffect(onList) { if (!onList) snackbar.currentSnackbarData?.dismiss() }
+            if (onList) {
+                SnackbarHost(
+                    snackbar,
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(
+                            bottom =
+                                when (tab) {
+                                    // Also above the upload button.
+                                    Tab.DOCUMENTS -> TAB_BAR_HEIGHT + FAB_SPACE
+                                    null -> 0.dp
+                                    else -> TAB_BAR_HEIGHT
+                                },
+                        ),
+                )
             }
         }
     }
@@ -507,14 +532,16 @@ private fun TabBar(
         Tab.entries.forEach { item ->
             NavigationBarItem(
                 selected = item == current,
-                onClick = {
-                    navController.navigate(item.route) {
-                        // The documents tab is the root; the others come back to it on Back.
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
+                // Not from a tab screen that is leaving (the bar moves with it, e.g. while a document opens).
+                onClick =
+                    dropUnlessResumed {
+                        navController.navigate(item.route) {
+                            // The documents tab is the root; the others come back to it on Back.
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
                 icon = { Icon(item.icon, contentDescription = null) },
                 label = { Text(stringResource(item.label)) },
             )
@@ -713,6 +740,45 @@ private fun SignOutDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
+
+/** The frame of a list: its bars and an optional button (the snackbar is the shell's, over every screen). */
+@Composable
+private fun ListScaffold(
+    topBar: @Composable () -> Unit,
+    bottomBar: @Composable () -> Unit = {},
+    floatingActionButton: @Composable () -> Unit = {},
+    content: @Composable (PaddingValues) -> Unit,
+) = Scaffold(
+    topBar = topBar,
+    bottomBar = bottomBar,
+    floatingActionButton = floatingActionButton,
+    content = content,
+)
+
+/** Back to the previous screen: it comes back from the left (between tabs they fade). */
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.popEnter(): EnterTransition =
+    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
+        fadeIn()
+    } else {
+        slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, initialOffset = { it / 4 }) + fadeIn()
+    }
+
+/** Back to the previous screen: the current one slides out to the right (between tabs they fade). */
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.popExit(): ExitTransition =
+    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
+        fadeOut()
+    } else {
+        slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End)
+    }
+
+/** The height of the tab bar (Material 3 navigation bar), which the snackbar stays above. */
+private val TAB_BAR_HEIGHT = 80.dp
+
+/** Lists without tabs; with the tabs, the screens the shell's snackbar shows on. */
+private val SECONDARY_LIST_ROUTES = setOf(INBOX_ROUTE, UPLOADS_ROUTE, VIEW_ROUTE)
+
+/** A floating action button (56dp) with its margin. */
+private val FAB_SPACE = 72.dp
 
 /** A new label in the label editor (no ID). */
 private const val NEW_LABEL = -1L

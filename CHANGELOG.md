@@ -74,3 +74,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Viewer: scrolling down hides the bars (full screen), scrolling up shows them; the search is in the menu (⋮);
   page search also on Android 12–14 with the updated PDF renderer; screens slide in and out alike for the back
   button and the back gesture
+- The lists' top bars and tabs belong to their screens, so the back gesture shows the screen underneath with them
