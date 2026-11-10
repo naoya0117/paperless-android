@@ -116,6 +116,19 @@ class AccountRepository
         suspend fun switchTo(accountId: String) = store.setActive(accountId)
 
         /**
+         * The account's custom headers (name, value), e.g. to sign in to it again with the same ones. If the
+         * stored secrets cannot be read anymore, the values are empty; `null` if there is no such account.
+         */
+        suspend fun customHeaders(accountId: String): List<Pair<String, String>>? {
+            val account =
+                store.state
+                    .first()
+                    .accounts
+                    .firstOrNull { it.id == accountId } ?: return null
+            return store.credentials(accountId)?.customHeaders ?: account.customHeaderNames.map { it to "" }
+        }
+
+        /**
          * Changes the account's TLS settings (e.g. a renewed client certificate); its client is rebuilt.
          *
          * @throws IllegalArgumentException if there is no such account or a certificate is invalid

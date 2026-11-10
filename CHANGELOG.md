@@ -43,3 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   progress, the server's processing result (document, duplicate or error), retry and removal
 - Disk cache of document files (thumbnails, previews, downloads) per account, refreshed when a document changes,
   limited in size (least recently used first) and deleted when signing out
+- Sign-in logic for the login screen (`:feature:login`): server URL check with a warning for plain HTTP,
+  password or token, two-factor authentication codes, custom headers, client certificate and trusted
+  certificates, errors by kind, and signing in again with an account's settings

@@ -47,6 +47,7 @@ android {
 
 dependencies {
     implementation(projects.core.data)
+    implementation(projects.feature.login)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
