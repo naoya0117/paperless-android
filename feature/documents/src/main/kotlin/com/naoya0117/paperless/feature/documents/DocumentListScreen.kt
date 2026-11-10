@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -31,7 +32,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,7 +49,6 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import coil3.compose.AsyncImage
 import com.naoya0117.paperless.core.model.Document
-import java.io.File
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
@@ -67,6 +66,7 @@ fun DocumentListScreen(
     val pages = viewModel.documentPages.collectAsLazyPagingItems()
     val labels by viewModel.labelNames.collectAsStateWithLifecycle()
     val searchText by viewModel.searchText.collectAsStateWithLifecycle()
+    val accountId by viewModel.accountId.collectAsStateWithLifecycle()
     Column(modifier.fillMaxSize()) {
         if (viewModel.mode == DocumentListMode.SEARCH) {
             OutlinedTextField(
@@ -84,10 +84,14 @@ fun DocumentListScreen(
             labels = labels,
             mode = viewModel.mode,
             searchText = searchText,
-            thumbnail = viewModel::thumbnail,
+            accountId = accountId,
             onRefresh = {
                 viewModel.refreshLabels()
                 pages.refresh()
+            },
+            onRetry = {
+                viewModel.refreshLabels()
+                pages.retry()
             },
             onOpenDocument = onOpenDocument,
         )
@@ -101,8 +105,9 @@ private fun DocumentList(
     labels: LabelNames,
     mode: DocumentListMode,
     searchText: String,
-    thumbnail: suspend (Document) -> File?,
+    accountId: String?,
     onRefresh: () -> Unit,
+    onRetry: () -> Unit,
     onOpenDocument: (Document) -> Unit,
 ) {
     val refresh = pages.loadState.refresh
@@ -114,23 +119,29 @@ private fun DocumentList(
         when {
             pages.itemCount > 0 ->
                 LazyColumn(contentPadding = PaddingValues(bottom = 16.dp), modifier = Modifier.fillMaxSize()) {
-                    if (refresh is LoadState.Error) item { ErrorBanner(onRetry = pages::retry) }
+                    if (refresh is LoadState.Error) item { ErrorBanner(onRetry = onRetry) }
                     items(count = pages.itemCount, key = pages.itemKey { it.id }) { index ->
                         pages[index]?.let { document ->
-                            DocumentRow(document, labels, thumbnail, onClick = { onOpenDocument(document) })
+                            DocumentRow(document, labels, accountId, onClick = { onOpenDocument(document) })
                             HorizontalDivider(modifier = Modifier.padding(start = 136.dp))
                         }
                     }
                     when (pages.loadState.append) {
                         is LoadState.Loading -> item { LoadingRow() }
-                        is LoadState.Error -> item { ErrorBanner(onRetry = pages::retry) }
+                        is LoadState.Error -> item { ErrorBanner(onRetry = onRetry) }
                         else -> Unit
                     }
                 }
             refresh is LoadState.Loading -> Centered { CircularProgressIndicator() }
-            refresh is LoadState.Error -> Centered { ErrorBanner(onRetry = pages::retry) }
+            // Scrollable like the empty states, so that pull to refresh works too.
+            refresh is LoadState.Error -> Scrollable { ErrorBanner(onRetry = onRetry) }
             mode == DocumentListMode.SEARCH && searchText.isBlank() ->
                 EmptyState(Icons.Outlined.Search, stringResource(R.string.documents_search_prompt))
+            mode == DocumentListMode.SEARCH ->
+                EmptyState(
+                    Icons.Outlined.SearchOff,
+                    stringResource(R.string.documents_no_results),
+                )
             mode == DocumentListMode.INBOX ->
                 EmptyState(
                     Icons.Outlined.Inbox,
@@ -146,14 +157,14 @@ private fun DocumentList(
 private fun DocumentRow(
     document: Document,
     labels: LabelNames,
-    thumbnail: suspend (Document) -> File?,
+    accountId: String?,
     onClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        DocumentThumbnail(document, thumbnail)
+        ThumbnailImage(accountId, document)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 text = document.title,
@@ -193,11 +204,10 @@ private fun DocumentRow(
 
 /** Large enough to recognise the document (thumbnails are a page preview). */
 @Composable
-private fun DocumentThumbnail(
+private fun ThumbnailImage(
+    accountId: String?,
     document: Document,
-    thumbnail: suspend (Document) -> File?,
 ) {
-    val file by produceState<File?>(null, document.id, document.modified) { value = thumbnail(document) }
     val shape = RoundedCornerShape(8.dp)
     Box(
         modifier =
@@ -208,12 +218,11 @@ private fun DocumentThumbnail(
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape),
         contentAlignment = Alignment.Center,
     ) {
-        val loaded = file
-        if (loaded == null) {
-            Icon(Icons.Outlined.Description, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
-        } else {
+        // Shown while loading and when the thumbnail cannot be loaded; the image covers it.
+        Icon(Icons.Outlined.Description, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+        if (accountId != null) {
             AsyncImage(
-                model = loaded,
+                model = DocumentThumbnail(accountId, document),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 alignment = Alignment.TopCenter,
@@ -274,6 +283,11 @@ private fun LoadingRow() {
 @Composable
 private fun Centered(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
+}
+
+@Composable
+private fun Scrollable(content: @Composable () -> Unit) {
+    LazyColumn(modifier = Modifier.fillMaxSize()) { item { content() } }
 }
 
 @Composable

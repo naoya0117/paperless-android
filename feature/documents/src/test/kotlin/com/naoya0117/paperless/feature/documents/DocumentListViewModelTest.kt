@@ -4,8 +4,6 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.test.core.app.ApplicationProvider
 import com.naoya0117.paperless.core.data.AccountRepository
-import com.naoya0117.paperless.core.data.DocumentFileRepository
-import com.naoya0117.paperless.core.data.DocumentFileStorage
 import com.naoya0117.paperless.core.data.DocumentRepository
 import com.naoya0117.paperless.core.data.LabelRepository
 import com.naoya0117.paperless.core.data.PaperlessClientFactory
@@ -14,7 +12,6 @@ import com.naoya0117.paperless.core.datastore.AccountStore
 import com.naoya0117.paperless.core.datastore.SecretCipher
 import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.AuthToken
-import com.naoya0117.paperless.core.model.Document
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -31,7 +28,6 @@ import mockwebserver3.RecordedRequest
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -39,8 +35,6 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.net.Proxy
-import java.time.Instant
-import java.time.LocalDate
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -113,7 +107,7 @@ class DocumentListViewModelTest {
         DocumentListViewModel(
             DocumentRepository(accounts, cache),
             LabelRepository(accounts, cache),
-            DocumentFileRepository(accounts, DocumentFileStorage(folder.newFolder())),
+            accounts,
             savedState,
         )
 
@@ -145,42 +139,24 @@ class DocumentListViewModelTest {
         }
 
     @Test
-    fun `a thumbnail that cannot be loaded is null`() =
-        runTest {
-            accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls())
-            val document =
-                Document(
-                    id = 1,
-                    title = "Doc",
-                    content = "",
-                    created = LocalDate.of(2026, 1, 1),
-                    added = Instant.EPOCH,
-                    modified = Instant.EPOCH,
-                    correspondentId = null,
-                    documentTypeId = null,
-                    storagePathId = null,
-                    tagIds = emptyList(),
-                    archiveSerialNumber = null,
-                    originalFileName = null,
-                    archivedFileName = null,
-                    mimeType = null,
-                    pageCount = null,
-                    customFields = emptyList(),
-                    notes = null,
-                    owner = null,
-                    userCanChange = true,
-                    deletedAt = null,
-                    searchHit = null,
-                )
-
-            assertNull(withContext(Dispatchers.IO) { viewModel(DocumentListMode.ALL).thumbnail(document) })
-        }
-
-    @Test
     fun `the search text is kept across process death`() {
         val savedState = SavedStateHandle(mapOf(DocumentListViewModel.MODE_ARGUMENT to DocumentListMode.SEARCH.name))
         viewModel(savedState).setSearchText("invoice")
 
         assertEquals("invoice", viewModel(savedState).searchText.value)
     }
+
+    @Test
+    fun `the active account is exposed for thumbnails`() =
+        runTest {
+            val account = accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls())
+            val viewModel = viewModel(DocumentListMode.ALL)
+
+            val accountId =
+                withContext(Dispatchers.Default.limitedParallelism(1)) {
+                    withTimeout(10_000) { viewModel.accountId.first { it != null } }
+                }
+
+            assertEquals(account.id, accountId)
+        }
 }

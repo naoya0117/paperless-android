@@ -2,6 +2,7 @@
 <resources>
     <string name="documents_search_hint">文書を検索</string>
     <string name="documents_search_prompt">文書のタイトルと本文を検索します。</string>
+    <string name="documents_no_results">一致する文書はありません。</string>
     <string name="documents_inbox_empty">受信箱は空です。</string>
     <string name="documents_empty">文書はまだありません。</string>
     <string name="documents_load_error">文書を読み込めませんでした。</string>

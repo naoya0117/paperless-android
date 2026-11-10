@@ -5,14 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import com.naoya0117.paperless.core.data.DocumentFileRepository
+import com.naoya0117.paperless.core.data.AccountRepository
 import com.naoya0117.paperless.core.data.DocumentRepository
 import com.naoya0117.paperless.core.data.LabelRepository
 import com.naoya0117.paperless.core.model.Document
 import com.naoya0117.paperless.core.model.DocumentQuery
 import com.naoya0117.paperless.core.model.DocumentSearch
-import com.naoya0117.paperless.core.network.DocumentFileKind
-import com.naoya0117.paperless.core.network.PaperlessException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,8 +28,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.io.File
-import java.io.IOException
 import javax.inject.Inject
 
 /** Which documents a list shows. */
@@ -65,8 +61,8 @@ class DocumentListViewModel
     constructor(
         private val documents: DocumentRepository,
         private val labels: LabelRepository,
-        private val files: DocumentFileRepository,
-        savedState: SavedStateHandle,
+        accounts: AccountRepository,
+        private val savedState: SavedStateHandle,
     ) : ViewModel() {
         val mode: DocumentListMode =
             savedState.get<String>(MODE_ARGUMENT)?.let { name ->
@@ -78,8 +74,6 @@ class DocumentListViewModel
 
         /** The search text as typed (for [DocumentListMode.SEARCH]). */
         val searchText: StateFlow<String> = searchInput.asStateFlow()
-
-        private val savedStateHandle = savedState
 
         /** Empty for a search without text. */
         @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -102,6 +96,12 @@ class DocumentListViewModel
                         }
             }.cachedIn(viewModelScope)
 
+        /** For thumbnails ([DocumentThumbnail]), which are cached per account. */
+        val accountId: StateFlow<String?> =
+            accounts.state
+                .map { it.activeAccountId }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
+
         val labelNames: StateFlow<LabelNames> =
             combine(
                 labels.correspondents.items,
@@ -121,7 +121,7 @@ class DocumentListViewModel
 
         fun setSearchText(value: String) {
             searchInput.value = value
-            savedStateHandle[SEARCH_KEY] = value
+            savedState[SEARCH_KEY] = value
         }
 
         /** Labels change rarely; refreshed with the list (pull to refresh) and when the screen opens. */
@@ -138,21 +138,6 @@ class DocumentListViewModel
                 }
             }
         }
-
-        /** The thumbnail on disk, or `null` if it cannot be loaded (e.g. offline and not cached). */
-        suspend fun thumbnail(document: Document): File? =
-            try {
-                files.file(document, DocumentFileKind.THUMBNAIL).file
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: PaperlessException) {
-                null
-            } catch (_: IOException) {
-                null
-            } catch (_: IllegalStateException) {
-                // Not signed in (anymore).
-                null
-            }
 
         companion object {
             /** Navigation argument with the [DocumentListMode] name. */
