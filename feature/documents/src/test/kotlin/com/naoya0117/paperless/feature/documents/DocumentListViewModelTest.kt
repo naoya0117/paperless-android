@@ -1,8 +1,10 @@
 package com.naoya0117.paperless.feature.documents
 
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.paging.testing.asSnapshot
@@ -22,9 +24,13 @@ import com.naoya0117.paperless.core.model.AuthToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.job
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -146,20 +152,25 @@ class DocumentListViewModelTest {
 
     @After
     fun tearDown() {
+        // Cancel the view models and wait until their coroutines are done: one resuming on another thread
+        // while Main is reset fails ("Dispatchers.Main is used concurrently with setting it").
         store.clear()
         applicationScope.cancel()
+        runBlocking { withTimeout(10_000) { viewModelJobs.joinAll() } }
         Dispatchers.resetMain()
         server.close()
     }
 
-    /** Cleared after each test, so that none keeps collecting into the next one (which sets Main again). */
+    /** Every view model of a test, cleared in [tearDown]. */
     private val store = ViewModelStore()
+    private val viewModelJobs = mutableListOf<Job>()
 
-    private fun viewModel(savedState: SavedStateHandle): DocumentListViewModel =
-        ViewModelProvider.create(
-            store,
-            viewModelFactory { initializer { newViewModel(savedState) } },
-        )["vm${store.keys().size}", DocumentListViewModel::class]
+    private inline fun <reified VM : ViewModel> inStore(crossinline create: () -> VM): VM =
+        ViewModelProvider
+            .create(store, viewModelFactory { initializer { create() } })["vm${store.keys().size}", VM::class]
+            .also { viewModelJobs += it.viewModelScope.coroutineContext.job }
+
+    private fun viewModel(savedState: SavedStateHandle): DocumentListViewModel = inStore { newViewModel(savedState) }
 
     private fun newViewModel(savedState: SavedStateHandle) =
         DocumentListViewModel(
@@ -235,7 +246,7 @@ class DocumentListViewModelTest {
             // The count is set from the network thread: the view model must run on a real dispatcher here.
             Dispatchers.setMain(Dispatchers.Unconfined)
 
-            val inbox = InboxViewModel(DocumentRepository(accounts, cache))
+            val inbox = inStore { InboxViewModel(DocumentRepository(accounts, cache)) }
 
             val count = withContext(Dispatchers.Default) { withTimeout(10_000) { inbox.count.first { it > 0 } } }
             assertEquals(3, count)
@@ -243,7 +254,7 @@ class DocumentListViewModelTest {
 
     @Test
     fun `without an account the inbox count stays 0`() {
-        assertEquals(0, InboxViewModel(DocumentRepository(accounts, cache)).count.value)
+        assertEquals(0, inStore { InboxViewModel(DocumentRepository(accounts, cache)) }.count.value)
     }
 
     private class MutableClock(
@@ -265,7 +276,7 @@ class DocumentListViewModelTest {
             accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls())
             Dispatchers.setMain(Dispatchers.Unconfined)
             val clock = MutableClock()
-            val inbox = InboxViewModel(DocumentRepository(accounts, cache), clock)
+            val inbox = inStore { InboxViewModel(DocumentRepository(accounts, cache), clock) }
             inbox.awaitCount { it == 3 }
 
             inbox.refresh()
@@ -330,7 +341,7 @@ class DocumentListViewModelTest {
             offline.set(true)
             Dispatchers.setMain(Dispatchers.Unconfined)
 
-            val inbox = InboxViewModel(DocumentRepository(accounts, cache))
+            val inbox = inStore { InboxViewModel(DocumentRepository(accounts, cache)) }
 
             assertEquals(1, inbox.awaitCount { it > 0 })
         }
