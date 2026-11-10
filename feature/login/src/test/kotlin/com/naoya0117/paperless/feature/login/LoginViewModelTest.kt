@@ -1,5 +1,6 @@
 package com.naoya0117.paperless.feature.login
 
+import androidx.lifecycle.SavedStateHandle
 import com.naoya0117.paperless.core.data.AccountRepository
 import com.naoya0117.paperless.core.data.PaperlessClientFactory
 import com.naoya0117.paperless.core.datastore.AccountStore
@@ -40,6 +41,7 @@ class LoginViewModelTest {
     private val server = MockWebServer()
     private lateinit var accounts: AccountRepository
     private lateinit var viewModel: LoginViewModel
+    private val savedState = SavedStateHandle()
 
     private object XorCipher : SecretCipher {
         override fun encrypt(plain: ByteArray) = plain.map { (it.toInt() xor 0x33).toByte() }.toByteArray()
@@ -78,7 +80,7 @@ class LoginViewModelTest {
                 },
                 {},
             )
-        viewModel = LoginViewModel(accounts)
+        viewModel = LoginViewModel(accounts, savedState)
     }
 
     @After
@@ -212,15 +214,115 @@ class LoginViewModelTest {
         }
 
     @Test
-    fun `invalid headers are reported as settings errors`() =
+    fun `invalid headers are reported by position without their value`() =
         runTest {
             enterPassword()
-            viewModel.setHeaders(listOf(HeaderInput("Authorization", "x"), HeaderInput("", "ignored")))
+            viewModel.setHeaders(
+                listOf(HeaderInput("", ""), HeaderInput("X-Ok", "fine"), HeaderInput("X-Bad", "sec\u0001ret")),
+            )
 
             viewModel.submit()
 
-            assertEquals(LoginError.INVALID_SETTINGS, awaitDone().error)
+            val state = viewModel.state.value
+            assertEquals(LoginError.INVALID_HEADER, state.error)
+            assertEquals(2, state.invalidHeaderIndex)
+            assertNull(state.errorDetail)
+            assertFalse(state.inProgress)
             assertEquals(0, server.requestCount)
+
+            viewModel.setHeaders(listOf(HeaderInput("", "value without a name")))
+            viewModel.submit()
+            assertEquals(0, viewModel.state.value.invalidHeaderIndex)
+        }
+
+    @Test
+    fun `header values are trimmed`() =
+        runTest {
+            server.enqueue(json(200, """{"token": "abc"}"""))
+            server.enqueue(uiSettings)
+            enterPassword()
+            viewModel.setHeaders(listOf(HeaderInput(" X-Proxy ", "secret\n")))
+
+            viewModel.submit()
+            awaitDone()
+
+            assertEquals("secret", server.takeRequest().headers["X-Proxy"])
+        }
+
+    @Test
+    fun `rate limits and proxy authentication have their own kinds`() =
+        runTest {
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(429)
+                    .addHeader("Retry-After", "42")
+                    .body("{}")
+                    .build(),
+            )
+            enterPassword()
+            viewModel.submit()
+            val limited = awaitDone()
+            assertEquals(LoginError.RATE_LIMITED, limited.error)
+            assertEquals(42L, limited.retryAfterSeconds)
+
+            server.enqueue(json(401, """{"detail": "Proxy says no"}"""))
+            viewModel.submit()
+            val proxy = awaitDone()
+            assertEquals(LoginError.PROXY_AUTHENTICATION, proxy.error)
+            assertEquals("Proxy says no", proxy.errorDetail)
+        }
+
+    @Test
+    fun `wrong credentials at the code step go back to the credentials`() =
+        runTest {
+            server.enqueue(json(400, """{"non_field_errors": ["MFA code is required"]}"""))
+            enterPassword()
+            viewModel.submit()
+            assertEquals(LoginStep.MFA_CODE, awaitDone().step)
+
+            server.enqueue(json(400, """{"non_field_errors": ["Unable to log in with provided credentials."]}"""))
+            viewModel.setMfaCode("123456")
+            viewModel.submit()
+
+            val state = awaitDone()
+            assertEquals(LoginError.INVALID_CREDENTIALS, state.error)
+            assertEquals(LoginStep.CREDENTIALS, state.step)
+            assertEquals("Unable to log in with provided credentials.", state.errorDetail)
+        }
+
+    @Test
+    fun `non-secret input survives process death`() {
+        enterPassword()
+        viewModel.setMethod(LoginMethod.TOKEN)
+        viewModel.setToken("secret-token")
+        viewModel.setHeaders(listOf(HeaderInput("X-Proxy", "secret")))
+        viewModel.setClientCertificate("my-cert")
+
+        val restored = LoginViewModel(accounts, savedState).state.value
+
+        assertEquals(url(), restored.serverUrl)
+        assertEquals(LoginMethod.TOKEN, restored.method)
+        assertEquals("alice", restored.username)
+        assertEquals("", restored.token)
+        assertEquals("", restored.password)
+        assertEquals(listOf(HeaderInput("X-Proxy", "")), restored.headers)
+        assertEquals("my-cert", restored.tls.clientCertificateAlias)
+    }
+
+    @Test
+    fun `after a sign-in was handled the form starts over`() =
+        runTest {
+            server.enqueue(uiSettings)
+            viewModel.setServerUrl(url())
+            viewModel.setMethod(LoginMethod.TOKEN)
+            viewModel.setToken("abc")
+            viewModel.submit()
+            assertNotNull(awaitDone().signedIn)
+
+            viewModel.signedInHandled()
+
+            assertEquals(LoginState(), viewModel.state.value)
         }
 
     @Test
@@ -245,18 +347,31 @@ class LoginViewModelTest {
     }
 
     @Test
-    fun `signing in again keeps the account's settings`() =
+    fun `signing in again keeps the account's settings and headers, once`() =
         runTest {
             server.enqueue(uiSettings)
             val account =
-                accounts.signInWithToken(url(), AuthToken("abc"), tls = AccountTls(clientCertificateAlias = "my-cert"))
+                accounts.signInWithToken(
+                    url(),
+                    AuthToken("abc"),
+                    customHeaders = listOf("X-Proxy" to "secret"),
+                    tls = AccountTls(clientCertificateAlias = "my-cert"),
+                )
 
-            viewModel.signInAgain(account)
+            viewModel.signInAgain(account.id)
+            val state =
+                withContext(Dispatchers.Default.limitedParallelism(1)) {
+                    withTimeout(10_000) { viewModel.state.first { it.username.isNotEmpty() } }
+                }
 
-            val state = viewModel.state.value
             assertEquals(account.serverUrl, state.serverUrl)
             assertEquals("alice", state.username)
             assertEquals("my-cert", state.tls.clientCertificateAlias)
+            assertEquals(listOf(HeaderInput("X-Proxy", "secret")), state.headers)
+
+            viewModel.setPassword("typed")
+            viewModel.signInAgain(account.id) // e.g. the screen is shown again after rotation
+            assertEquals("typed", viewModel.state.value.password)
         }
 
     @Test
