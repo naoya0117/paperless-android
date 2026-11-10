@@ -1,6 +1,9 @@
 package com.naoya0117.paperless
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
@@ -14,9 +17,12 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.IntentCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.DEFAULT_ARGS_KEY
 import androidx.lifecycle.HasDefaultViewModelProviderFactory
@@ -34,22 +40,52 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    /** Files shared to the app and not handled yet. */
+    private val sharedFiles = mutableStateOf<List<Uri>>(emptyList())
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Not again when recreated (e.g. rotated): the share was handled then.
+        if (savedInstanceState == null) sharedFiles.value = intent.sharedUris()
         setContent {
             PaperlessTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    App()
+                    App(sharedFiles = sharedFiles.value, onSharedFilesHandled = { sharedFiles.value = emptyList() })
                 }
             }
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.sharedUris().takeIf { it.isNotEmpty() }?.let { sharedFiles.value = it }
+    }
 }
 
+private fun Intent.sharedUris(): List<Uri> =
+    when (action) {
+        Intent.ACTION_SEND -> listOfNotNull(IntentCompat.getParcelableExtra(this, Intent.EXTRA_STREAM, Uri::class.java))
+        Intent.ACTION_SEND_MULTIPLE ->
+            IntentCompat.getParcelableArrayListExtra(this, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+        else -> emptyList()
+    }
+
 @Composable
-private fun App(viewModel: AppViewModel = hiltViewModel()) {
+private fun App(
+    sharedFiles: List<Uri>,
+    onSharedFilesHandled: () -> Unit,
+    viewModel: AppViewModel = hiltViewModel(),
+) {
     val screen by viewModel.screen.collectAsStateWithLifecycle()
+    // Without an account the files cannot be uploaded; say so rather than dropping them silently.
+    val context = LocalContext.current
+    if (screen is AppScreen.Login && sharedFiles.isNotEmpty()) {
+        LaunchedEffect(sharedFiles) {
+            Toast.makeText(context, R.string.share_sign_in_first, Toast.LENGTH_LONG).show()
+            onSharedFilesHandled()
+        }
+    }
     // Left the signed-in screens: their view models must stop (e.g. lists still loading).
     if (screen is AppScreen.Login) LaunchedEffect(Unit) { viewModel.releaseShell() }
     when (val current = screen) {
@@ -69,7 +105,12 @@ private fun App(viewModel: AppViewModel = hiltViewModel()) {
                 val activity = checkNotNull(LocalActivity.current as? ComponentActivity) { "Not in an activity" }
                 val owner = remember(store, activity) { ShellViewModelStoreOwner(store, activity) }
                 CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
-                    MainShell(current.account, onSignOut = { viewModel.signOut(current.account.id) })
+                    MainShell(
+                        account = current.account,
+                        sharedFiles = sharedFiles,
+                        onSharedFilesHandled = onSharedFilesHandled,
+                        onSignOut = { viewModel.signOut(current.account.id) },
+                    )
                 }
             }
     }

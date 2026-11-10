@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="uploads_empty">No uploads. Share files to this app or add them from the documents.</string>
+    <string name="uploads_retry">Retry %1$s</string>
+    <string name="uploads_remove">Remove %1$s</string>
+    <string name="uploads_state_queued">Waiting for a connection</string>
+    <string name="uploads_state_uploading">Uploading</string>
+    <string name="uploads_state_processing">Processing on the server</string>
+    <string name="uploads_state_done">Added as a document</string>
+    <string name="uploads_state_done_no_document">Processed (no document was created, e.g. split by a barcode)</string>
+    <string name="uploads_error_sign_in">Failed: sign in again</string>
+    <string name="uploads_error_rejected">Failed: the server rejected the file</string>
+    <string name="uploads_error_processing">Failed: the server could not process the file</string>
+    <string name="uploads_error_duplicate">Not added: the server already has this file</string>
+    <string name="uploads_error_not_reported">Unknown: the server did not report the result; the document may still appear</string>
+    <string name="uploads_error_other">Failed</string>
+</resources>

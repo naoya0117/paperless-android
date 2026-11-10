@@ -1,22 +1,31 @@
 package com.naoya0117.paperless
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,6 +37,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
@@ -35,16 +47,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -65,11 +81,15 @@ import com.naoya0117.paperless.feature.documents.DocumentListViewModel
 import com.naoya0117.paperless.feature.documents.DocumentViewerScreen
 import com.naoya0117.paperless.feature.documents.DocumentViewerViewModel
 import com.naoya0117.paperless.feature.documents.InboxViewModel
+import com.naoya0117.paperless.feature.uploads.EnqueueResult
+import com.naoya0117.paperless.feature.uploads.UploadsScreen
+import com.naoya0117.paperless.feature.uploads.UploadsViewModel
 import kotlinx.coroutines.launch
 
 private const val DOCUMENTS_ROUTE = "documents"
 private const val SEARCH_ROUTE = "search"
 private const val INBOX_ROUTE = "inbox"
+private const val UPLOADS_ROUTE = "uploads"
 
 /** The bottom tabs: only what is used most; everything else is in the drawer (hamburger menu). */
 private enum class Tab(
@@ -96,8 +116,11 @@ private const val EDIT_ROUTE = "document/{${DocumentEditViewModel.DOCUMENT_ID_AR
 @Composable
 fun MainShell(
     account: Account,
+    sharedFiles: List<Uri>,
+    onSharedFilesHandled: () -> Unit,
     onSignOut: () -> Unit,
     inbox: InboxViewModel = hiltViewModel(),
+    uploads: UploadsViewModel = hiltViewModel(),
 ) {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
@@ -128,6 +151,51 @@ fun MainShell(
         )
     }
 
+    val snackbar = remember { SnackbarHostState() }
+    val enqueue = rememberUploadStarter(uploads)
+    // Files shared to the app: queued at once (the permission to read them ends with the activity).
+    LaunchedEffect(sharedFiles) {
+        if (sharedFiles.isNotEmpty()) {
+            enqueue(sharedFiles)
+            onSharedFilesHandled()
+            navController.navigate(UPLOADS_ROUTE) { launchSingleTop = true }
+        }
+    }
+    val resources = LocalResources.current
+    LaunchedEffect(uploads) {
+        uploads.enqueueResults.collect { result ->
+            val message =
+                when (result) {
+                    is EnqueueResult.Queued ->
+                        resources.getQuantityString(
+                            R.plurals.uploads_queued_message,
+                            result.count,
+                            result.count,
+                        )
+                    is EnqueueResult.PartlyFailed ->
+                        resources.getString(
+                            R.string.uploads_partly_failed_message,
+                            result.queued,
+                            result.failed,
+                        )
+                    EnqueueResult.NotSignedIn -> resources.getString(R.string.share_sign_in_first)
+                }
+            val action =
+                if (result is EnqueueResult.NotSignedIn) {
+                    null
+                } else {
+                    resources.getString(
+                        R.string.uploads_view_action,
+                    )
+                }
+            if (snackbar.showSnackbar(message, actionLabel = action) == SnackbarResult.ActionPerformed) {
+                navController.navigate(UPLOADS_ROUTE) { launchSingleTop = true }
+            }
+        }
+    }
+    val pickFiles =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> enqueue(uris) }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         // Only from the list; elsewhere the edge swipe is the system's back gesture.
@@ -135,6 +203,10 @@ fun MainShell(
         drawerContent = {
             Drawer(
                 account = account,
+                onUploads = {
+                    scope.launch { drawerState.close() }
+                    navController.navigate(UPLOADS_ROUTE) { launchSingleTop = true }
+                },
                 onSignOut = {
                     scope.launch { drawerState.close() }
                     confirmSignOut = true
@@ -142,7 +214,13 @@ fun MainShell(
             )
         },
     ) {
-        val listScreen = tab != null || route == INBOX_ROUTE
+        val secondaryTitle =
+            when (route) {
+                INBOX_ROUTE -> R.string.title_inbox
+                UPLOADS_ROUTE -> R.string.drawer_uploads
+                else -> null
+            }
+        val listScreen = tab != null || secondaryTitle != null
         Scaffold(
             // The lists share this bar; other screens (e.g. the viewer) bring their own.
             topBar = {
@@ -167,9 +245,9 @@ fun MainShell(
                                 }
                             },
                         )
-                    INBOX_ROUTE ->
+                    INBOX_ROUTE, UPLOADS_ROUTE ->
                         CenterAlignedTopAppBar(
-                            title = { Text(stringResource(R.string.title_inbox)) },
+                            title = { Text(stringResource(checkNotNull(secondaryTitle))) },
                             navigationIcon = {
                                 // navigateUp never leaves the start destination (e.g. on a double tap).
                                 IconButton(onClick = { navController.navigateUp() }) {
@@ -183,6 +261,14 @@ fun MainShell(
                 }
             },
             bottomBar = { if (tab != null) TabBar(tab, navController) },
+            snackbarHost = { SnackbarHost(snackbar) },
+            floatingActionButton = {
+                if (route == DOCUMENTS_ROUTE) {
+                    FloatingActionButton(onClick = { pickFiles.launch(arrayOf("*/*")) }) {
+                        Icon(Icons.Outlined.UploadFile, contentDescription = stringResource(R.string.upload_files))
+                    }
+                }
+            },
             // Other screens (e.g. the viewer) are a Scaffold of their own and handle the system bars themselves.
             contentWindowInsets = if (listScreen) ScaffoldDefaults.contentWindowInsets else WindowInsets(0),
         ) { padding ->
@@ -232,6 +318,11 @@ fun MainShell(
                         ),
                 ) {
                     DocumentEditScreen(onClose = { navController.popBackStack() })
+                }
+                composable(UPLOADS_ROUTE) {
+                    UploadsScreen(viewModel = uploads, onOpenDocument = { id ->
+                        navController.navigate("document/$id")
+                    })
                 }
             }
         }
@@ -285,6 +376,7 @@ private const val MAX_BADGE = 99
 @Composable
 private fun Drawer(
     account: Account,
+    onUploads: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     ModalDrawerSheet {
@@ -308,6 +400,14 @@ private fun Drawer(
                 )
             }
         }
+        HorizontalDivider()
+        NavigationDrawerItem(
+            label = { Text(stringResource(R.string.drawer_uploads)) },
+            icon = { Icon(Icons.Outlined.CloudUpload, contentDescription = null) },
+            selected = false,
+            onClick = onUploads,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        )
         HorizontalDivider()
         NavigationDrawerItem(
             label = { Text(stringResource(R.string.home_sign_out)) },
@@ -337,4 +437,27 @@ private fun SignOutDialog(
         confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.home_sign_out)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
+}
+
+/**
+ * Queues files for upload; the first time (Android 13+) it asks for the notification shown while sending.
+ * Uploads run either way.
+ */
+@Composable
+private fun rememberUploadStarter(uploads: UploadsViewModel): (List<Uri>) -> Unit {
+    val context = LocalContext.current
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    return remember(uploads, permission) {
+        { uris ->
+            if (uris.isNotEmpty()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                    PackageManager.PERMISSION_GRANTED
+                ) {
+                    permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                uploads.enqueue(uris)
+            }
+        }
+    }
 }
