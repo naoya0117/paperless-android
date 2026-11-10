@@ -7,7 +7,6 @@
     <string name="tab_inbox">Inbox</string>
     <string name="tab_search">Search</string>
     <string name="menu_open">Open menu</string>
-    <string name="navigate_back">Back</string>
     <string name="drawer_server_version">Paperless-ngx %1$s</string>
     <string name="sign_out_title">Sign out?</string>
     <string name="sign_out_message">%1$s on %2$s will be removed from this device, with its cached documents. Documents on the server are not affected.</string>

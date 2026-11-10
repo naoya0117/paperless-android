@@ -2,9 +2,9 @@ package com.naoya0117.paperless
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Inbox
@@ -24,6 +24,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
@@ -49,6 +50,8 @@ import com.naoya0117.paperless.core.model.Account
 import com.naoya0117.paperless.feature.documents.DocumentListMode
 import com.naoya0117.paperless.feature.documents.DocumentListScreen
 import com.naoya0117.paperless.feature.documents.DocumentListViewModel
+import com.naoya0117.paperless.feature.documents.DocumentViewerScreen
+import com.naoya0117.paperless.feature.documents.DocumentViewerViewModel
 import kotlinx.coroutines.launch
 
 /** The bottom tabs: only what is used most; everything else is in the drawer (hamburger menu). */
@@ -66,7 +69,8 @@ private enum class Tab(
     val route: String get() = "documents/${mode.name.lowercase()}"
 }
 
-private const val DOCUMENT_ROUTE = "document/{id}"
+private const val DOCUMENT_ROUTE = "document/{${DocumentViewerViewModel.DOCUMENT_ID_ARGUMENT}}"
+private const val EDIT_ROUTE = "document/{id}/edit"
 
 /** The signed-in app: top bar with the drawer, bottom tabs, and the screens in between. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,26 +115,22 @@ fun MainShell(
         },
     ) {
         Scaffold(
+            // The tabs share this bar; other screens (e.g. the viewer) bring their own.
             topBar = {
-                CenterAlignedTopAppBar(
-                    title = { Text(stringResource(tab?.label ?: R.string.app_name)) },
-                    navigationIcon = {
-                        if (tab != null) {
+                if (tab != null) {
+                    CenterAlignedTopAppBar(
+                        title = { Text(stringResource(tab.label)) },
+                        navigationIcon = {
                             IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                 Icon(Icons.Outlined.Menu, contentDescription = stringResource(R.string.menu_open))
                             }
-                        } else if (route == DOCUMENT_ROUTE) {
-                            IconButton(onClick = { navController.popBackStack() }) {
-                                Icon(
-                                    Icons.AutoMirrored.Outlined.ArrowBack,
-                                    contentDescription = stringResource(R.string.navigate_back),
-                                )
-                            }
-                        }
-                    },
-                )
+                        },
+                    )
+                }
             },
             bottomBar = { if (tab != null) TabBar(tab, navController) },
+            // Other screens (e.g. the viewer) are a Scaffold of their own and handle the system bars themselves.
+            contentWindowInsets = if (tab != null) ScaffoldDefaults.contentWindowInsets else WindowInsets(0),
         ) { padding ->
             NavHost(
                 navController = navController,
@@ -151,8 +151,23 @@ fun MainShell(
                         DocumentListScreen(onOpenDocument = { navController.navigate("document/${it.id}") })
                     }
                 }
-                composable(DOCUMENT_ROUTE, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
-                    // Replaced by the viewer (next issue).
+                composable(
+                    DOCUMENT_ROUTE,
+                    arguments =
+                        listOf(
+                            navArgument(DocumentViewerViewModel.DOCUMENT_ID_ARGUMENT) {
+                                type =
+                                    NavType.LongType
+                            },
+                        ),
+                ) {
+                    DocumentViewerScreen(
+                        onBack = { navController.popBackStack() },
+                        onEdit = { id -> navController.navigate("document/$id/edit") },
+                    )
+                }
+                composable(EDIT_ROUTE, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                    // Replaced by the editor (next issue).
                     Text(
                         "#${entry.arguments?.getLong("id")}",
                         style = MaterialTheme.typography.headlineSmall,

@@ -233,7 +233,7 @@ private fun ThumbnailImage(
 }
 
 @Composable
-private fun TagChip(tag: TagLabel) {
+internal fun TagChip(tag: TagLabel) {
     val background = parseColor(tag.color) ?: MaterialTheme.colorScheme.secondaryContainer
     val text = parseColor(tag.textColor) ?: MaterialTheme.colorScheme.onSecondaryContainer
     Text(
