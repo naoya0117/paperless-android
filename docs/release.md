@@ -316,11 +316,15 @@ versionName を読み取ろうとします。このプロジェクトは version
 
 自動で更新しない場合は `AutoUpdateMode: None` とし、リリースごとに fdroiddata にマージリクエストを出します。
 
-### レシピの下書き
+### レシピ
 
-[fdroiddata](https://gitlab.com/fdroid/fdroiddata) を fork し、`metadata/com.naoya0117.paperless.yml` を追加して
-マージリクエストを出します（`fdroid readmeta` / `fdroid lint` / `fdroid build -v -l com.naoya0117.paperless` で
-事前に確認できます）。
+署名は F-Droid の鍵で行う（既定）とします。[fdroiddata](https://gitlab.com/fdroid/fdroiddata) を fork し、
+`metadata/com.naoya0117.paperless.yml` を追加してマージリクエストを出します（`fdroid readmeta` / `fdroid lint` /
+`fdroid build -v -l com.naoya0117.paperless` で事前に確認できます）。
+
+**v0.1.1 以降で申請する（推奨）。** v0.1.0 のタグには、F-Droid の検査で止まる Maven Central のミラーの URL
+（`settings.gradle.kts`、#89 で修正）が残っており、F-Droid 用のスクリーンショット（#96）もまだ含まれていません。
+これらを含む次のリリースのタグで申請すると、次のレシピのままで済みます（`0.1.1` / `101` は実際のバージョンに合わせる）。
 
 ```yaml
 Categories:
@@ -337,9 +341,9 @@ RepoType: git
 Repo: https://github.com/naoya0117/paperless-android.git
 
 Builds:
-  - versionName: 0.1.0
-    versionCode: 100
-    commit: v0.1.0
+  - versionName: 0.1.1
+    versionCode: 101
+    commit: v0.1.1
     subdir: app
     gradle:
       - yes
@@ -347,9 +351,38 @@ Builds:
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
 UpdateCheckData: gradle.properties|paperless\.versionCode=(\d+)|.|paperless\.versionName=(.+)
-CurrentVersion: 0.1.0
-CurrentVersionCode: 100
+CurrentVersion: 0.1.1
+CurrentVersionCode: 101
 ```
+
+**v0.1.0 で申請する場合**は、`Builds` を次のようにし、ビルドの前に `settings.gradle.kts` からミラーの部分を削除します
+（F-Droid は `prebuild` の後にソースを検査します。v0.1.0 のソースでこの削除の後に署名なしのリリースビルドが通り、
+Gradle のファイルにミラーの URL が残らないことを確認済み）。`CurrentVersion` は `0.1.0`、`CurrentVersionCode` は `100`
+にします。スクリーンショットはタグに含まれていないため、掲載されない可能性があります。
+
+```yaml
+Builds:
+  - versionName: 0.1.0
+    versionCode: 100
+    commit: v0.1.0
+    subdir: app
+    prebuild: sed -i -e '/exclusiveContent {/,/^        }$/d' ../settings.gradle.kts
+    gradle:
+      - yes
+```
+
+自動更新では最後のビルドの設定が引き継がれますが、v0.1.1 以降のソースにはミラーの部分がないため、この `prebuild` は
+何も削除せずに終わります（後から削除してもかまいません）。
+
+作者の鍵で署名した APK をそのまま配布する場合は、レシピの最上位（`Repo:` と `Builds:` の間）に
+`Binaries:`（GitHub のリリースの APK の URL。`%v` は versionName に置き換わる。
+例：`https://github.com/naoya0117/paperless-android/releases/download/v%v/paperless-android-%v.apk`）と
+`AllowedAPKSigningKeys: 562b808b01754f9ec21450e68d4c77eb095f32b63692b6d951b9265f00c2b047` を追加します
+（ビルドごとに指定する場合は小文字の `binary:`）。
+
+- 申請するときは `commit:` をタグのコミットのハッシュ（`git rev-parse v0.1.1^{commit}`）にしておくと、
+  タグが動かされる心配がなく、レビューで指摘されにくくなります。自動更新のビルドは F-Droid がハッシュにします。
+- v0.1.1 では `fastlane/metadata/android/{en-US,ja-JP}/changelogs/101.txt` を用意します（[2](#2-バージョンと変更履歴)）。
 
 - 説明・スクリーンショットはリポジトリの `fastlane/metadata` から自動で取り込まれるため、レシピには書きません。
 - `IssueTracker` は GitHub の Issue を受け付ける場合に記載します（受け付けない場合は省略）。
