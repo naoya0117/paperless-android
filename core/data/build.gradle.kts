@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.paperless.android.library)
+    alias(libs.plugins.paperless.robolectric)
 }
 
 android {
@@ -23,7 +24,6 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.okhttp.tls)
     testImplementation(libs.androidx.test.core)
-    testImplementation(libs.robolectric)
     testImplementation(libs.sqlite.bundled.jvm)
     testImplementation(libs.paging.testing)
     testImplementation(libs.work.testing)

@@ -60,6 +60,8 @@ work-runtime = { module = "androidx.work:work-runtime", version.ref = "work" }
 work-testing = { module = "androidx.work:work-testing", version.ref = "work" }
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+# Robolectric's Android jar for sdk=35 (robolectric.properties); see RobolectricConventionPlugin. Update with Robolectric.
+robolectric-android-all = { module = "org.robolectric:android-all-instrumented", version = "15-robolectric-13954326-i7" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 sqlite-bundled-jvm = { module = "androidx.sqlite:sqlite-bundled-jvm", version.ref = "sqlite" }
@@ -86,3 +88,4 @@ ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint-gradle" }
 paperless-android-application = { id = "paperless.android.application" }
 paperless-android-library = { id = "paperless.android.library" }
 paperless-jvm-library = { id = "paperless.jvm.library" }
+paperless-robolectric = { id = "paperless.robolectric" }
