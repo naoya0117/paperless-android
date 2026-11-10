@@ -6,6 +6,11 @@ import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -19,13 +24,22 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -53,7 +67,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -61,7 +74,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -70,6 +82,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -91,10 +104,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -143,9 +160,8 @@ fun DocumentViewerScreen(
     val fullscreen by viewModel.fullscreen.collectAsStateWithLifecycle()
     val search by viewModel.search.collectAsStateWithLifecycle()
     SystemBarsHidden(fullscreen)
-    BackHandler(enabled = search.open || fullscreen) {
-        if (search.open) viewModel.closeSearch() else viewModel.toggleFullscreen()
-    }
+    // Back closes the search; otherwise it leaves the viewer (also in full screen, which a scroll turns on).
+    BackHandler(enabled = search.open, onBack = viewModel::closeSearch)
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -176,80 +192,59 @@ fun DocumentViewerScreen(
     }
     var menuOpen by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    // Scrolling down hides the bars (full screen), scrolling up shows them again.
+    val threshold = with(LocalDensity.current) { BARS_SCROLL_THRESHOLD.toPx() }
+    val hideBarsOnScroll = remember(viewModel, threshold) { HideBarsOnScroll(threshold, viewModel::onScrolled) }
     Scaffold(
         modifier = modifier,
-        snackbarHost = { SnackbarHost(snackbar) },
-        // Full screen: the document only.
-        contentWindowInsets = if (fullscreen) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets,
-        floatingActionButton = {
-            if (!fullscreen && !search.open && state.content.searchable) {
-                FloatingActionButton(onClick = viewModel::openSearch) {
-                    Icon(Icons.Outlined.Search, contentDescription = stringResource(R.string.viewer_search))
-                }
-            }
+        // Above the navigation bar, unless the text match card (which clears it) is below; above the keyboard.
+        snackbarHost = {
+            val card = search.currentMatch is SearchMatch.InText
+            SnackbarHost(snackbar, if (card) Modifier.imePadding() else Modifier.navigationBarsPadding().imePadding())
         },
+        // The document goes behind the bars, so that it stays put when they hide.
+        contentWindowInsets = WindowInsets(0),
         bottomBar = {
             (search.currentMatch as? SearchMatch.InText)?.let { TextMatchCard(it) }
         },
-        topBar = {
-            if (fullscreen) return@Scaffold
-            if (search.open) {
-                SearchBar(
-                    search = search,
-                    onQueryChange = viewModel::setSearchQuery,
-                    onPrevious = viewModel::previousMatch,
-                    onNext = viewModel::nextMatch,
-                    onClose = viewModel::closeSearch,
-                )
-                return@Scaffold
-            }
-            TopAppBar(
-                title = { Text(state.document?.title.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = stringResource(R.string.viewer_back),
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = viewModel::toggleInfo, enabled = state.document != null) {
-                        Icon(Icons.Outlined.Info, contentDescription = stringResource(R.string.viewer_info))
-                    }
-                    if (state.busy) {
-                        Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-                        }
-                    } else {
-                        Box {
-                            IconButton(onClick = { menuOpen = true }, enabled = state.document != null) {
-                                Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.viewer_more))
-                            }
-                            ViewerMenu(
-                                expanded = menuOpen,
-                                onDismiss = { menuOpen = false },
-                                onShare = viewModel::share,
-                                onOpen = viewModel::openExternally,
-                                onDownload = viewModel::download,
-                                onDelete = { confirmDelete = true },
-                            )
-                        }
-                    }
-                },
-            )
-        },
     ) { padding ->
+        @OptIn(ExperimentalLayoutApi::class)
+        val barSpace =
+            // As tall as the bar with its insets (e.g. a cutout taller than the status bar).
+            viewerBarInsets().asPaddingValues().calculateTopPadding() + TopAppBarDefaults.TopAppBarExpandedHeight
+
+        @OptIn(ExperimentalLayoutApi::class)
+        val bottomSpace =
+            maxOf(
+                padding.calculateBottomPadding(),
+                WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding(),
+            )
         Box(
             modifier =
                 Modifier
-                    .padding(padding)
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surfaceContainer),
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .nestedScroll(hideBarsOnScroll),
             contentAlignment = Alignment.Center,
         ) {
             // Pinch to zoom; reset for other content.
             val zoom = remember(state.content) { ZoomState() }
+
+            // Landscape: clear of a navigation bar or cutout at the side.
+            @OptIn(ExperimentalLayoutApi::class)
+            val sides =
+                WindowInsets.systemBarsIgnoringVisibility
+                    .union(WindowInsets.displayCutout)
+                    .only(WindowInsetsSides.Horizontal)
+                    .asPaddingValues()
+            val direction = LocalLayoutDirection.current
+            val space =
+                PaddingValues(
+                    start = sides.calculateStartPadding(direction),
+                    end = sides.calculateEndPadding(direction),
+                    top = barSpace,
+                    bottom = bottomSpace,
+                )
             when (val content = state.content) {
                 ViewerContent.Loading -> CircularProgressIndicator()
                 is ViewerContent.Pdf ->
@@ -257,9 +252,11 @@ fun DocumentViewerScreen(
                         pages = content.pages,
                         onTap = viewModel::toggleFullscreen,
                         search = search,
+                        space = space,
                         modifier = Modifier.zoomable(zoom),
                     )
-                is ViewerContent.Image -> ImageView(content, viewModel::toggleFullscreen, Modifier.zoomable(zoom))
+                is ViewerContent.Image ->
+                    ImageView(content, viewModel::toggleFullscreen, space, Modifier.zoomable(zoom))
                 is ViewerContent.Unsupported ->
                     Message(stringResource(R.string.viewer_unsupported, content.fileName.orEmpty()))
                 ViewerContent.Failed ->
@@ -267,6 +264,73 @@ fun DocumentViewerScreen(
                         Message(stringResource(R.string.viewer_failed))
                         TextButton(onClick = viewModel::retry) { Text(stringResource(R.string.documents_retry)) }
                     }
+            }
+            AnimatedVisibility(
+                visible = !fullscreen,
+                enter = slideInVertically { -it } + fadeIn(),
+                exit = slideOutVertically { -it } + fadeOut(),
+                modifier = Modifier.align(Alignment.TopCenter),
+            ) {
+                if (search.open) {
+                    SearchBar(
+                        search = search,
+                        onQueryChange = viewModel::setSearchQuery,
+                        onPrevious = viewModel::previousMatch,
+                        onNext = viewModel::nextMatch,
+                        onClose = viewModel::closeSearch,
+                    )
+                } else {
+                    TopAppBar(
+                        // Not shrinking while the status bar hides with it.
+                        windowInsets = viewerBarInsets(),
+                        title = {
+                            Text(
+                                state.document?.title.orEmpty(),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(
+                                    Icons.AutoMirrored.Outlined.ArrowBack,
+                                    contentDescription = stringResource(R.string.viewer_back),
+                                )
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = viewModel::toggleInfo, enabled = state.document != null) {
+                                Icon(Icons.Outlined.Info, contentDescription = stringResource(R.string.viewer_info))
+                            }
+                            if (state.busy) {
+                                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                                }
+                            }
+                            // Always there: searching works while a file action runs (those wait).
+                            run {
+                                Box {
+                                    IconButton(onClick = { menuOpen = true }, enabled = state.document != null) {
+                                        Icon(
+                                            Icons.Outlined.MoreVert,
+                                            contentDescription = stringResource(R.string.viewer_more),
+                                        )
+                                    }
+                                    ViewerMenu(
+                                        expanded = menuOpen,
+                                        onDismiss = { menuOpen = false },
+                                        onSearch = viewModel::openSearch.takeIf { state.content.searchable },
+                                        onShare = viewModel::share,
+                                        onOpen = viewModel::openExternally,
+                                        onDownload = viewModel::download,
+                                        onDelete = { confirmDelete = true },
+                                        actionsEnabled = !state.busy,
+                                    )
+                                }
+                            }
+                        },
+                    )
+                }
             }
         }
     }
@@ -315,10 +379,14 @@ fun DocumentViewerScreen(
 private fun ViewerMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
+    /** `null` if the content cannot be searched. */
+    onSearch: (() -> Unit)?,
     onShare: () -> Unit,
     onOpen: () -> Unit,
     onDownload: () -> Unit,
     onDelete: () -> Unit,
+    /** File actions and deleting wait while one runs; the search does not. */
+    actionsEnabled: Boolean,
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         @Composable
@@ -326,14 +394,17 @@ private fun ViewerMenu(
             text: Int,
             icon: ImageVector,
             onClick: () -> Unit,
+            enabled: Boolean = actionsEnabled,
         ) = DropdownMenuItem(
             text = { Text(stringResource(text)) },
             leadingIcon = { Icon(icon, contentDescription = null) },
+            enabled = enabled,
             onClick = {
                 onDismiss()
                 onClick()
             },
         )
+        onSearch?.let { item(R.string.viewer_search, Icons.Outlined.Search, it, enabled = true) }
         item(R.string.viewer_share, Icons.Outlined.Share, onShare)
         item(R.string.viewer_open_with, Icons.AutoMirrored.Outlined.OpenInNew, onOpen)
         item(R.string.viewer_download, Icons.Outlined.Download, onDownload)
@@ -383,6 +454,8 @@ private fun PdfPagesView(
     pages: PdfPages,
     onTap: () -> Unit,
     search: SearchState,
+    /** Kept free above and below (behind the bars). */
+    space: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -402,7 +475,13 @@ private fun PdfPagesView(
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize().tapWhenNotScrolling({ listState.isScrollInProgress }, onTap),
-        contentPadding = PaddingValues(PAGE_PADDING),
+        contentPadding =
+            PaddingValues(
+                start = space.calculateStartPadding(LocalLayoutDirection.current) + PAGE_PADDING,
+                end = space.calculateEndPadding(LocalLayoutDirection.current) + PAGE_PADDING,
+                top = space.calculateTopPadding() + PAGE_PADDING,
+                bottom = space.calculateBottomPadding() + PAGE_PADDING,
+            ),
         verticalArrangement = Arrangement.spacedBy(PAGE_PADDING),
     ) {
         items(count = pages.pageCount, key = { it }) { index ->
@@ -454,6 +533,41 @@ private fun PdfPage(
 
 private val PAGE_PADDING = 12.dp
 
+/** The top bar's insets, as if the system bars were shown (they hide and show with it). */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun viewerBarInsets(): WindowInsets =
+    WindowInsets.systemBarsIgnoringVisibility
+        .union(WindowInsets.displayCutout)
+        .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+
+/** How far a scroll goes before the bars hide or show, so that small moves do not toggle them. */
+private val BARS_SCROLL_THRESHOLD = 32.dp
+
+/** Reports scrolling by the user: [onScrolled] with `true` for down (towards the end), `false` for up. */
+private class HideBarsOnScroll(
+    private val threshold: Float,
+    private val onScrolled: (down: Boolean) -> Unit,
+) : NestedScrollConnection {
+    private var distance = 0f
+
+    override fun onPreScroll(
+        available: Offset,
+        source: NestedScrollSource,
+    ): Offset {
+        if (source == NestedScrollSource.UserInput && available.y != 0f) {
+            // A change of direction starts counting again.
+            if (distance != 0f && (distance < 0) != (available.y < 0)) distance = 0f
+            distance += available.y
+            if (kotlin.math.abs(distance) > threshold) {
+                onScrolled(distance < 0)
+                distance = 0f
+            }
+        }
+        return Offset.Zero
+    }
+}
+
 /** The search matches on a page; the current one stands out. */
 @Composable
 private fun Highlights(
@@ -489,6 +603,7 @@ private fun SearchBar(
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     TopAppBar(
+        windowInsets = viewerBarInsets(),
         navigationIcon = {
             IconButton(onClick = onClose) {
                 Icon(
@@ -617,6 +732,7 @@ private suspend fun <T> safely(block: suspend () -> T): T? =
 private fun ImageView(
     content: ViewerContent.Image,
     onTap: () -> Unit,
+    space: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -625,6 +741,7 @@ private fun ImageView(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .tapWhenNotScrolling({ false }, onTap)
+                .padding(space)
                 .padding(12.dp),
     ) {
         AsyncImage(

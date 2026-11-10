@@ -369,6 +369,11 @@ class DocumentViewerViewModelTest {
 
         viewModel.toggleFullscreen()
         assertTrue(viewModel.fullscreen.value)
+        // Scrolling up shows the bars, down hides them.
+        viewModel.onScrolled(down = false)
+        assertFalse(viewModel.fullscreen.value)
+        viewModel.onScrolled(down = true)
+        assertTrue(viewModel.fullscreen.value)
 
         viewModel.openSearch()
         assertFalse(viewModel.fullscreen.value)

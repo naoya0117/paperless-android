@@ -8,6 +8,9 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -361,6 +364,44 @@ fun MainShell(
                 navController = navController,
                 startDestination = DOCUMENTS_ROUTE,
                 modifier = Modifier.padding(padding),
+                // One animation for both back button and back gesture (predictive back plays the pop transitions):
+                // screens slide in from the right and back out to it. Between tabs they fade.
+                enterTransition = {
+                    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
+                        fadeIn()
+                    } else {
+                        slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start)
+                    }
+                },
+                exitTransition = {
+                    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
+                        fadeOut()
+                    } else {
+                        slideOutOfContainer(
+                            AnimatedContentTransitionScope.SlideDirection.Start,
+                            targetOffset = { it / 4 },
+                        ) +
+                            fadeOut()
+                    }
+                },
+                popEnterTransition = {
+                    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
+                        fadeIn()
+                    } else {
+                        slideIntoContainer(
+                            AnimatedContentTransitionScope.SlideDirection.End,
+                            initialOffset = { it / 4 },
+                        ) +
+                            fadeIn()
+                    }
+                },
+                popExitTransition = {
+                    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
+                        fadeOut()
+                    } else {
+                        slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End)
+                    }
+                },
             ) {
                 LIST_ROUTES.forEach { (path, mode) ->
                     composable(
