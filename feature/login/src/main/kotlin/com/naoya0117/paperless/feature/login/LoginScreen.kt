@@ -151,7 +151,11 @@ internal fun LoginContent(
     // Back from the code entry goes to the credentials rather than closing the app.
     BackHandler(enabled = state.step == LoginStep.MFA_CODE && enabled, onBack = actions.cancelMfa)
     val cancel = actions.cancel
-    BackHandler(enabled = cancel != null && state.step == LoginStep.CREDENTIALS && enabled) { cancel?.invoke() }
+    // While signing in, Back waits (rather than leaving the app).
+    // Not once signed in: the app switches to the account in a moment.
+    BackHandler(enabled = cancel != null && state.step == LoginStep.CREDENTIALS && state.signedIn == null) {
+        if (enabled) cancel?.invoke()
+    }
     if (state.signedIn != null) {
         // Signed in: the app switches to its next screen in a moment.
         val description = stringResource(R.string.login_in_progress)

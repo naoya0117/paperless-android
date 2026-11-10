@@ -74,6 +74,8 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -505,11 +507,14 @@ private fun Drawer(
         // Scrolls on small screens (e.g. in landscape).
         Column(Modifier.verticalScroll(rememberScrollState())) {
             var accountsOpen by rememberSaveable { mutableStateOf(false) }
+            val accountsState =
+                stringResource(if (accountsOpen) R.string.drawer_accounts_shown else R.string.drawer_accounts_hidden)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .semantics { stateDescription = accountsState }
                         .clickable(onClickLabel = stringResource(R.string.drawer_accounts)) {
                             accountsOpen =
                                 !accountsOpen
@@ -551,7 +556,11 @@ private fun Drawer(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
-                                    other.serverUrl,
+                                    if (other.needsSignIn) {
+                                        stringResource(R.string.drawer_account_sign_in, other.serverUrl)
+                                    } else {
+                                        other.serverUrl
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,

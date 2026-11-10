@@ -31,10 +31,13 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.net.Proxy
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
+// Not the app's (Hilt, starting background work): only the view model is tested.
+@Config(application = android.app.Application::class)
 class AppViewModelTest {
     @get:Rule
     val folder = TemporaryFolder()
@@ -94,17 +97,18 @@ class AppViewModelTest {
             viewModel.screen.await { it is AppScreen.Home }
 
             viewModel.addAccount()
-            val first = viewModel.screen.await { it is AppScreen.AddAccount } as AppScreen.AddAccount
+            val first = viewModel.screen.await { (it as? AppScreen.Home)?.addingAccount != null } as AppScreen.Home
+            assertEquals(alice.id, first.account.id)
             viewModel.addAccountDone()
-            assertEquals(alice.id, (viewModel.screen.await { it is AppScreen.Home } as AppScreen.Home).account.id)
+            viewModel.screen.await { it is AppScreen.Home && it.addingAccount == null }
 
             // A new attempt gets a fresh form.
             viewModel.addAccount()
-            val second = viewModel.screen.await { it is AppScreen.AddAccount } as AppScreen.AddAccount
-            assertTrue(second.attempt > first.attempt)
+            val second = viewModel.screen.await { (it as? AppScreen.Home)?.addingAccount != null } as AppScreen.Home
+            assertTrue(second.addingAccount!! > first.addingAccount!!)
             val bob = signIn("bob")
-            viewModel.addAccountDone()
-            assertEquals(bob.id, (viewModel.screen.await { it is AppScreen.Home } as AppScreen.Home).account.id)
+            viewModel.accountAdded(bob)
+            viewModel.screen.await { it is AppScreen.Home && it.addingAccount == null && it.account.id == bob.id }
             assertEquals(2, viewModel.accountList.await { it.size == 2 }.size)
         }
 
@@ -130,6 +134,21 @@ class AppViewModelTest {
 
             val restored = AppViewModel(accounts, savedState)
 
-            restored.screen.await { it is AppScreen.AddAccount }
+            restored.screen.await { (it as? AppScreen.Home)?.addingAccount != null }
+        }
+
+    @Test
+    fun `adding ends when the account signs out`() =
+        runTest {
+            val alice = signIn("alice")
+            val viewModel = AppViewModel(accounts, SavedStateHandle())
+            viewModel.addAccount()
+            viewModel.screen.await { (it as? AppScreen.Home)?.addingAccount != null }
+
+            accounts.signOut(alice.id)
+            viewModel.screen.await { it is AppScreen.Login }
+            signIn("alice")
+
+            viewModel.screen.await { it is AppScreen.Home && it.addingAccount == null }
         }
 }

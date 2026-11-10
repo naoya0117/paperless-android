@@ -7,9 +7,11 @@ import androidx.lifecycle.viewModelScope
 import com.naoya0117.paperless.core.data.AccountRepository
 import com.naoya0117.paperless.core.model.Account
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -26,14 +28,13 @@ sealed interface AppScreen {
         val otherAccountId: String? = null,
     ) : AppScreen
 
-    /** Signing in to another account, from the signed-in screens; can be cancelled. */
-    data class AddAccount(
-        /** Distinguishes each attempt, so that it starts with an empty form. */
-        val attempt: Int,
-    ) : AppScreen
-
     data class Home(
         val account: Account,
+        /**
+         * Signing in to another account is open over the signed-in screens (which stay as they are, e.g. if it
+         * is cancelled); distinguishes each attempt. `null` if not adding an account.
+         */
+        val addingAccount: Int? = null,
     ) : AppScreen
 }
 
@@ -52,13 +53,12 @@ class AppViewModel
                 val active = state.activeAccount
                 when {
                     active == null -> AppScreen.Login(reSignInAccountId = null)
-                    attempt != null -> AppScreen.AddAccount(attempt)
                     active.needsSignIn ->
                         AppScreen.Login(
                             reSignInAccountId = active.id,
                             otherAccountId = state.accounts.firstOrNull { it.id != active.id && !it.needsSignIn }?.id,
                         )
-                    else -> AppScreen.Home(active)
+                    else -> AppScreen.Home(active, attempt)
                 }
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), AppScreen.Loading)
 
@@ -68,12 +68,31 @@ class AppViewModel
                 .map { it.accounts }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
 
+        /** The login form of the account being added: its own, cleared when done (each attempt starts empty). */
+        private var addAccountStore = ViewModelStore()
+
+        fun addAccountViewModelStore(): ViewModelStore = addAccountStore
+
+        init {
+            // Signed out or must sign in again meanwhile: adding ends (it would come back after the next login).
+            viewModelScope.launch {
+                accounts.state.collect { state ->
+                    val active = state.activeAccount
+                    if (adding.value != null && (active == null || active.needsSignIn)) addAccountDone()
+                }
+            }
+        }
+
         fun switchTo(accountId: String) {
             viewModelScope.launch {
                 try {
                     accounts.switchTo(accountId)
-                } catch (_: IllegalArgumentException) {
-                    // Removed meanwhile: the list follows.
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (
+                    @Suppress("TooGenericExceptionCaught") _: Exception,
+                ) {
+                    // Removed meanwhile (the list follows) or not storable: the current account stays.
                 }
             }
         }
@@ -85,9 +104,22 @@ class AppViewModel
             savedState[ADDING_KEY] = attempt
         }
 
-        /** Signed in (the new account is active now) or cancelled. */
+        /**
+         * Signed in to [account]: the form closes once it is the active account (not before, so that the
+         * previous account's screens do not show up in between).
+         */
+        fun accountAdded(account: Account) {
+            viewModelScope.launch {
+                accounts.state.first { it.activeAccountId == account.id }
+                addAccountDone()
+            }
+        }
+
+        /** Cancelled (or signed in and active). */
         fun addAccountDone() {
             savedState[ADDING_KEY] = null
+            addAccountStore.clear()
+            addAccountStore = ViewModelStore()
         }
 
         fun signOut(accountId: String) {
@@ -116,7 +148,10 @@ class AppViewModel
             shellAccountId = null
         }
 
-        override fun onCleared() = shellStore.clear()
+        override fun onCleared() {
+            shellStore.clear()
+            addAccountStore.clear()
+        }
 
         private companion object {
             const val STOP_TIMEOUT_MILLIS = 5_000L

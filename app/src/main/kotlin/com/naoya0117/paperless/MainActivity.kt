@@ -110,7 +110,7 @@ private fun App(
     val accounts by viewModel.accountList.collectAsStateWithLifecycle()
     // Without an account the files cannot be uploaded; say so rather than dropping them silently.
     val context = LocalContext.current
-    if ((screen is AppScreen.Login || screen is AppScreen.AddAccount) && sharedFiles.isNotEmpty()) {
+    if (screen is AppScreen.Login && sharedFiles.isNotEmpty()) {
         LaunchedEffect(sharedFiles) {
             Toast.makeText(context, R.string.share_sign_in_first, Toast.LENGTH_LONG).show()
             onSharedFilesHandled()
@@ -128,15 +128,8 @@ private fun App(
                 onSignedIn = {},
                 onRemoveAccount = viewModel::signOut,
                 onCancel = current.otherAccountId?.let { other -> { viewModel.switchTo(other) } },
-            )
-        // A login form of its own (not the first sign-in's), fresh for each attempt.
-        is AppScreen.AddAccount ->
-            LoginScreen(
-                reSignInAccountId = null,
-                onSignedIn = { viewModel.addAccountDone() },
-                onRemoveAccount = {},
-                onCancel = viewModel::addAccountDone,
-                viewModel = hiltViewModel(key = "add-account-${current.attempt}"),
+                // Per account: a form left for another account does not come back for this one.
+                viewModel = hiltViewModel(key = "login-${current.reSignInAccountId}"),
             )
         is AppScreen.Home ->
             // A fresh shell per account; its view models live in a store the app view model clears.
@@ -156,6 +149,25 @@ private fun App(
                     )
                 }
             }
+    }
+    val adding = (screen as? AppScreen.Home)?.addingAccount
+    if (adding != null) {
+        // Over the signed-in screens, which keep their state; a form of its own, cleared when done.
+        key(adding) {
+            val activity = checkNotNull(LocalActivity.current as? ComponentActivity) { "Not in an activity" }
+            val store = viewModel.addAccountViewModelStore()
+            val owner = remember(store, activity) { ShellViewModelStoreOwner(store, activity) }
+            Surface(Modifier.fillMaxSize()) {
+                CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
+                    LoginScreen(
+                        reSignInAccountId = null,
+                        onSignedIn = viewModel::accountAdded,
+                        onRemoveAccount = {},
+                        onCancel = viewModel::addAccountDone,
+                    )
+                }
+            }
+        }
     }
 }
 
