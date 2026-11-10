@@ -404,15 +404,15 @@ private fun DocumentRow(
 
 /** Large enough to recognise the document (thumbnails are a page preview). */
 @Composable
-private fun ThumbnailImage(
+internal fun ThumbnailImage(
     accountId: String?,
     document: Document,
+    modifier: Modifier = Modifier.size(width = THUMBNAIL_WIDTH.dp, height = THUMBNAIL_HEIGHT.dp),
 ) {
     val shape = RoundedCornerShape(8.dp)
     Box(
         modifier =
-            Modifier
-                .size(width = THUMBNAIL_WIDTH.dp, height = THUMBNAIL_HEIGHT.dp)
+            modifier
                 .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceContainer)
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape),
