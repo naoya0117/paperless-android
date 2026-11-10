@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- App name: paperless-android
+- About screen (menu): version, copyright, license (GPL-3.0-or-later, no warranty), source code link, and the open
+  source libraries in the app with their licenses and notices (generated at build time by AboutLibraries, offline;
+  the build fails on a license that is not allowed)
 - README in English and Japanese, including acknowledgement of [paperless-mobile](https://github.com/astubenbord/paperless-mobile)
 - License: GNU General Public License v3.0 or later
 - This changelog

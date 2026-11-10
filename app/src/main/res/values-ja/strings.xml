@@ -44,4 +44,13 @@
     <plurals name="upload_combine_message">
         <item quantity="other">%1$d 枚の画像を 1 つの文書（PDF）にまとめるか、別々にアップロードできます。</item>
     </plurals>
+    <string name="drawer_about">このアプリについて</string>
+    <string name="about_version">バージョン %1$s</string>
+    <string name="about_notice">このアプリはフリーソフトウェアです。GNU 一般公衆利用許諾書（GPL）のバージョン 3、またはそれ以降のバージョンの条件で、再配布や改変ができます。このアプリは「無保証」です。Paperless-ngx のプロジェクトとは関係ありません。</string>
+    <string name="about_source_code">ソースコード</string>
+    <string name="about_license">ライセンス</string>
+    <string name="about_notices">ライブラリの表示事項（NOTICE）</string>
+    <string name="about_libraries">オープンソースのライブラリ</string>
+    <string name="about_libraries_failed">ライブラリの一覧を読み込めませんでした</string>
+    <string name="about_open_failed">リンクを開けるアプリがありません</string>
 </resources>

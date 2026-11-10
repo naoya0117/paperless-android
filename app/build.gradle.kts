@@ -3,6 +3,26 @@ plugins {
     alias(libs.plugins.paperless.robolectric)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.aboutlibraries)
+}
+
+// The open source libraries in the APK and their licenses, for the about screen (res/raw/aboutlibraries.json).
+aboutLibraries {
+    // Only what the Maven POMs say: no network access (reproducible, F-Droid).
+    offlineMode = true
+    collect {
+        fetchRemoteLicense = false
+        fetchRemoteFunding = false
+    }
+    export {
+        // Not shown; also keeps the output the same between builds.
+        excludeFields.addAll("developers", "funding", "organization", "scm", "website")
+    }
+    license {
+        // The app is GPL-3.0-or-later: fail the build on a dependency whose license is not known to be compatible.
+        strictMode = com.mikepenz.aboutlibraries.plugin.StrictMode.FAIL
+        allowedLicenses.addAll("Apache-2.0")
+    }
 }
 
 android {
@@ -30,6 +50,9 @@ android {
             null
         }
 
+    // The about screen's test reads the app's raw resources (the generated library list).
+    testOptions.unitTests.isIncludeAndroidResources = true
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -55,6 +78,7 @@ dependencies {
     implementation(libs.navigation.compose)
     implementation(libs.compose.material.icons.extended)
     implementation(libs.coil.compose)
+    implementation(libs.aboutlibraries.core)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 

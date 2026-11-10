@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PersonAdd
@@ -142,6 +143,9 @@ private const val INBOX_ROUTE = "inbox"
 private const val UPLOADS_ROUTE = "uploads"
 private const val TRASH_ROUTE = "trash"
 private const val SCAN_ROUTE = "scan?camera={camera}"
+private const val ABOUT_ROUTE = "about"
+private const val TEXT_ARGUMENT = "text"
+private const val ABOUT_TEXT_ROUTE = "about/{$TEXT_ARGUMENT}"
 private const val VIEW_ROUTE = "view/{${DocumentListViewModel.VIEW_ID_ARGUMENT}}"
 private const val LABELS_ROUTE = "labels/{${LabelListViewModel.KIND_ARGUMENT}}"
 private const val LABEL_EDIT_ROUTE =
@@ -358,6 +362,10 @@ fun MainShell(
                     ) {
                         navController.navigate("labels/${kind.key}")
                     }
+                },
+                onAbout = {
+                    scope.launch { drawerState.close() }
+                    if (navController.currentDestination?.route in TAB_ROUTES) navController.navigate(ABOUT_ROUTE)
                 },
                 onSignOut = {
                     scope.launch { drawerState.close() }
@@ -645,6 +653,25 @@ fun MainShell(
                 composable(TRASH_ROUTE) {
                     TrashScreen(onBack = dropUnlessResumed { navController.navigateUp() })
                 }
+                composable(ABOUT_ROUTE) {
+                    AboutScreen(
+                        onBack = dropUnlessResumed { navController.navigateUp() },
+                        onOpenText = { text -> navController.navigate("about/${text.key}") },
+                    )
+                }
+                composable(
+                    ABOUT_TEXT_ROUTE,
+                    arguments = listOf(navArgument(TEXT_ARGUMENT) { type = NavType.StringType }),
+                ) {
+                    val back = dropUnlessResumed { navController.navigateUp() }
+                    val text = BundledText.of(it.arguments?.getString(TEXT_ARGUMENT))
+                    if (text != null) {
+                        LicenseTextScreen(text, onBack = back)
+                    } else {
+                        // Unknown text (not opened from the about screen): nothing to show.
+                        LaunchedEffect(Unit) { navController.navigateUp() }
+                    }
+                }
                 composable(UPLOADS_ROUTE) {
                     ListScaffold(
                         topBar = { backBar(stringResource(R.string.drawer_uploads)) },
@@ -739,6 +766,7 @@ private fun Drawer(
     savedViews: List<SavedView>,
     onSavedView: (SavedView) -> Unit,
     onLabels: (LabelKind) -> Unit,
+    onAbout: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     ModalDrawerSheet {
@@ -870,11 +898,18 @@ private fun Drawer(
             }
             HorizontalDivider(Modifier.padding(top = 8.dp))
             NavigationDrawerItem(
+                label = { Text(stringResource(R.string.drawer_about)) },
+                icon = { Icon(Icons.Outlined.Info, contentDescription = null) },
+                selected = false,
+                onClick = onAbout,
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp),
+            )
+            NavigationDrawerItem(
                 label = { Text(stringResource(R.string.home_sign_out)) },
                 icon = { Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null) },
                 selected = false,
                 onClick = onSignOut,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
             )
         }
     }
