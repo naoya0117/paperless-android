@@ -70,22 +70,20 @@ import kotlinx.coroutines.launch
 private const val DOCUMENTS_ROUTE = "documents"
 private const val SEARCH_ROUTE = "search"
 private const val INBOX_ROUTE = "inbox"
-private val LIST_ROUTES =
-    listOf(
-        DOCUMENTS_ROUTE to DocumentListMode.ALL,
-        SEARCH_ROUTE to DocumentListMode.SEARCH,
-        INBOX_ROUTE to DocumentListMode.INBOX,
-    )
 
 /** The bottom tabs: only what is used most; everything else is in the drawer (hamburger menu). */
 private enum class Tab(
     val route: String,
+    val mode: DocumentListMode,
     val icon: ImageVector,
     val label: Int,
 ) {
-    DOCUMENTS(DOCUMENTS_ROUTE, Icons.Outlined.Description, R.string.title_documents),
-    SEARCH(SEARCH_ROUTE, Icons.Outlined.Search, R.string.title_search),
+    DOCUMENTS(DOCUMENTS_ROUTE, DocumentListMode.ALL, Icons.Outlined.Description, R.string.title_documents),
+    SEARCH(SEARCH_ROUTE, DocumentListMode.SEARCH, Icons.Outlined.Search, R.string.title_search),
 }
+
+/** The document lists: one per tab, and the inbox (opened from the documents tab). */
+private val LIST_ROUTES = Tab.entries.map { it.route to it.mode } + (INBOX_ROUTE to DocumentListMode.INBOX)
 
 private const val DOCUMENT_ROUTE = "document/{${DocumentViewerViewModel.DOCUMENT_ID_ARGUMENT}}"
 private const val EDIT_ROUTE = "document/{${DocumentEditViewModel.DOCUMENT_ID_ARGUMENT}}/edit"
@@ -151,7 +149,7 @@ fun MainShell(
                 when (route) {
                     DOCUMENTS_ROUTE, SEARCH_ROUTE ->
                         CenterAlignedTopAppBar(
-                            title = { Text(stringResource(tab?.label ?: R.string.title_documents)) },
+                            title = { Text(stringResource(checkNotNull(tab).label)) },
                             navigationIcon = {
                                 IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                     Icon(Icons.Outlined.Menu, contentDescription = stringResource(R.string.menu_open))
@@ -206,7 +204,8 @@ fun MainShell(
                     ) {
                         DocumentListScreen(
                             onOpenDocument = { navController.navigate("document/${it.id}") },
-                            onRefresh = { inbox.refresh(force = true) },
+                            // The inbox count is shown on the documents tab only.
+                            onRefresh = { if (path == DOCUMENTS_ROUTE) inbox.refresh(force = true) },
                         )
                     }
                 }
