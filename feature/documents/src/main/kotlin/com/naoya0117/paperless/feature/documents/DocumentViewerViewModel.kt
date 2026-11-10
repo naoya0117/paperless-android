@@ -2,7 +2,6 @@ package com.naoya0117.paperless.feature.documents
 
 import android.content.Context
 import android.net.Uri
-import android.os.Build
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -179,6 +178,11 @@ class DocumentViewerViewModel
             if (!mutableSearch.value.open) setFullscreen(!full.value)
         }
 
+        /** Scrolling down hides the bars, up shows them (not while searching: the search bar stays). */
+        fun onScrolled(down: Boolean) {
+            if (!mutableSearch.value.open && full.value != down) setFullscreen(down)
+        }
+
         private fun setFullscreen(value: Boolean) {
             full.value = value
             handle[FULLSCREEN_KEY] = value
@@ -260,7 +264,7 @@ class DocumentViewerViewModel
             query: String,
             content: ViewerContent,
         ): List<SearchMatch> {
-            if (content is ViewerContent.Pdf && Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            if (content is ViewerContent.Pdf && PdfPages.canSearchPages) {
                 // A PDF without a text layer (e.g. a scan without an archived version) finds nothing there.
                 content.pages
                     .search(query)

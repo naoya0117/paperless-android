@@ -1,11 +1,15 @@
 package com.naoya0117.paperless.feature.documents
 
+import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
+import android.graphics.pdf.PdfRendererPreV
+import android.graphics.pdf.models.PageMatchBounds
 import android.os.Build
 import android.os.ParcelFileDescriptor
-import androidx.annotation.RequiresApi
+import android.os.ext.SdkExtensions
+import androidx.annotation.RequiresExtension
 import androidx.core.graphics.createBitmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,9 +29,12 @@ import kotlin.math.sqrt
  * on demand at the width they are shown, so only visible pages take memory.
  */
 class PdfPages private constructor(
+    private val file: File,
     private val descriptor: ParcelFileDescriptor,
     private val renderer: PdfRenderer,
 ) : Closeable {
+    /** Android 12–14: a second renderer for searching only (opened on the first search). */
+    private var searcher: Closeable? = null
     private val lock = Mutex()
 
     @Volatile private var closed = false
@@ -73,8 +80,9 @@ class PdfPages private constructor(
      *
      * @throws IllegalStateException if closed meanwhile
      */
-    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    @SuppressLint("NewApi") // canSearchPages checks the API level and the SDK extension.
     suspend fun search(query: String): List<SearchMatch.InPage> {
+        check(canSearchPages) { "Page search needs Android 15, or 12+ with SDK extension 13" }
         val matches = mutableListOf<SearchMatch.InPage>()
         for (index in 0 until pageCount) {
             if (matches.size >= MAX_TEXT_MATCHES) break
@@ -83,30 +91,74 @@ class PdfPages private constructor(
                 lock.withLock {
                     withContext(Dispatchers.IO) {
                         check(!closed) { "closed" }
-                        renderer.openPage(index).use { page ->
-                            // Known now, so that scrolling to a match on a page not shown yet is right.
-                            aspectRatios[index] = validAspect(page.width, page.height)
-                            val width = page.width.toFloat().takeIf { it > 0 } ?: 1f
-                            val height = page.height.toFloat().takeIf { it > 0 } ?: 1f
-                            page.searchText(query).map { match ->
-                                SearchMatch.InPage(
-                                    page = index,
-                                    bounds =
-                                        match.bounds.map {
-                                            PageRect(
-                                                it.left / width,
-                                                it.top / height,
-                                                it.right / width,
-                                                it.bottom / height,
-                                            )
-                                        },
-                                )
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                            renderer.openPage(index).use { page ->
+                                pageMatches(index, page.width, page.height, page.searchText(query))
+                            }
+                        } else {
+                            preV().openPage(index).use { page ->
+                                pageMatches(index, page.width, page.height, page.searchText(query))
                             }
                         }
                     }
                 }
         }
         return matches.take(MAX_TEXT_MATCHES)
+    }
+
+    @RequiresExtension(extension = Build.VERSION_CODES.S, version = PREV_EXTENSION)
+    private fun preV(): PdfRendererPreV =
+        (searcher as? PreVSearcher)?.renderer
+            ?: PreVSearcher(
+                ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY),
+            ).also { searcher = it }.renderer
+
+    @RequiresExtension(extension = Build.VERSION_CODES.S, version = PREV_EXTENSION)
+    private class PreVSearcher(
+        private val descriptor: ParcelFileDescriptor,
+    ) : Closeable {
+        val renderer: PdfRendererPreV =
+            try {
+                PdfRendererPreV(descriptor)
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Exception,
+            ) {
+                descriptor.close()
+                throw e
+            }
+
+        override fun close() {
+            renderer.close()
+            descriptor.close()
+        }
+    }
+
+    /** The matches of a page, as fractions of its size; its aspect ratio is known then too. */
+    @RequiresExtension(extension = Build.VERSION_CODES.S, version = PREV_EXTENSION)
+    private fun pageMatches(
+        index: Int,
+        pageWidth: Int,
+        pageHeight: Int,
+        found: List<PageMatchBounds>,
+    ): List<SearchMatch.InPage> {
+        // Known now, so that scrolling to a match on a page not shown yet is right.
+        aspectRatios[index] = validAspect(pageWidth, pageHeight)
+        val width = pageWidth.toFloat().takeIf { it > 0 } ?: 1f
+        val height = pageHeight.toFloat().takeIf { it > 0 } ?: 1f
+        return found.map { match ->
+            SearchMatch.InPage(
+                page = index,
+                bounds =
+                    match.bounds.map {
+                        PageRect(
+                            it.left / width,
+                            it.top / height,
+                            it.right / width,
+                            it.bottom / height,
+                        )
+                    },
+            )
+        }
     }
 
     /**
@@ -120,11 +172,27 @@ class PdfPages private constructor(
             lock.withLock {
                 renderer.close()
                 descriptor.close()
+                searcher?.close()
             }
         }
     }
 
     companion object {
+        /** The SDK extension (of Android 12) with PdfRendererPreV, which can search text. */
+        private const val PREV_EXTENSION = 13
+
+        /**
+         * Whether [search] can find text on the pages: Android 15+, or Android 12–14 updated with the PDF
+         * renderer of SDK extension 13 (through system updates).
+         */
+        val canSearchPages: Boolean by lazy {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM ||
+                (
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                        SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= PREV_EXTENSION
+                )
+        }
+
         /** Enough for sharp text on large phones. */
         const val MAX_WIDTH: Int = 1440
 
@@ -154,7 +222,7 @@ class PdfPages private constructor(
             withContext(Dispatchers.IO) {
                 val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
                 try {
-                    PdfPages(descriptor, PdfRenderer(descriptor))
+                    PdfPages(file, descriptor, PdfRenderer(descriptor))
                 } catch (
                     @Suppress("TooGenericExceptionCaught") e: Exception,
                 ) {

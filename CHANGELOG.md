@@ -71,3 +71,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pinch to zoom in the viewer (two fingers move the zoomed page)
 - Viewer: tapping the document switches to full screen; search within the document (on PDF pages with the
   matches highlighted on Android 15+, otherwise in the document's text)
+- Viewer: scrolling down hides the bars (full screen), scrolling up shows them; the search is in the menu (⋮);
+  page search also on Android 12–14 with the updated PDF renderer; screens slide in and out alike for the back
+  button and the back gesture
