@@ -68,7 +68,10 @@ class AppViewModel
                 .map { it.accounts }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
 
-        /** The login form of the account being added: its own, cleared when done (each attempt starts empty). */
+        /**
+         * The login form of the account being added: a store of its own per attempt (each starts empty), cleared
+         * by the screen once the form is gone. Not saved: after process death the form starts empty again.
+         */
         private var addAccountStore = ViewModelStore()
 
         fun addAccountViewModelStore(): ViewModelStore = addAccountStore
@@ -118,7 +121,7 @@ class AppViewModel
         /** Cancelled (or signed in and active). */
         fun addAccountDone() {
             savedState[ADDING_KEY] = null
-            addAccountStore.clear()
+            // The next attempt gets a new store; the screen clears this one when the form is gone.
             addAccountStore = ViewModelStore()
         }
 

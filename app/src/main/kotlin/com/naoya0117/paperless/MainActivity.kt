@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -14,6 +15,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -140,7 +142,8 @@ private fun App(
                 CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
                     MainShell(
                         account = current.account,
-                        sharedFiles = sharedFiles,
+                        // Held while adding an account: handled once the screens are visible again.
+                        sharedFiles = if (current.addingAccount == null) sharedFiles else emptyList(),
                         onSharedFilesHandled = onSharedFilesHandled,
                         accounts = accounts,
                         onSwitchAccount = viewModel::switchTo,
@@ -155,8 +158,12 @@ private fun App(
         // Over the signed-in screens, which keep their state; a form of its own, cleared when done.
         key(adding) {
             val activity = checkNotNull(LocalActivity.current as? ComponentActivity) { "Not in an activity" }
-            val store = viewModel.addAccountViewModelStore()
+            val store = remember { viewModel.addAccountViewModelStore() }
             val owner = remember(store, activity) { ShellViewModelStoreOwner(store, activity) }
+            // Cleared once the form is gone (not while it may still create view models in it).
+            DisposableEffect(store) { onDispose { store.clear() } }
+            // Back never reaches the screens underneath; the form's own handlers (registered later) come first.
+            BackHandler {}
             Surface(Modifier.fillMaxSize()) {
                 CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
                     LoginScreen(
