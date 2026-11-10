@@ -24,6 +24,10 @@ kotlinx-coroutines = "1.11.0"
 kotlinx-serialization = "1.12.0"
 okhttp = "5.5.1"
 paging = "3.5.3"
+navigation = "2.10.2"
+coil = "3.6.3"
+# The last release; icons are copied into the app by R8 as needed.
+material-icons = "1.7.8"
 retrofit = "3.0.0"
 robolectric = "4.17"
 room = "2.8.5"
@@ -57,6 +61,10 @@ okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 okhttp-logging-interceptor = { module = "com.squareup.okhttp3:logging-interceptor", version.ref = "okhttp" }
 okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver3", version.ref = "okhttp" }
 okhttp-tls = { module = "com.squareup.okhttp3:okhttp-tls", version.ref = "okhttp" }
+paging-compose = { module = "androidx.paging:paging-compose", version.ref = "paging" }
+navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigation" }
+coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended", version.ref = "material-icons" }
 paging-common = { module = "androidx.paging:paging-common", version.ref = "paging" }
 paging-testing = { module = "androidx.paging:paging-testing", version.ref = "paging" }
 room-paging = { module = "androidx.room:room-paging", version.ref = "room" }

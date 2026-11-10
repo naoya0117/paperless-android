@@ -200,11 +200,12 @@ class LoginViewModel
                     accounts.customHeaders(accountId).orEmpty().map { (name, value) ->
                         HeaderInput(name, value)
                     }
-                mutableState.update { state ->
-                    if (state.reSignInAccountId != accountId) return@update state
-                    prefilled(state, account, headers)
-                }
-                save()
+                val current = mutableState.value
+                if (current.reSignInAccountId != accountId) return@launch
+                val prepared = prefilled(current, account, headers)
+                // Saved before it is shown, so that whoever sees the state also finds it saved.
+                save(prepared)
+                mutableState.value = prepared
             }
         }
 
@@ -463,8 +464,7 @@ class LoginViewModel
         }
 
         /** Keeps the non-secret input across process death. */
-        private fun save() {
-            val state = mutableState.value
+        private fun save(state: LoginState = mutableState.value) {
             savedState[KEY_URL] = state.serverUrl
             savedState[KEY_METHOD] = state.method.name
             savedState[KEY_USERNAME] = state.username

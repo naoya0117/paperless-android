@@ -48,6 +48,10 @@ android {
 dependencies {
     implementation(projects.core.data)
     implementation(projects.feature.login)
+    implementation(projects.feature.documents)
+    implementation(libs.navigation.compose)
+    implementation(libs.compose.material.icons.extended)
+    implementation(libs.coil.compose)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 

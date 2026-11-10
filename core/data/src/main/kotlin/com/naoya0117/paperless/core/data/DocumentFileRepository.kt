@@ -15,15 +15,19 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Where document files are cached: a cache directory the system may also clear, and the most it may hold
- * (for all accounts together; the least recently used files go first, whichever account they belong to).
+ * Where document files are cached: a cache directory the system may also clear, and the most each area may
+ * hold (for all accounts together; the least recently used files go first, whichever account they belong
+ * to). Thumbnails have their own area, so that scrolling through lists does not push out the documents
+ * opened before (e.g. to read them offline).
  */
 class DocumentFileStorage(
     val directory: File,
     val maxBytes: Long = DEFAULT_MAX_BYTES,
+    val thumbnailMaxBytes: Long = DEFAULT_THUMBNAIL_MAX_BYTES,
 ) {
     companion object {
         const val DEFAULT_MAX_BYTES: Long = 256L * 1024 * 1024
+        const val DEFAULT_THUMBNAIL_MAX_BYTES: Long = 64L * 1024 * 1024
     }
 }
 
@@ -56,8 +60,27 @@ class DocumentFileRepository
         /** Serializes trimming and clearing, which walk the whole cache. */
         private val trimLock = Mutex()
 
-        /** Bytes in the cache as far as known; negative until counted. Trimming walks the disk only when over. */
-        private val knownBytes = AtomicLong(-1)
+        /** Thumbnails, and everything else: cached and trimmed separately. */
+        private enum class Area(
+            val directoryName: String,
+        ) {
+            THUMBNAILS("thumbnails"),
+            FILES("files"),
+        }
+
+        /** Per area, bytes as far as known; negative until counted. Trimming walks the disk only when over. */
+        private val knownBytes = Area.entries.associateWith { AtomicLong(-1) }
+
+        private fun Area.limit() = if (this == Area.THUMBNAILS) storage.thumbnailMaxBytes else storage.maxBytes
+
+        private fun areaOf(kind: DocumentFileKind) =
+            if (kind ==
+                DocumentFileKind.THUMBNAIL
+            ) {
+                Area.THUMBNAILS
+            } else {
+                Area.FILES
+            }
 
         /**
          * The file of [document] (from the active account), downloaded if it is not cached yet.
@@ -71,7 +94,7 @@ class DocumentFileRepository
             kind: DocumentFileKind,
         ): CachedDocumentFile {
             val session = accounts.currentSession() ?: throw NotSignedInException()
-            val file = File(accountDirectory(session.account.id), fileName(document, kind))
+            val file = File(accountDirectory(areaOf(kind), session.account.id), fileName(document, kind))
             // Stored files appear atomically (renamed into place with their metadata), so a hit needs no lock.
             cached(file)?.let { return it }
             return withFileLock(file.name) { cached(file) ?: download(session, document, kind, file) }
@@ -80,8 +103,10 @@ class DocumentFileRepository
         /** Deletes the account's cached files, e.g. after signing out. */
         suspend fun clear(accountId: String) =
             trimLock.withLock {
-                withContext(Dispatchers.IO) { accountDirectory(accountId).deleteRecursively() }
-                knownBytes.set(-1)
+                withContext(
+                    Dispatchers.IO,
+                ) { Area.entries.forEach { accountDirectory(it, accountId).deleteRecursively() } }
+                knownBytes.values.forEach { it.set(-1) }
             }
 
         /** `null` if not cached (or deleted meanwhile). */
@@ -133,8 +158,15 @@ class DocumentFileRepository
                     }
                 if (!stored) throw NotSignedInException()
                 withContext(Dispatchers.IO) { deleteOlderVersions(file) }
-                if (knownBytes.get() >= 0) knownBytes.addAndGet(file.length() + metaFile(file).length())
-                trimIfNeeded(keep = file)
+                val area = areaOf(kind)
+                knownBytes.getValue(area).let {
+                    if (it.get() >=
+                        0
+                    ) {
+                        it.addAndGet(file.length() + metaFile(file).length())
+                    }
+                }
+                trimIfNeeded(area, keep = file)
                 return result
             } finally {
                 withContext(NonCancellable + Dispatchers.IO) {
@@ -171,14 +203,18 @@ class DocumentFileRepository
          * the limit does not push out everything else: it is the first to go next time. Leftovers of interrupted
          * downloads are removed.
          */
-        private suspend fun trimIfNeeded(keep: File) {
-            val known = knownBytes.get()
-            if (known in 0..storage.maxBytes) return
+        private suspend fun trimIfNeeded(
+            area: Area,
+            keep: File,
+        ) {
+            val maxBytes = area.limit()
+            val known = knownBytes.getValue(area).get()
+            if (known in 0..maxBytes) return
             trimLock.withLock {
                 withContext(Dispatchers.IO) {
                     val now = System.currentTimeMillis()
                     val entries = mutableListOf<Entry>()
-                    storage.directory.walkTopDown().filter { it.isFile }.forEach { file ->
+                    File(storage.directory, area.directoryName).walkTopDown().filter { it.isFile }.forEach { file ->
                         val name = file.name
                         when {
                             name.endsWith(PART) -> if (file.lastModified() < now - LEFTOVER_AGE_MILLIS) file.delete()
@@ -192,17 +228,17 @@ class DocumentFileRepository
                         }
                     }
                     var total = entries.sumOf { it.bytes }
-                    val oversized = keep.length() > storage.maxBytes / 2
+                    val oversized = keep.length() > maxBytes / 2
                     if (oversized) total -= entries.firstOrNull { it.file == keep }?.bytes ?: 0
                     for (entry in entries.sortedBy { it.lastUsed }) {
-                        if (total <= storage.maxBytes) break
+                        if (total <= maxBytes) break
                         if (entry.file == keep || entry.lastUsed > now - RECENTLY_USED_MILLIS) continue
                         metaFile(entry.file).delete()
                         entry.file.delete()
                         total -= entry.bytes
                     }
                     if (oversized) total += keep.length() + metaFile(keep).length()
-                    knownBytes.set(total)
+                    knownBytes.getValue(area).set(total)
                 }
             }
         }
@@ -233,7 +269,10 @@ class DocumentFileRepository
             }
         }
 
-        private fun accountDirectory(accountId: String) = File(storage.directory, accountId)
+        private fun accountDirectory(
+            area: Area,
+            accountId: String,
+        ) = File(File(storage.directory, area.directoryName), accountId)
 
         private fun metaFile(file: File) = File(file.parentFile, file.name + META)
 

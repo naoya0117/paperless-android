@@ -1,6 +1,7 @@
 package com.naoya0117.paperless
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewModelScope
 import com.naoya0117.paperless.core.data.AccountRepository
 import com.naoya0117.paperless.core.model.Account
@@ -46,6 +47,30 @@ class AppViewModel
         fun signOut(accountId: String) {
             viewModelScope.launch { accounts.signOut(accountId) }
         }
+
+        private var shellAccountId: String? = null
+        private var shellStore = ViewModelStore()
+
+        /**
+         * Holds the view models of the signed-in screens (e.g. the document lists) of one account. It survives
+         * configuration changes (it lives in this view model) and is cleared when the account changes or the
+         * app leaves its signed-in screens, so that no list keeps loading for an account that is gone.
+         */
+        fun shellViewModelStore(accountId: String): ViewModelStore {
+            if (shellAccountId != accountId) {
+                releaseShell()
+                shellAccountId = accountId
+            }
+            return shellStore
+        }
+
+        fun releaseShell() {
+            shellStore.clear()
+            shellStore = ViewModelStore()
+            shellAccountId = null
+        }
+
+        override fun onCleared() = shellStore.clear()
 
         private companion object {
             const val STOP_TIMEOUT_MILLIS = 5_000L

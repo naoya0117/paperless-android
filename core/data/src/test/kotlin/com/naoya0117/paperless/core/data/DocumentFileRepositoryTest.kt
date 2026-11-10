@@ -134,7 +134,7 @@ class DocumentFileRepositoryTest {
                 { files.clear(it) },
             )
         cacheDir = folder.newFolder()
-        files = DocumentFileRepository(accounts, DocumentFileStorage(cacheDir, maxBytes))
+        files = DocumentFileRepository(accounts, DocumentFileStorage(cacheDir, maxBytes, thumbnailMaxBytes = maxBytes))
     }
 
     @After
@@ -173,7 +173,7 @@ class DocumentFileRepositoryTest {
             assertEquals(2, fileRequests.size)
             assertFalse(old.file.exists())
             assertTrue(new.file.exists())
-            assertEquals(2, File(cacheDir, accountId).listFiles()!!.size) // file + metadata
+            assertEquals(2, File(cacheDir, "thumbnails/$accountId").listFiles()!!.size) // file + metadata
         }
 
     @Test
@@ -202,7 +202,7 @@ class DocumentFileRepositoryTest {
             val result = runCatching { thumbnail(document(7)) }
 
             assertTrue(result.exceptionOrNull() is PaperlessException)
-            assertEquals(emptyList<String>(), File(cacheDir, accountId).list()?.toList().orEmpty())
+            assertEquals(emptyList<String>(), File(cacheDir, "thumbnails/$accountId").list()?.toList().orEmpty())
         }
 
     @Test
@@ -224,7 +224,7 @@ class DocumentFileRepositoryTest {
             val left =
                 File(
                     cacheDir,
-                    accountId,
+                    "thumbnails/$accountId",
                 ).list()!!.filter { !it.endsWith(".meta") }.map { it.substringBefore('-') }
             assertEquals(listOf("1", "3", "4"), left.sorted())
             assertEquals(
@@ -292,7 +292,7 @@ class DocumentFileRepositoryTest {
             release.countDown()
 
             assertTrue(download.await().exceptionOrNull() is NotSignedInException)
-            assertFalse(File(cacheDir, accountId).exists())
+            assertFalse(File(cacheDir, "thumbnails/$accountId").exists())
         }
 
     @Test
@@ -305,5 +305,27 @@ class DocumentFileRepositoryTest {
 
             assertFalse(cached.file.exists())
             assertTrue(runCatching { thumbnail(document(7)) }.exceptionOrNull() is NotSignedInException)
+        }
+
+    @Test
+    fun `thumbnails do not push out other files`() =
+        runTest {
+            signIn()
+            val sample = thumbnail(document(99)).file
+            val entry = sample.length() + File(sample.path + ".meta").length()
+            cacheDir = folder.newFolder()
+            files =
+                DocumentFileRepository(
+                    accounts,
+                    DocumentFileStorage(cacheDir, maxBytes = 1_000_000, thumbnailMaxBytes = entry),
+                )
+            val preview = withContext(Dispatchers.IO) { files.file(document(1), DocumentFileKind.PREVIEW) }
+            preview.file.setLastModified(0)
+
+            (2L..6L).forEach { id ->
+                thumbnail(document(id)).file.setLastModified(0)
+            }
+
+            assertTrue(preview.file.exists())
         }
 }

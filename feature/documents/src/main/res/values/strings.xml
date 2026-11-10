@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="documents_search_hint">Search documents</string>
+    <string name="documents_search_prompt">Search the title and content of your documents.</string>
+    <string name="documents_no_results">No documents match your search.</string>
+    <string name="documents_inbox_empty">Your inbox is empty.</string>
+    <string name="documents_empty">No documents yet.</string>
+    <string name="documents_load_error">Could not load documents.</string>
+    <string name="documents_retry">Retry</string>
+</resources>
