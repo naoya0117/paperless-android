@@ -47,8 +47,9 @@ tests, Android Lint and ktlint.
 ### Demo build
 
 A demo of the app that needs no server: it signs in to a server built into the app, with sample documents,
-labels and saved views. Changes (editing, notes, the trash) are kept in memory until the app is closed;
-uploading is not available. It is meant for trying the app and for screenshots, built locally only, and is
+labels and saved views. Changes (editing, notes, the trash) are kept in memory only: after a restart the
+sample data starts over (the app's cache may still show earlier changes until it is refreshed). Uploading is
+not available. It is meant for trying the app and for screenshots, built locally only, and is
 not part of the releases. It can be installed next to the regular app (application ID suffix `.demo`).
 
 ```bash

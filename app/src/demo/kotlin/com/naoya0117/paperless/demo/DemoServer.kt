@@ -24,7 +24,8 @@ class DemoServer internal constructor(
         val request = chain.request()
         val reply =
             try {
-                synchronized(this) { handle(request) }
+                // Files are drawn outside the lock, so that thumbnails do not hold up the API calls.
+                fileRequest(request) ?: synchronized(this) { handle(request) }
             } catch (e: Exception) {
                 Reply.json(500, JSONObject().put("detail", "Demo server error: $e"))
             }
@@ -61,14 +62,26 @@ class DemoServer internal constructor(
         }
     }
 
+    /** The path below `/api/`, split into segments. */
+    private fun apiPath(url: HttpUrl): List<String> =
+        url.encodedPath
+            .substringAfter("/api/", "")
+            .trim('/')
+            .split('/')
+            .filter { it.isNotEmpty() }
+
+    /** `GET documents/<id>/thumb|preview|download/`, or null for any other request. */
+    private fun fileRequest(request: Request): Reply? {
+        val path = apiPath(request.url)
+        if (request.method != "GET" || path.size != 3 || path[0] != "documents" || path[2] !in FILE_KINDS) return null
+        val id = path[1].toLongOrNull() ?: return null
+        val document = synchronized(this) { data.document(id)?.copy() } ?: return Reply.notFound()
+        return file(document, path[2])
+    }
+
     private fun handle(request: Request): Reply {
         val url = request.url
-        val path =
-            url.encodedPath
-                .substringAfter("/api/", "")
-                .trim('/')
-                .split('/')
-                .filter { it.isNotEmpty() }
+        val path = apiPath(url)
         val body = request.bodyJson()
         val method = request.method
         val head = path.firstOrNull() ?: return Reply.notFound()
@@ -125,7 +138,6 @@ class DemoServer internal constructor(
                     }
                     else -> Reply.notFound()
                 }
-            "thumb", "preview", "download" -> file(document, path.first())
             "notes" -> notes(document, request, body)
             "metadata" -> Reply.ok(metadata(document))
             "suggestions" -> Reply.ok(suggestions(document))
@@ -147,7 +159,12 @@ class DemoServer internal constructor(
         return if (search == null) {
             sorted
         } else {
-            sorted.map { it.copy().put("__search_hit__", searchHit(it, search, sorted.indexOf(it))) }
+            sorted.mapIndexed {
+                rank,
+                document,
+                ->
+                document.copy().put("__search_hit__", searchHit(document, search, rank))
+            }
         }
     }
 
@@ -169,6 +186,20 @@ class DemoServer internal constructor(
             key == "is_tagged" -> tags.isNotEmpty() == value.isTrue()
             key == "is_in_inbox" -> tags.any { it in inboxTagIds() } == value.isTrue()
             key == "id__in" -> document.getLong("id") in ids
+            key == "mime_type" -> document.optString("mime_type") == value
+            key == "has_custom_fields" -> fieldIds(document).isNotEmpty() == value.isTrue()
+            key == "custom_fields__id__all" -> fieldIds(document).containsAll(ids)
+            key == "custom_fields__id__in" -> fieldIds(document).any { it in ids }
+            key == "custom_fields__id__none" -> fieldIds(document).none { it in ids }
+            key == "custom_fields__icontains" ->
+                document
+                    .getJSONArray(
+                        "custom_fields",
+                    ).objects()
+                    .any { it.optString("value").contains(value, ignoreCase = true) }
+            // Nothing in the demo is shared or has duplicates.
+            key == "shared_by__id" -> false
+            key == "has_duplicates" -> !value.isTrue()
             key.startsWith(
                 "archive_serial_number",
             ) -> matchesAsn(document.longOrNull("archive_serial_number"), key, value)
@@ -195,6 +226,9 @@ class DemoServer internal constructor(
             else -> true
         }
     }
+
+    private fun fieldIds(document: JSONObject): List<Long> =
+        document.getJSONArray("custom_fields").objects().map { it.getLong("field") }
 
     private fun matchesAsn(
         asn: Long?,
@@ -352,10 +386,38 @@ class DemoServer internal constructor(
             }
             "set_correspondent", "set_document_type", "set_storage_path" -> {
                 val field = body.optString("method").removePrefix("set_")
-                documents.forEach { it.put(field, parameters.opt(field) ?: JSONObject.NULL) }
+                documents.forEach {
+                    it
+                        .put(
+                            field,
+                            parameters.opt(field) ?: JSONObject.NULL,
+                        ).put("modified", Instant.now().toString())
+                }
             }
+            "modify_custom_fields" -> documents.forEach { modifyCustomFields(it, parameters) }
         }
         return Reply.ok(JSONObject().put("result", "OK"))
+    }
+
+    /** `add_custom_fields` is a `{"<field id>": value}` object or a list of field IDs (added without a value). */
+    private fun modifyCustomFields(
+        document: JSONObject,
+        parameters: JSONObject,
+    ) {
+        val values = parameters.optJSONObject("add_custom_fields")
+        val add: Map<Long, Any> =
+            values?.keys()?.asSequence()?.associate { it.toLong() to values.get(it) }
+                ?: parameters.optJSONArray("add_custom_fields")?.longs()?.associateWith { JSONObject.NULL }
+                ?: emptyMap()
+        val remove =
+            parameters
+                .optJSONArray("remove_custom_fields")
+                ?.longs()
+                .orEmpty()
+                .toSet()
+        val kept = document.getJSONArray("custom_fields").objects().filter { it.getLong("field") !in remove + add.keys }
+        val added = add.map { (field, value) -> JSONObject().put("field", field).put("value", value) }
+        document.put("custom_fields", JSONArray(kept + added)).put("modified", Instant.now().toString())
     }
 
     private fun notes(
@@ -499,7 +561,7 @@ class DemoServer internal constructor(
         val id = path.firstOrNull()?.toLongOrNull()
         if (id == null) {
             return when (method) {
-                "GET" -> page(url, items.map { withCounts(name, it) }.sortedBy { it.optString("name").lowercase() })
+                "GET" -> page(url, listCollection(name, url, items))
                 "POST" -> {
                     val item = (body ?: JSONObject()).put("id", data.newId())
                     defaults(name, item)
@@ -517,12 +579,37 @@ class DemoServer internal constructor(
                 Reply.ok(withCounts(name, item))
             }
             "DELETE" -> {
-                items.remove(item)
-                removeReferences(name, id)
+                // Like the server, deleting a tag deletes its sub-tags too.
+                val ids = if (name == "tags") descendantsAndSelf(id) else setOf(id)
+                items.removeAll { it.getLong("id") in ids }
+                ids.forEach { removeReferences(name, it) }
                 Reply.noContent
             }
             else -> Reply.notFound()
         }
+    }
+
+    /** With the `name__icontains` filter and `ordering` (by name by default), like the server. */
+    private fun listCollection(
+        name: String,
+        url: HttpUrl,
+        items: List<JSONObject>,
+    ): List<JSONObject> {
+        val contains = url.queryParameter("name__icontains")?.takeIf { it.isNotBlank() }
+        val ordering = url.queryParameter("ordering")?.ifEmpty { null } ?: "name"
+        val field = ordering.removePrefix("-")
+        val counted =
+            items
+                .filter {
+                    contains == null || it.optString("name").contains(contains, ignoreCase = true)
+                }.map { withCounts(name, it) }
+        val sorted =
+            when (field) {
+                "document_count" -> counted.sortedBy { it.optInt(field) }
+                "id" -> counted.sortedBy { it.getLong("id") }
+                else -> counted.sortedBy { it.optString(field).lowercase() }
+            }
+        return if (ordering.startsWith("-")) sorted.reversed() else sorted
     }
 
     private fun defaults(
@@ -615,13 +702,16 @@ class DemoServer internal constructor(
                     }
             }
         }
-        if (name == "tags") {
-            data.collections
-                .getValue(
-                    "tags",
-                ).filter { it.longOrNull("parent") == id }
-                .forEach { it.put("parent", JSONObject.NULL) }
+    }
+
+    private fun descendantsAndSelf(tagId: Long): Set<Long> {
+        val tags = data.collections.getValue("tags")
+        val result = mutableSetOf(tagId)
+        var added = true
+        while (added) {
+            added = tags.filter { it.longOrNull("parent") in result }.map { it.getLong("id") }.any(result::add)
         }
+        return result
     }
 
     // Helpers
@@ -661,6 +751,8 @@ class DemoServer internal constructor(
 
     private fun Request.bodyJson(): JSONObject? {
         val body = body ?: return null
+        // Only JSON bodies are read: a multipart upload is refused without reading the file.
+        if (body.contentType()?.subtype != "json") return null
         val text = Buffer().also(body::writeTo).readUtf8()
         return if (text.trimStart().startsWith("{")) JSONObject(text) else null
     }
@@ -677,6 +769,7 @@ class DemoServer internal constructor(
         private const val API_VERSION = "10"
         private const val SERVER_VERSION = "3.4.2"
         private const val DEFAULT_PAGE_SIZE = 25
+        private val FILE_KINDS = setOf("thumb", "preview", "download")
         private val SEARCH_PARAMS = listOf("text", "query", "title_search")
         private val IGNORED_PARAMS =
             setOf(

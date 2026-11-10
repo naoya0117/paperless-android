@@ -2,6 +2,7 @@ package com.naoya0117.paperless.demo
 
 import androidx.test.core.app.ApplicationProvider
 import com.naoya0117.paperless.core.model.AuthToken
+import com.naoya0117.paperless.core.model.BulkEdit
 import com.naoya0117.paperless.core.model.DateRange
 import com.naoya0117.paperless.core.model.DocumentOrdering
 import com.naoya0117.paperless.core.model.DocumentQuery
@@ -10,6 +11,7 @@ import com.naoya0117.paperless.core.model.IdFilter
 import com.naoya0117.paperless.core.model.TagFilter
 import com.naoya0117.paperless.core.model.toDraft
 import com.naoya0117.paperless.core.network.DocumentFileKind
+import com.naoya0117.paperless.core.network.ListQuery
 import com.naoya0117.paperless.core.network.PaperlessClient
 import com.naoya0117.paperless.core.network.PaperlessClientConfig
 import com.naoya0117.paperless.core.network.PaperlessException
@@ -24,9 +26,14 @@ import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.time.LocalDate
 
-/** The demo server through the app's real API client: its responses must parse like a real server's. */
+/**
+ * The demo server through the app's real API client: its responses must parse like a real server's. A plain
+ * Application: the demo app's own start (automatic sign-in) must not run in the tests.
+ */
+@Config(application = android.app.Application::class)
 @RunWith(RobolectricTestRunner::class)
 class DemoServerTest {
     private val server = DemoServer(DemoData.load(ApplicationProvider.getApplicationContext()), DemoFiles())
@@ -146,6 +153,44 @@ class DemoServerTest {
             assertEquals(8, client.correspondents.listAll().size)
             assertEquals(3, client.savedViews.listAll().size)
             assertEquals(4, client.customFields.listAll().size)
+            assertEquals(
+                listOf("Car"),
+                client.tags
+                    .list(ListQuery(nameContains = "ca"))
+                    .items
+                    .map { it.name },
+            )
+        }
+
+    @Test
+    fun `deleting a tag deletes its sub-tags`() =
+        runTest {
+            val client = client()
+            client.tags.delete(4)
+            val names = client.tags.listAll().map { it.name }
+            assertFalse("Home" in names || "Warranty" in names)
+            assertTrue(
+                client.documents
+                    .get(4)
+                    .tagIds
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun `bulk edits change the documents`() =
+        runTest {
+            val client = client()
+            client.bulk.edit(listOf(2, 3), BulkEdit.SetCorrespondent(5))
+            assertEquals(listOf(5L, 5L), listOf(2L, 3L).map { client.documents.get(it).correspondentId })
+            client.bulk.edit(listOf(2), BulkEdit.ModifyCustomFields(remove = setOf(1L)))
+            assertTrue(
+                client.documents
+                    .get(2)
+                    .customFields
+                    .none { it.fieldId == 1L },
+            )
+            assertEquals(14, client.documents.list(DocumentQuery(customFieldQuery = null)).count)
         }
 
     @Test

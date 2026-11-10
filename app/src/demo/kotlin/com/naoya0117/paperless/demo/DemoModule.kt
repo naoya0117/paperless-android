@@ -6,6 +6,7 @@ import com.naoya0117.paperless.core.data.AccountRepository
 import com.naoya0117.paperless.core.data.PaperlessClientFactory
 import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.AuthToken
+import dagger.Lazy
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -39,14 +40,17 @@ object DemoModule {
 
     @Provides
     @IntoSet
-    fun signIn(accounts: AccountRepository): AppStartupTask =
+    fun signIn(accounts: Lazy<AccountRepository>): AppStartupTask =
+        // Lazy: the task is injected in Application.onCreate (main thread); the demo data is loaded when it runs.
         AppStartupTask {
-            if (accounts.state
+            val repository = accounts.get()
+            val signedOut =
+                repository.state
                     .first()
                     .accounts
                     .isEmpty()
-            ) {
-                accounts.signInWithToken(DEMO_SERVER_URL, AuthToken(DemoServer.DEMO_TOKEN), tls = AccountTls())
+            if (signedOut) {
+                repository.signInWithToken(DEMO_SERVER_URL, AuthToken(DemoServer.DEMO_TOKEN), tls = AccountTls())
             }
         }
 }

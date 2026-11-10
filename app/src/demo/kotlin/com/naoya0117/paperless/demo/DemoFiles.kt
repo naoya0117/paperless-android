@@ -8,6 +8,7 @@ import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Draws the demo documents' files: a thumbnail (PNG), and the document itself as a PDF with real text (so
@@ -21,14 +22,18 @@ class DemoFiles {
         val name: String,
     )
 
-    private val cache = HashMap<String, File>()
+    /** By document and thumbnail or file (preview and download are the same), with the modification time drawn. */
+    private val cache = ConcurrentHashMap<String, Pair<String, File>>()
 
+    /** Thread-safe; the same file may be drawn twice when requested concurrently. */
     fun render(
         document: JSONObject,
         kind: String,
     ): File {
-        val key = "${document.getLong("id")}:$kind:${document.optString("modified")}"
-        return cache.getOrPut(key) { draw(document, kind) }
+        val key = "${document.getLong("id")}:${if (kind == "thumb") "thumb" else "file"}"
+        val modified = document.optString("modified")
+        cache[key]?.takeIf { it.first == modified }?.let { return it.second }
+        return draw(document, kind).also { cache[key] = modified to it }
     }
 
     fun size(
