@@ -16,6 +16,24 @@ Kotlin で実装した [Paperless-ngx](https://github.com/paperless-ngx/paperles
 - HTTPS で接続する場合、サーバー証明書が Android に信頼されている必要があります。
   プライベート CA で発行した証明書を使う場合は、端末に CA 証明書をインストールしてください。
 
+## インストール
+
+[GitHub のリリース](https://github.com/naoya0117/paperless-android/releases)から APK（`paperless-android-<バージョン>.apk`）を
+ダウンロードしてインストールしてください。各リリースに APK の SHA-256 を記載しています。
+
+APK は次の証明書（SHA-256）で署名しています。
+
+```text
+56:2B:80:8B:01:75:4F:9E:C2:14:50:E6:8D:4C:77:EB:09:5F:32:B6:36:92:B6:D9:51:B9:26:5F:00:C2:B0:47
+```
+
+ダウンロードした APK を確かめるには、Android SDK の build-tools にある `apksigner` を実行します（例はバージョン 0.1.0）。
+表示される `Signer #1 certificate SHA-256 digest` が `562b808b01754f9ec21450e68d4c77eb095f32b63692b6d951b9265f00c2b047`（同じ値を小文字・コロンなしで表したもの）であれば正しい APK です。
+
+```bash
+apksigner verify --print-certs paperless-android-0.1.0.apk
+```
+
 ## 機能
 
 - **文書**：ダッシュボードの保存済みビューを並べたホーム画面、大きなサムネイルの文書一覧（オフラインでも表示）、受信箱、ごみ箱からの復元、

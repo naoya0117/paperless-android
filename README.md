@@ -17,6 +17,25 @@ An Android client for [Paperless-ngx](https://github.com/paperless-ngx/paperless
 - To connect over HTTPS, the server certificate must be trusted by Android.
   To use a certificate issued by a private CA, install the CA certificate on the device.
 
+## Installation
+
+Download the APK (`paperless-android-<version>.apk`) from the
+[releases on GitHub](https://github.com/naoya0117/paperless-android/releases) and install it.
+Each release lists the APK's SHA-256.
+
+The APK is signed with the following certificate (SHA-256):
+
+```text
+56:2B:80:8B:01:75:4F:9E:C2:14:50:E6:8D:4C:77:EB:09:5F:32:B6:36:92:B6:D9:51:B9:26:5F:00:C2:B0:47
+```
+
+To check a downloaded APK, run `apksigner` from the Android SDK build tools (here for version 0.1.0). The
+`Signer #1 certificate SHA-256 digest` it prints must be `562b808b01754f9ec21450e68d4c77eb095f32b63692b6d951b9265f00c2b047` (the same value in lowercase, without colons).
+
+```bash
+apksigner verify --print-certs paperless-android-0.1.0.apk
+```
+
 ## Features
 
 - **Documents**: home screen with the saved views of the dashboard; document lists with large thumbnails, available
