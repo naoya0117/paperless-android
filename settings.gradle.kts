@@ -17,13 +17,16 @@ dependencyResolutionManagement {
     repositoriesMode = RepositoriesMode.FAIL_ON_PROJECT_REPOS
     repositories {
         google()
-        // Robolectric's Android jars are large, and Maven Central rate-limits the CI runner for them (HTTP 429).
-        // Google's mirror of Maven Central serves the same artifacts.
+        // Robolectric's Android jars and its native runtime are large (150 MB or more each), and Maven Central
+        // rate-limits the CI runner for them (HTTP 429). Google's mirror of Maven Central serves the same artifacts.
         exclusiveContent {
             forRepository {
                 maven("https://maven-central.storage-download.googleapis.com/maven2/") { name = "MavenCentralGoogleMirror" }
             }
-            filter { includeModule("org.robolectric", "android-all-instrumented") }
+            filter {
+                includeModule("org.robolectric", "android-all-instrumented")
+                includeModule("org.robolectric", "nativeruntime-dist-compat")
+            }
         }
         mavenCentral()
     }
