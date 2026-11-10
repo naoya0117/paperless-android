@@ -44,4 +44,18 @@
     <string name="edit_error_sign_in">保存するには、もう一度サインインしてください。</string>
     <string name="edit_error_conflict">その間にサーバー側で文書が変更されました。保存していません。変更内容を確認して、もう一度保存してください。</string>
     <string name="edit_error_server">サーバーでエラーが発生しました。変更は残っているので、しばらくしてから保存してください。</string>
+    <string name="viewer_more">その他</string>
+    <string name="viewer_share">共有</string>
+    <string name="viewer_open_with">他のアプリで開く</string>
+    <string name="viewer_download">ダウンロード</string>
+    <string name="viewer_delete">削除</string>
+    <string name="viewer_cancel">キャンセル</string>
+    <string name="viewer_delete_title">文書を削除しますか？</string>
+    <string name="viewer_delete_message">「%1$s」をごみ箱へ移動します。</string>
+    <string name="viewer_no_app">このファイルを開けるアプリがありません</string>
+    <string name="viewer_saved">ダウンロードに保存しました：%1$s</string>
+    <string name="viewer_file_failed">ファイルを読み込めませんでした。接続を確認して、もう一度お試しください。</string>
+    <string name="viewer_file_storage_failed">ファイルを用意できませんでした（端末の空き容量が足りない可能性があります）</string>
+    <string name="viewer_save_failed">ダウンロードに保存できませんでした</string>
+    <string name="viewer_delete_failed">文書を削除できませんでした。接続を確認して、もう一度お試しください。</string>
 </resources>

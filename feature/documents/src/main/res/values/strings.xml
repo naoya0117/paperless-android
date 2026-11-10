@@ -44,4 +44,18 @@
     <string name="edit_error_sign_in">Sign in again to save.</string>
     <string name="edit_error_conflict">The document was changed on the server meanwhile. Nothing was saved; check your changes and save again.</string>
     <string name="edit_error_server">The server reported an error. Your changes are kept; try again later.</string>
+    <string name="viewer_more">More</string>
+    <string name="viewer_share">Share</string>
+    <string name="viewer_open_with">Open in another app</string>
+    <string name="viewer_download">Download</string>
+    <string name="viewer_delete">Delete</string>
+    <string name="viewer_cancel">Cancel</string>
+    <string name="viewer_delete_title">Delete document?</string>
+    <string name="viewer_delete_message">“%1$s” will be moved to the trash.</string>
+    <string name="viewer_no_app">No app can open this file</string>
+    <string name="viewer_saved">Saved to Downloads: %1$s</string>
+    <string name="viewer_file_failed">The file could not be loaded. Check the connection and try again.</string>
+    <string name="viewer_file_storage_failed">The file could not be prepared (is the device storage full?)</string>
+    <string name="viewer_save_failed">The file could not be saved to Downloads</string>
+    <string name="viewer_delete_failed">The document could not be deleted. Check the connection and try again.</string>
 </resources>

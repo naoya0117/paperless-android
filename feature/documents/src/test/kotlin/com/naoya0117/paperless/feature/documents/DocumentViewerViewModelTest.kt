@@ -31,6 +31,7 @@ import mockwebserver3.RecordedRequest
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -53,6 +54,7 @@ class DocumentViewerViewModelTest {
     private val cache = OfflineCache.inMemory(ApplicationProvider.getApplicationContext(), BundledSQLiteDriver())
     private lateinit var accounts: AccountRepository
     private val offline = AtomicBoolean(false)
+    private val deleted = AtomicBoolean(false)
 
     @Volatile private var previewType = "image/png"
 
@@ -93,6 +95,10 @@ class DocumentViewerViewModelTest {
                                 .code(503)
                                 .body("{}")
                                 .build()
+                        path == "/api/documents/1/" && request.method == "DELETE" -> {
+                            deleted.set(true)
+                            MockResponse.Builder().code(204).build()
+                        }
                         path == "/api/documents/1/" -> json(documentJson)
                         path == "/api/documents/1/preview/" ->
                             MockResponse
@@ -130,6 +136,7 @@ class DocumentViewerViewModelTest {
             DocumentFileRepository(accounts, DocumentFileStorage(filesDir)),
             LabelRepository(accounts, cache),
             SavedStateHandle(mapOf(DocumentViewerViewModel.DOCUMENT_ID_ARGUMENT to 1L)),
+            ApplicationProvider.getApplicationContext(),
         )
 
     private suspend fun DocumentViewerViewModel.awaitState(predicate: (ViewerState) -> Boolean): ViewerState =
@@ -187,6 +194,66 @@ class DocumentViewerViewModelTest {
             viewModel.retry()
             assertTrue(viewModel.awaitState { it.content is ViewerContent.Image }.document != null)
         }
+
+    private suspend fun DocumentViewerViewModel.nextEvent(): ViewerEvent =
+        withContext(Dispatchers.Default.limitedParallelism(1)) { withTimeout(10_000) { events.first() } }
+
+    // The only test handing out a content URI: FileProvider keeps its paths per authority for the whole process,
+    // so a second test (with another temporary cache directory) would be refused.
+    @Test
+    fun `sharing hands a copy of the file under its server name to other apps`() =
+        runTest {
+            signIn()
+            val viewModel = viewModel()
+            viewModel.awaitState { it.document?.content == "full text" }
+
+            viewModel.share()
+
+            val event = viewModel.nextEvent() as ViewerEvent.SendFile
+            assertEquals("image/png", event.mimeType)
+            assertFalse(event.open)
+            assertEquals("content", event.uri.scheme)
+            assertEquals("scan.docx", event.uri.lastPathSegment)
+            val resolver = ApplicationProvider.getApplicationContext<android.content.Context>().contentResolver
+            assertEquals(
+                "not really an image",
+                resolver.openInputStream(event.uri)!!.use { it.readBytes().decodeToString() },
+            )
+            assertFalse(viewModel.state.value.busy)
+        }
+
+    @Test
+    fun `a failed deletion is reported`() =
+        runTest {
+            signIn()
+            val viewModel = viewModel()
+            viewModel.awaitState { it.document != null }
+            offline.set(true)
+
+            viewModel.delete()
+
+            assertEquals(ViewerEvent.Failed(FileAction.DELETE, FailureReason.SERVER), viewModel.nextEvent())
+            assertFalse(deleted.get())
+        }
+
+    @Test
+    fun `deleting moves the document to the trash`() =
+        runTest {
+            signIn()
+            val viewModel = viewModel()
+            viewModel.awaitState { it.document != null }
+
+            viewModel.delete()
+
+            assertEquals(ViewerEvent.Deleted, viewModel.nextEvent())
+            assertTrue(deleted.get())
+        }
+
+    @Test
+    fun `file names are made safe for file systems`() {
+        assertEquals("a_b_c.pdf", DocumentFileExport.safeFileName("a/b:c.pdf"))
+        assertEquals("document", DocumentFileExport.safeFileName(" .. "))
+    }
 
     @Test
     fun `tapping toggles the details`() {

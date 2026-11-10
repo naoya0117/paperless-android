@@ -59,3 +59,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the server's errors per field and a confirmation before discarding changes
 - Uploads screen (from the menu): each upload's state, progress, errors, retry and removal; a finished upload
   opens its document. Files are added with a button on the documents tab or shared from other apps
+- Viewer actions: share the document's file with another app, open it in another app, save it to Downloads,
+  and delete the document (moved to the trash, after a confirmation)

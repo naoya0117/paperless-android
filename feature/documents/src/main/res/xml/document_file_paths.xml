@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Document files handed to other apps (DocumentFileExport): only these copies, not the cache itself. -->
+<paths>
+    <cache-path name="documents" path="shared-documents/" />
+</paths>
