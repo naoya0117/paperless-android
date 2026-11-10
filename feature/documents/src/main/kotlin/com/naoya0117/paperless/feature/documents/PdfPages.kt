@@ -3,11 +3,15 @@ package com.naoya0117.paperless.feature.documents
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
+import android.os.Build
 import android.os.ParcelFileDescriptor
+import androidx.annotation.RequiresApi
 import androidx.core.graphics.createBitmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -62,6 +66,48 @@ class PdfPages private constructor(
                 }
             }
         }
+
+    /**
+     * Where [query] occurs, page by page (Android 15+: PdfRenderer finds text in the PDF's text layer, e.g. the
+     * OCR layer of archived documents). Other work (rendering) may run between pages.
+     *
+     * @throws IllegalStateException if closed meanwhile
+     */
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    suspend fun search(query: String): List<SearchMatch.InPage> {
+        val matches = mutableListOf<SearchMatch.InPage>()
+        for (index in 0 until pageCount) {
+            if (matches.size >= MAX_TEXT_MATCHES) break
+            currentCoroutineContext().ensureActive()
+            matches +=
+                lock.withLock {
+                    withContext(Dispatchers.IO) {
+                        check(!closed) { "closed" }
+                        renderer.openPage(index).use { page ->
+                            // Known now, so that scrolling to a match on a page not shown yet is right.
+                            aspectRatios[index] = validAspect(page.width, page.height)
+                            val width = page.width.toFloat().takeIf { it > 0 } ?: 1f
+                            val height = page.height.toFloat().takeIf { it > 0 } ?: 1f
+                            page.searchText(query).map { match ->
+                                SearchMatch.InPage(
+                                    page = index,
+                                    bounds =
+                                        match.bounds.map {
+                                            PageRect(
+                                                it.left / width,
+                                                it.top / height,
+                                                it.right / width,
+                                                it.bottom / height,
+                                            )
+                                        },
+                                )
+                            }
+                        }
+                    }
+                }
+        }
+        return matches.take(MAX_TEXT_MATCHES)
+    }
 
     /**
      * Stops rendering at once; the renderer is released in the background after a page being rendered

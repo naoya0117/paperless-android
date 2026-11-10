@@ -69,3 +69,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Document details: notes (add and delete) and custom field values, shown by type (options, dates, money, ...)
 - Trash (from the menu): restore deleted documents, delete them permanently or empty the trash
 - Pinch to zoom in the viewer (two fingers move the zoomed page)
+- Viewer: tapping the document switches to full screen; search within the document (on PDF pages with the
+  matches highlighted on Android 15+, otherwise in the document's text)

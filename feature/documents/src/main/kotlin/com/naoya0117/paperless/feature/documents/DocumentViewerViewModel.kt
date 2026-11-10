@@ -2,6 +2,7 @@ package com.naoya0117.paperless.feature.documents
 
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,6 +19,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
@@ -27,7 +30,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -112,11 +117,11 @@ class DocumentViewerViewModel
         private val documents: DocumentRepository,
         private val files: DocumentFileRepository,
         labels: LabelRepository,
-        savedState: SavedStateHandle,
+        private val handle: SavedStateHandle,
         @ApplicationContext private val context: Context,
         @ApplicationScope private val applicationScope: CoroutineScope,
     ) : ViewModel() {
-        val documentId: Long = checkNotNull(savedState.get<Long>(DOCUMENT_ID_ARGUMENT)) { "No document ID" }
+        val documentId: Long = checkNotNull(handle.get<Long>(DOCUMENT_ID_ARGUMENT)) { "No document ID" }
 
         private val fetched = MutableStateFlow<Document?>(null)
         private val content = MutableStateFlow<ViewerContent>(ViewerContent.Loading)
@@ -143,11 +148,155 @@ class DocumentViewerViewModel
 
         private val info = MutableStateFlow(false)
 
-        /** Whether the metadata and the edit button are shown (toggled by tapping the document). */
+        /** Whether the metadata and the edit button are shown (from the info button). */
         val infoVisible: StateFlow<Boolean> = info.asStateFlow()
+
+        private val full = MutableStateFlow(handle.get<Boolean>(FULLSCREEN_KEY) ?: false)
+
+        /** Only the document, without bars (toggled by tapping it). */
+        val fullscreen: StateFlow<Boolean> = full.asStateFlow()
+
+        private val mutableSearch = MutableStateFlow(SearchState())
+
+        /** Searching within the document (from the search button). */
+        val search: StateFlow<SearchState> = mutableSearch.asStateFlow()
+
+        /** What to search; [SearchRequest.session] changes each time the search is closed. */
+        private data class SearchRequest(
+            val session: Int,
+            val query: String,
+        )
+
+        private val searchQuery = MutableStateFlow(SearchRequest(0, ""))
 
         init {
             load()
+            viewModelScope.launch { runSearches() }
+        }
+
+        /** Not while searching (a tap there is more likely meant for the highlighted page). */
+        fun toggleFullscreen() {
+            if (!mutableSearch.value.open) setFullscreen(!full.value)
+        }
+
+        private fun setFullscreen(value: Boolean) {
+            full.value = value
+            handle[FULLSCREEN_KEY] = value
+        }
+
+        fun openSearch() {
+            setFullscreen(false)
+            mutableSearch.update { it.copy(open = true) }
+        }
+
+        fun closeSearch() {
+            // A new session: a search still running is dropped, and the same text later is searched again.
+            searchQuery.value = SearchRequest(searchQuery.value.session + 1, "")
+            mutableSearch.value = SearchState()
+        }
+
+        fun setSearchQuery(query: String) {
+            mutableSearch.update { it.copy(query = query) }
+            searchQuery.value = searchQuery.value.copy(query = query.trim())
+        }
+
+        fun nextMatch() = moveMatch(1)
+
+        fun previousMatch() = moveMatch(-1)
+
+        private fun moveMatch(step: Int) =
+            mutableSearch.update {
+                if (it.matches.isEmpty()) {
+                    it
+                } else {
+                    // Moves there again even with a single match (e.g. after scrolling away).
+                    it.copy(current = (it.current + step).mod(it.matches.size), moves = it.moves + 1)
+                }
+            }
+
+        /** Searches once typing pauses; a newer query (or other content) replaces a search still running. */
+        @OptIn(FlowPreview::class)
+        private suspend fun runSearches() {
+            combine(
+                searchQuery.debounce { if (it.query.isEmpty()) 0L else SEARCH_DEBOUNCE_MILLIS },
+                content,
+            ) { request, content ->
+                request to content
+            }
+                // Every request (also the same text again after another one): its results may have been dropped.
+                .collectLatest { (request, content) ->
+                    val query = request.query
+                    if (query.isEmpty()) {
+                        mutableSearch.update { it.copy(searching = false, matches = emptyList(), current = 0) }
+                        return@collectLatest
+                    }
+                    mutableSearch.update { it.copy(searching = true) }
+                    val matches =
+                        try {
+                            findMatches(query, content)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (
+                            @Suppress("TooGenericExceptionCaught") _: Exception,
+                        ) {
+                            // E.g. closed meanwhile.
+                            emptyList()
+                        }
+                    // Only for the search shown (not one closed or changed meanwhile).
+                    mutableSearch.update {
+                        if (it.open &&
+                            it.query.trim() == query
+                        ) {
+                            it.copy(searching = false, matches = matches, current = 0)
+                        } else {
+                            it
+                        }
+                    }
+                }
+        }
+
+        /** In the PDF's pages where the device can (Android 15+), otherwise in the document's text. */
+        private suspend fun findMatches(
+            query: String,
+            content: ViewerContent,
+        ): List<SearchMatch> {
+            if (content is ViewerContent.Pdf && Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                // A PDF without a text layer (e.g. a scan without an archived version) finds nothing there.
+                content.pages
+                    .search(query)
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { return it }
+            }
+            return withContext(Dispatchers.Default) { searchText(fullText(), query) }
+        }
+
+        /** The full text fetched for searching (not shown: the fetched copy is left to [load]). */
+        private var searchText: String? = null
+
+        /** A fetch for searching failed: the cached text is searched from then on (no wait for each query). */
+        private var searchFetchFailed = false
+
+        /** The document's full text: lists cache it shortened, so the fetched copy (or a fetch) is used. */
+        private suspend fun fullText(): String {
+            fetched.value?.content?.let { return it }
+            searchText?.let { return it }
+            if (!searchFetchFailed) {
+                try {
+                    return documents.fetch(documentId).content.also { searchText = it }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (
+                    @Suppress("TooGenericExceptionCaught") _: Exception,
+                ) {
+                    searchFetchFailed = true
+                }
+            }
+            // Offline: the cached text (perhaps shortened) is better than nothing.
+            return documents
+                .cached(documentId)
+                .first()
+                ?.content
+                .orEmpty()
         }
 
         fun toggleInfo() {
@@ -373,6 +522,8 @@ class DocumentViewerViewModel
                 }
 
             const val DOCUMENT_ID_ARGUMENT = "id"
+            private const val FULLSCREEN_KEY = "viewer.fullscreen"
+            private const val SEARCH_DEBOUNCE_MILLIS = 300L
             private const val PDF = "application/pdf"
             private const val ANY_TYPE = "*/*"
             private const val STOP_TIMEOUT_MILLIS = 5_000L
