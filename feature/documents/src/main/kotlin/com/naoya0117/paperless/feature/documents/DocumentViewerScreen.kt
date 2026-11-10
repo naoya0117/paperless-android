@@ -38,7 +38,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
@@ -198,8 +197,11 @@ fun DocumentViewerScreen(
     val hideBarsOnScroll = remember(viewModel, threshold) { HideBarsOnScroll(threshold, viewModel::onScrolled) }
     Scaffold(
         modifier = modifier,
-        // Above the navigation bar (the scaffold has no insets, see below).
-        snackbarHost = { SnackbarHost(snackbar, Modifier.navigationBarsPadding()) },
+        // Above the navigation bar, unless the text match card (which clears it) is below; above the keyboard.
+        snackbarHost = {
+            val card = search.currentMatch is SearchMatch.InText
+            SnackbarHost(snackbar, if (card) Modifier.imePadding() else Modifier.navigationBarsPadding().imePadding())
+        },
         // The document goes behind the bars, so that it stays put when they hide.
         contentWindowInsets = WindowInsets(0),
         bottomBar = {
@@ -208,8 +210,8 @@ fun DocumentViewerScreen(
     ) { padding ->
         @OptIn(ExperimentalLayoutApi::class)
         val barSpace =
-            WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding() +
-                TopAppBarDefaults.TopAppBarExpandedHeight
+            // As tall as the bar with its insets (e.g. a cutout taller than the status bar).
+            viewerBarInsets().asPaddingValues().calculateTopPadding() + TopAppBarDefaults.TopAppBarExpandedHeight
 
         @OptIn(ExperimentalLayoutApi::class)
         val bottomSpace =
