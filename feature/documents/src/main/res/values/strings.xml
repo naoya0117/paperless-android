@@ -66,7 +66,8 @@
     <string name="info_linked_documents">Documents %1$s</string>
     <string name="info_note_hint">Add a note</string>
     <string name="info_note_add">Add note</string>
-    <string name="info_note_delete">Delete note</string>
     <string name="viewer_note_add_failed">The note could not be added. Check the connection and try again.</string>
     <string name="viewer_note_delete_failed">The note could not be deleted. Check the connection and try again.</string>
+    <string name="info_note_delete_message">Delete this note?</string>
+    <string name="info_note_delete_named">Delete note “%1$s”</string>
 </resources>

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -128,7 +129,7 @@ fun DocumentViewerScreen(
                             resources.getString(R.string.viewer_saved, event.fileName),
                         )
                     ViewerEvent.Deleted -> currentOnBack()
-                    ViewerEvent.NoteAdded -> noteText = ""
+                    is ViewerEvent.NoteAdded -> if (noteText.trim() == event.text) noteText = ""
                     is ViewerEvent.Failed -> snackbar.showSnackbar(resources.getString(event.message()))
                 }
             }
@@ -423,7 +424,9 @@ private fun DocumentInfo(
                 .verticalScroll(
                     rememberScrollState(),
                 ).padding(horizontal = 24.dp)
-                .navigationBarsPadding(),
+                .navigationBarsPadding()
+                // The note field stays above the keyboard.
+                .imePadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -454,8 +457,8 @@ private fun DocumentInfo(
         InfoRow(R.string.info_added, dateTime.format(document.added))
         InfoRow(R.string.info_modified, dateTime.format(document.modified))
         CustomFieldRows(document, labels)
-        // Without notes from the server (offline, or not allowed to see them) there is no notes section.
-        document.notes?.let { NotesSection(it, notes) }
+        // Without notes (not allowed to see them, or not loaded) there is no notes section.
+        document.notes?.let { NotesSection(it, notes, canChange = document.userCanChange, dateTime = dateTime) }
         androidx.compose.foundation.layout
             .Spacer(Modifier.size(16.dp))
     }
@@ -491,9 +494,27 @@ private fun CustomFieldRows(
 private fun NotesSection(
     notes: List<Note>,
     actions: NoteActions,
+    canChange: Boolean,
+    dateTime: DateTimeFormatter,
 ) {
-    val dateTime =
-        DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withZone(ZoneId.systemDefault())
+    var confirmDelete by rememberSaveable { mutableStateOf<Long?>(null) }
+    confirmDelete?.let { noteId ->
+        AlertDialog(
+            onDismissRequest = { confirmDelete = null },
+            text = { Text(stringResource(R.string.info_note_delete_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDelete = null
+                        actions.onDelete(noteId)
+                    },
+                ) { Text(stringResource(R.string.viewer_delete), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = null }) { Text(stringResource(R.string.viewer_cancel)) }
+            },
+        )
+    }
     HorizontalDivider()
     Text(stringResource(R.string.info_notes), style = MaterialTheme.typography.titleSmall)
     notes.forEach { note ->
@@ -502,7 +523,10 @@ private fun NotesSection(
                 Text(note.text, style = MaterialTheme.typography.bodyMedium)
                 val author =
                     note.user?.let { user ->
-                        listOfNotNull(user.firstName, user.lastName).joinToString(" ").ifBlank { user.username }
+                        listOfNotNull(user.firstName, user.lastName)
+                            .filter { it.isNotBlank() }
+                            .joinToString(" ")
+                            .ifBlank { user.username }
                     }
                 Text(
                     listOfNotNull(author, dateTime.format(note.created)).joinToString(" · "),
@@ -510,23 +534,38 @@ private fun NotesSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            IconButton(onClick = { actions.onDelete(note.id) }, enabled = !actions.busy) {
-                Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.info_note_delete))
+            // Only with permission to change the document (the server requires it).
+            if (canChange) {
+                IconButton(onClick = { confirmDelete = note.id }, enabled = !actions.busy) {
+                    Icon(
+                        Icons.Outlined.Delete,
+                        contentDescription =
+                            stringResource(
+                                R.string.info_note_delete_named,
+                                note.text.take(NOTE_LABEL_LENGTH),
+                            ),
+                    )
+                }
             }
         }
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        OutlinedTextField(
-            value = actions.text,
-            onValueChange = actions.onTextChange,
-            placeholder = { Text(stringResource(R.string.info_note_hint)) },
-            modifier = Modifier.weight(1f),
-        )
-        IconButton(onClick = actions.onAdd, enabled = !actions.busy && actions.text.isNotBlank()) {
-            Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = stringResource(R.string.info_note_add))
+    if (canChange) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = actions.text,
+                onValueChange = actions.onTextChange,
+                placeholder = { Text(stringResource(R.string.info_note_hint)) },
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = actions.onAdd, enabled = !actions.busy && actions.text.isNotBlank()) {
+                Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = stringResource(R.string.info_note_add))
+            }
         }
     }
 }
+
+/** How much of a note names its delete button (for screen readers). */
+private const val NOTE_LABEL_LENGTH = 40
 
 @Composable
 private fun InfoRow(

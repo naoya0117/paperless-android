@@ -23,7 +23,9 @@ internal fun formatFieldValue(
         FieldValue.Empty -> null
         is FieldValue.Bool -> stringResource(if (value.value) R.string.info_yes else R.string.info_no)
         is FieldValue.Integer -> NumberFormat.getIntegerInstance().format(value.value)
-        is FieldValue.Decimal -> NumberFormat.getNumberInstance().format(value.value)
+        // All digits as stored (by default at most 3 fraction digits are shown).
+        is FieldValue.Decimal ->
+            NumberFormat.getNumberInstance().apply { maximumFractionDigits = MAX_FRACTION_DIGITS }.format(value.value)
         is FieldValue.DocumentLinks ->
             stringResource(R.string.info_linked_documents, value.documentIds.joinToString { "#$it" })
         is FieldValue.Unknown -> value.json
@@ -69,3 +71,5 @@ private fun plain(amount: BigDecimal): String =
         .apply {
             minimumFractionDigits = 2
         }.format(amount)
+
+private const val MAX_FRACTION_DIGITS = 15

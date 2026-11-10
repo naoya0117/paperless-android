@@ -75,8 +75,10 @@ sealed interface ViewerEvent {
 
     data object Deleted : ViewerEvent
 
-    /** The note was added (the input can be cleared). */
-    data object NoteAdded : ViewerEvent
+    /** The note with [text] was added (the input can be cleared, unless typed on meanwhile). */
+    data class NoteAdded(
+        val text: String,
+    ) : ViewerEvent
 
     data class Failed(
         val action: FileAction,
@@ -191,7 +193,7 @@ class DocumentViewerViewModel
             runAction(FileAction.ADD_NOTE, viewModelScope) { document ->
                 val notes = documents.addNote(document.id, trimmed)
                 setNotes(notes)
-                ViewerEvent.NoteAdded
+                ViewerEvent.NoteAdded(trimmed)
             }
             return true
         }
@@ -202,9 +204,9 @@ class DocumentViewerViewModel
                 null
             }
 
-        /** The notes are only in the fetched copy (the cache has none). */
+        /** The repository updated the cached copy; the fetched one (or the cached one, if offline before) follows. */
         private fun setNotes(notes: List<Note>) {
-            fetched.update { it?.copy(notes = notes) }
+            fetched.update { (it ?: state.value.document)?.copy(notes = notes) }
         }
 
         private fun sendFile(action: FileAction) =
@@ -358,7 +360,7 @@ class DocumentViewerViewModel
                 when {
                     cached == null -> fetched
                     fetched == null -> cached
-                    // The cache has no notes: those of the fetched copy stay.
+                    // A cached copy without notes (e.g. from a list) keeps those of the fetched copy.
                     cached.modified > fetched.modified ->
                         if (cached.notes ==
                             null

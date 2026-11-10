@@ -334,7 +334,7 @@ class DocumentViewerViewModelTest {
             assertFalse(viewModel.addNote("   "))
             assertTrue(viewModel.addNote(" Paid "))
 
-            assertEquals(ViewerEvent.NoteAdded, viewModel.nextEvent())
+            assertEquals(ViewerEvent.NoteAdded("Paid"), viewModel.nextEvent())
             val note =
                 viewModel
                     .awaitState { it.document?.notes?.isNotEmpty() == true }
@@ -350,9 +350,14 @@ class DocumentViewerViewModelTest {
 
     @Test
     fun `money is shown in its currency`() {
+        val default = java.util.Locale.getDefault()
         java.util.Locale.setDefault(java.util.Locale.US)
-        assertEquals("€120.50", formatMoney("EUR120.50", null))
-        assertEquals("$3.00", formatMoney("3", "USD"))
-        assertEquals("12.30", formatMoney("12.3", null))
+        try {
+            assertEquals("€120.50", formatMoney("EUR120.50", null))
+            assertEquals("$3.00", formatMoney("3", "USD"))
+            assertEquals("12.30", formatMoney("12.3", null))
+        } finally {
+            java.util.Locale.setDefault(default)
+        }
     }
 }

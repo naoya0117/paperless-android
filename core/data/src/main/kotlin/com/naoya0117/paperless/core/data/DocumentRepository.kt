@@ -181,7 +181,9 @@ class DocumentRepository internal constructor(
         text: String,
     ): List<Note> {
         val session = accounts.currentSession() ?: throw NotSignedInException()
-        return session.client.documents.addNote(documentId, text)
+        return session.client.documents
+            .addNote(documentId, text)
+            .also { updateCachedNotes(session, documentId, it) }
     }
 
     /**
@@ -195,7 +197,21 @@ class DocumentRepository internal constructor(
         noteId: Long,
     ): List<Note> {
         val session = accounts.currentSession() ?: throw NotSignedInException()
-        return session.client.documents.deleteNote(documentId, noteId)
+        return session.client.documents
+            .deleteNote(
+                documentId,
+                noteId,
+            ).also { updateCachedNotes(session, documentId, it) }
+    }
+
+    /** The cached copy (if any) gets the notes too, e.g. to show them offline later. */
+    private suspend fun updateCachedNotes(
+        session: AccountSession,
+        documentId: Long,
+        notes: List<Note>,
+    ) {
+        val cached = cache.observe(session.account.id, documentId).first() ?: return
+        writeThrough(session) { cache.update(session.account.id, cached.copy(notes = notes)) }
     }
 
     /**
