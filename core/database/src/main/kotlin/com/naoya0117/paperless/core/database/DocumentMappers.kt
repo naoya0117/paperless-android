@@ -71,6 +71,16 @@ private fun StoredFieldValue.toModel(): CustomFieldValue {
     return CustomFieldValue(fieldId, value ?: FieldValue.Empty)
 }
 
+internal fun encodeCustomFields(values: List<CustomFieldValue>): String =
+    json.encodeToString(fieldValues, values.map { it.toStored() })
+
+internal fun decodeCustomFields(encoded: String): List<CustomFieldValue> =
+    json.decodeFromString(fieldValues, encoded).map { it.toModel() }
+
+internal fun encodeIds(ids: List<Long>): String = json.encodeToString(longList, ids)
+
+internal fun decodeIds(encoded: String): List<Long> = json.decodeFromString(longList, encoded)
+
 internal fun Document.toEntity(accountId: String) =
     DocumentEntity(
         accountId = accountId,
@@ -89,7 +99,7 @@ internal fun Document.toEntity(accountId: String) =
         archivedFileName = archivedFileName,
         mimeType = mimeType,
         pageCount = pageCount,
-        customFieldsJson = json.encodeToString(fieldValues, customFields.map { it.toStored() }),
+        customFieldsJson = encodeCustomFields(customFields),
         notesJson =
             notes?.let { list ->
                 json.encodeToString(
@@ -126,7 +136,7 @@ internal fun DocumentEntity.toModel(searchHit: SearchHit? = null) =
         archivedFileName = archivedFileName,
         mimeType = mimeType,
         pageCount = pageCount,
-        customFields = json.decodeFromString(fieldValues, customFieldsJson).map { it.toModel() },
+        customFields = decodeCustomFields(customFieldsJson),
         notes =
             notesJson?.let { encoded ->
                 json.decodeFromString(notes, encoded).map { note ->

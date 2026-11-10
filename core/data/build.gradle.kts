@@ -16,6 +16,7 @@ dependencies {
     implementation(libs.javax.inject)
     implementation(libs.kotlinx.coroutines.core)
     api(libs.paging.common)
+    api(libs.work.runtime)
 
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
@@ -24,4 +25,5 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.sqlite.bundled.jvm)
     testImplementation(libs.paging.testing)
+    testImplementation(libs.work.testing)
 }
