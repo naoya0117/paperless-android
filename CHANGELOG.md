@@ -49,5 +49,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Theme like the Paperless-ngx web interface: white or black surfaces with its green accent
 - Login screen with advanced settings for custom
   headers, a client certificate from the KeyChain and trusted certificate files; English and Japanese
-- The app shows the login screen without an account (or when the active account must sign in again), and
-  otherwise a provisional home screen with sign-out
+- The app shows the login screen without an account (or when the active account must sign in again)
+- Main screen with bottom tabs (documents, inbox, search) and a menu (account, sign-out); document lists with
+  large thumbnails, tags, pull to refresh, infinite scrolling and offline use
