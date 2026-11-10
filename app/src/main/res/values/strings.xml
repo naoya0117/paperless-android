@@ -31,4 +31,5 @@
     </plurals>
     <string name="share_no_files">No files to upload were shared</string>
     <string name="drawer_labels">Labels</string>
+    <string name="drawer_views">Views</string>
 </resources>

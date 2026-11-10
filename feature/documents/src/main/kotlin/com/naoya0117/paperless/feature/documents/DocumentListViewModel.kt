@@ -11,6 +11,8 @@ import com.naoya0117.paperless.core.data.LabelRepository
 import com.naoya0117.paperless.core.model.Document
 import com.naoya0117.paperless.core.model.DocumentQuery
 import com.naoya0117.paperless.core.model.DocumentSearch
+import com.naoya0117.paperless.core.model.SavedView
+import com.naoya0117.paperless.core.network.toDocumentQuery
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -38,6 +41,9 @@ enum class DocumentListMode {
 
     /** Full-text search results for the entered text (the search tab). */
     SEARCH,
+
+    /** The documents of a saved view (see [DocumentListViewModel.VIEW_ID_ARGUMENT]). */
+    VIEW,
 }
 
 @HiltViewModel
@@ -71,12 +77,48 @@ class DocumentListViewModel
                 .distinctUntilChanged()
                 .stateIn(viewModelScope, SharingStarted.Eagerly, searchInput.value.trim())
 
+        private val viewId: Long? = savedState.get<Long>(VIEW_ID_ARGUMENT)
+
+        private val viewFlow: Flow<SavedView?> =
+            if (mode != DocumentListMode.VIEW || viewId == null) {
+                flowOf(null)
+            } else {
+                labels.savedViews.items.map { views -> views.firstOrNull { it.id == viewId } }
+            }
+
+        /** The saved view shown ([DocumentListMode.VIEW]); `null` while not cached (or gone). */
+        val savedView: StateFlow<SavedView?> = viewFlow.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+        /** The view is not on the server any more (it is not among the refreshed saved views). */
+        val savedViewMissing: StateFlow<Boolean> =
+            if (mode != DocumentListMode.VIEW) {
+                MutableStateFlow(false)
+            } else {
+                combine(viewFlow, labels.savedViews.refreshedAt) { view, refreshedAt ->
+                    view == null &&
+                        refreshedAt != null
+                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), false)
+            }
+
+        /** The saved view's query, like the web UI builds it; `null` while the view is not known. */
+        private val viewQuery: Flow<DocumentQuery?> =
+            combine(viewFlow, labels.customFields.items, labels.customFields.refreshedAt) { view, fields, refreshedAt ->
+                view?.toDocumentQuery(
+                    // A sort by a deleted custom field falls back to the created date (once the fields are known).
+                    existingCustomFieldIds = refreshedAt?.let { fields.map { it.id }.toSet() },
+                )
+            }.distinctUntilChanged()
+
         /** The documents of [mode]; for a search without text, none. */
         @OptIn(ExperimentalCoroutinesApi::class)
         val documentPages: Flow<PagingData<Document>> =
             when (mode) {
                 DocumentListMode.ALL -> documents.documents(DocumentQuery())
                 DocumentListMode.INBOX -> documents.documents(DocumentQuery(inInbox = true))
+                DocumentListMode.VIEW ->
+                    viewQuery.flatMapLatest { query ->
+                        if (query == null) flowOf(PagingData.empty()) else documents.documents(query)
+                    }
                 DocumentListMode.SEARCH ->
                     activeSearch.flatMapLatest { text ->
                         if (text.isEmpty()) {
@@ -123,6 +165,9 @@ class DocumentListViewModel
         companion object {
             /** Navigation argument with the [DocumentListMode] name. */
             const val MODE_ARGUMENT = "mode"
+
+            /** Navigation argument with the saved view's ID, for [DocumentListMode.VIEW]. */
+            const val VIEW_ID_ARGUMENT = "viewId"
             private const val SEARCH_KEY = "documents.search"
             private const val SEARCH_DEBOUNCE_MILLIS = 400L
             private const val STOP_TIMEOUT_MILLIS = 5_000L

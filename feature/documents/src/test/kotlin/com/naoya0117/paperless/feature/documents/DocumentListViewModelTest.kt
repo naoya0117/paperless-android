@@ -87,6 +87,11 @@ class DocumentListViewModelTest {
                             )
                         "/api/correspondents/" -> page("""{"id": 2, "name": "ACME"}""")
                         "/api/document_types/" -> page("""{"id": 3, "name": "Invoice"}""")
+                        "/api/saved_views/" ->
+                            page(
+                                """{"id": 7, "name": "Tax by title", "sort_field": "title", "sort_reverse": false,""" +
+                                    """ "filter_rules": [{"rule_type": 6, "value": "1"}]}""",
+                            )
                         "/api/documents/" -> {
                             if (request.url.queryParameter("is_in_inbox") ==
                                 null
@@ -328,5 +333,46 @@ class DocumentListViewModelTest {
             Thread.sleep(300)
 
             assertEquals(emptyList<String>(), documentQueries)
+        }
+
+    @Test
+    fun `a saved view lists its documents with its filter and order`() =
+        runTest {
+            accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls())
+            val viewModel =
+                viewModel(
+                    SavedStateHandle(
+                        mapOf(
+                            DocumentListViewModel.MODE_ARGUMENT to DocumentListMode.VIEW.name,
+                            DocumentListViewModel.VIEW_ID_ARGUMENT to 7L,
+                        ),
+                    ),
+                )
+
+            // The view comes with the labels, refreshed when the list opens.
+            val view =
+                withContext(Dispatchers.Default) { withTimeout(10_000) { viewModel.savedView.first { it != null } } }
+            assertEquals("Tax by title", view?.name)
+            viewModel.documentPages.asSnapshot()
+
+            val query = documentQueries.last()
+            assertTrue(query, "tags__id__all=1" in query && "ordering=title" in query)
+        }
+
+    @Test
+    fun `a view that is gone from the server is reported`() =
+        runTest {
+            accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls())
+            val viewModel =
+                viewModel(
+                    SavedStateHandle(
+                        mapOf(
+                            DocumentListViewModel.MODE_ARGUMENT to DocumentListMode.VIEW.name,
+                            DocumentListViewModel.VIEW_ID_ARGUMENT to 8L,
+                        ),
+                    ),
+                )
+
+            withContext(Dispatchers.Default) { withTimeout(10_000) { viewModel.savedViewMissing.first { it } } }
         }
 }

@@ -58,4 +58,5 @@
     <string name="viewer_file_storage_failed">ファイルを用意できませんでした（端末の空き容量が足りない可能性があります）</string>
     <string name="viewer_save_failed">ダウンロードに保存できませんでした</string>
     <string name="viewer_delete_failed">文書を削除できませんでした。接続を確認して、もう一度お試しください。</string>
+    <string name="documents_view_missing">このビューはもうありません。</string>
 </resources>
