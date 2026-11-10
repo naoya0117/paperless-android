@@ -57,6 +57,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -236,7 +237,9 @@ fun MainShell(
             val showsUploads = navController.currentDestination?.route == UPLOADS_ROUTE
             val queuedAny = result is EnqueueResult.Queued || result is EnqueueResult.PartlyFailed
             val action = if (queuedAny && !showsUploads) resources.getString(R.string.uploads_view_action) else null
-            if (snackbar.showSnackbar(message, actionLabel = action) == SnackbarResult.ActionPerformed) {
+            // Not indefinitely (the default with an action): it would wait over other screens.
+            val shown = snackbar.showSnackbar(message, actionLabel = action, duration = SnackbarDuration.Long)
+            if (shown == SnackbarResult.ActionPerformed) {
                 navController.navigate(UPLOADS_ROUTE) { launchSingleTop = true }
             }
         }
@@ -505,22 +508,27 @@ fun MainShell(
                     }
                 }
             }
-            // One host for every screen: above the tabs (and button) on a tab, otherwise above the navigation bar.
-            SnackbarHost(
-                snackbar,
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(
-                        bottom =
-                            when (tab) {
-                                // Also above the upload button.
-                                Tab.DOCUMENTS -> TAB_BAR_HEIGHT + FAB_SPACE
-                                null -> 0.dp
-                                else -> TAB_BAR_HEIGHT
-                            },
-                    ),
-            )
+            // One host for the lists (other screens have their own): above the tabs (and button) on a tab,
+            // otherwise above the navigation bar. Leaving the lists dismisses it.
+            val onList = route in TAB_ROUTES || route in SECONDARY_LIST_ROUTES
+            LaunchedEffect(onList) { if (!onList) snackbar.currentSnackbarData?.dismiss() }
+            if (onList) {
+                SnackbarHost(
+                    snackbar,
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(
+                            bottom =
+                                when (tab) {
+                                    // Also above the upload button.
+                                    Tab.DOCUMENTS -> TAB_BAR_HEIGHT + FAB_SPACE
+                                    null -> 0.dp
+                                    else -> TAB_BAR_HEIGHT
+                                },
+                        ),
+                )
+            }
         }
     }
 }
@@ -759,6 +767,9 @@ private fun ListScaffold(
 
 /** The height of the tab bar (Material 3 navigation bar), which the snackbar stays above. */
 private val TAB_BAR_HEIGHT = 80.dp
+
+/** Lists without tabs; with the tabs, the screens the shell's snackbar shows on. */
+private val SECONDARY_LIST_ROUTES = setOf(INBOX_ROUTE, UPLOADS_ROUTE, VIEW_ROUTE)
 
 /** A floating action button (56dp) with its margin. */
 private val FAB_SPACE = 72.dp
