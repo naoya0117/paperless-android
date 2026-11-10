@@ -40,4 +40,8 @@
     <string name="edit_error_forbidden">この文書を変更する権限がありません。</string>
     <string name="edit_error_connection">サーバーに接続できませんでした。変更は残っているので、もう一度保存してください。</string>
     <string name="edit_error_other">保存できませんでした。</string>
+    <string name="edit_load_not_found">この文書はもう存在しません。</string>
+    <string name="edit_error_sign_in">保存するには、もう一度サインインしてください。</string>
+    <string name="edit_error_conflict">その間にサーバー側で文書が変更されました。保存していません。変更内容を確認して、もう一度保存してください。</string>
+    <string name="edit_error_server">サーバーでエラーが発生しました。変更は残っているので、しばらくしてから保存してください。</string>
 </resources>

@@ -37,6 +37,7 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.net.Proxy
+import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicReference
@@ -53,6 +54,9 @@ class DocumentEditViewModelTest {
 
     /** The response to the next PATCH; by default the patched document. */
     private val patchResponse = AtomicReference<MockResponse?>(null)
+
+    /** The response to GET of the document; by default [documentJson]. */
+    private val getResponse = AtomicReference<MockResponse?>(null)
     private val patches = CopyOnWriteArrayList<String>()
 
     private object XorCipher : SecretCipher {
@@ -76,7 +80,8 @@ class DocumentEditViewModelTest {
         title: String = "Invoice",
         modified: String = "2026-01-01T00:00:00Z",
     ) = """{"id": 1, "title": "$title", "content": "", "created": "2026-01-01", "added": "2026-01-01T00:00:00Z",""" +
-        """ "modified": "$modified", "correspondent": 2, "tags": [5], "archive_serial_number": 7}"""
+        """ "modified": "$modified", "correspondent": 2, "tags": [5], "archive_serial_number": 7,""" +
+        """ "custom_fields": [{"field": 9, "value": "kept"}]}"""
 
     @Before
     fun setUp() {
@@ -94,7 +99,7 @@ class DocumentEditViewModelTest {
                             patches += request.body?.utf8().orEmpty()
                             patchResponse.getAndSet(null) ?: json(documentJson("Renamed", "2026-02-01T00:00:00Z"))
                         }
-                        path == "/api/documents/1/" -> json(documentJson())
+                        path == "/api/documents/1/" -> getResponse.get() ?: json(documentJson())
                         else -> json("""{"count": 0, "next": null, "results": []}""")
                     }
                 }
@@ -115,14 +120,17 @@ class DocumentEditViewModelTest {
         server.close()
     }
 
-    private suspend fun loaded(): DocumentEditViewModel {
+    private val savedState = SavedStateHandle(mapOf(DocumentEditViewModel.DOCUMENT_ID_ARGUMENT to 1L))
+
+    private fun viewModel() =
+        DocumentEditViewModel(DocumentRepository(accounts, cache), LabelRepository(accounts, cache), savedState)
+
+    private suspend fun signIn() =
         accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls())
-        val viewModel =
-            DocumentEditViewModel(
-                DocumentRepository(accounts, cache),
-                LabelRepository(accounts, cache),
-                SavedStateHandle(mapOf(DocumentEditViewModel.DOCUMENT_ID_ARGUMENT to 1L)),
-            )
+
+    private suspend fun loaded(): DocumentEditViewModel {
+        signIn()
+        val viewModel = viewModel()
         viewModel.awaitState { it.original != null }
         return viewModel
     }
@@ -157,6 +165,7 @@ class DocumentEditViewModelTest {
             assertTrue(body, body.contains("\"tags\":[5,6]"))
             assertTrue(body, body.contains("\"correspondent\":null"))
             assertFalse("unchanged values are not sent", body.contains("archive_serial_number"))
+            assertFalse("custom fields are left alone", body.contains("custom_fields"))
         }
 
     @Test
@@ -181,7 +190,7 @@ class DocumentEditViewModelTest {
         }
 
     @Test
-    fun `a connection failure keeps the input for another try`() =
+    fun `a server failure keeps the input for another try`() =
         runTest {
             val viewModel = loaded()
             patchResponse.set(
@@ -196,7 +205,7 @@ class DocumentEditViewModelTest {
             viewModel.save()
 
             val state = viewModel.awaitState { !it.saving }
-            assertEquals(EditError.CONNECTION, state.error)
+            assertEquals(EditError.SERVER, state.error)
             assertEquals("Renamed", state.form.title)
             assertTrue(state.canSave)
         }
@@ -213,5 +222,80 @@ class DocumentEditViewModelTest {
 
             assertEquals("123", viewModel.state.value.form.archiveSerialNumber)
             assertTrue(viewModel.state.value.canSave)
+        }
+
+    @Test
+    fun `an offline copy changed on the server meanwhile is not saved over`() =
+        runTest {
+            val account = signIn()
+            // Cached from a list, then the server cannot be reached while opening the editor.
+            val cached = DocumentRepository(accounts, cache).fetch(1)
+            cache.documents.replaceList(account.id, "list", listOf(cached), null, Instant.now())
+            getResponse.set(
+                MockResponse
+                    .Builder()
+                    .code(503)
+                    .body("{}")
+                    .build(),
+            )
+            val viewModel = viewModel()
+            assertFalse(viewModel.awaitState { it.original != null }.originalFromServer)
+            viewModel.setTitle("Mine")
+            // Back online; someone else edited the document.
+            getResponse.set(json(documentJson("Theirs", "2026-03-01T00:00:00Z")))
+
+            viewModel.save()
+
+            val state = viewModel.awaitState { !it.saving }
+            assertEquals(EditError.CONFLICT, state.error)
+            assertEquals(emptyList<String>(), patches)
+            assertEquals("Theirs", state.original?.title)
+            assertEquals("Mine", state.form.title)
+        }
+
+    @Test
+    fun `a deleted document cannot be edited from the cache`() =
+        runTest {
+            signIn()
+            getResponse.set(json("""{"detail": "No Document matches the given query."}""", code = 404))
+
+            assertEquals(EditLoadError.NOT_FOUND, viewModel().awaitState { it.loadError != null }.loadError)
+        }
+
+    @Test
+    fun `editing a field clears its server error`() =
+        runTest {
+            val viewModel = loaded()
+            patchResponse.set(json("""{"title": ["Too long."], "tags": ["Invalid pk."]}""", code = 400))
+            viewModel.setTitle("Renamed")
+            viewModel.save()
+            viewModel.awaitState { !it.saving }
+
+            viewModel.setTitle("Shorter")
+
+            assertEquals(setOf("tags"), viewModel.state.value.form.fieldErrors.keys)
+        }
+
+    @Test
+    fun `edits survive process death`() =
+        runTest {
+            val viewModel = loaded()
+            viewModel.setTitle("Unsaved")
+            viewModel.setTags(listOf(5, 6))
+
+            val restored = viewModel().awaitState { it.original != null }
+
+            assertEquals("Unsaved", restored.form.title)
+            assertEquals(listOf(5L, 6L), restored.form.tagIds)
+        }
+
+    @Test
+    fun `the same ASN written differently is no change`() =
+        runTest {
+            val viewModel = loaded()
+
+            viewModel.setArchiveSerialNumber("007")
+
+            assertFalse(viewModel.state.value.changed)
         }
 }

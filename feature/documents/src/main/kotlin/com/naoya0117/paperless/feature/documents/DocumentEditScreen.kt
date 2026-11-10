@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -43,14 +44,19 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -75,25 +81,32 @@ fun DocumentEditScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val options by viewModel.options.collectAsStateWithLifecycle()
-    LaunchedEffect(state.saved) { if (state.saved) onClose() }
+
+    // Leaves once, whichever way (saved, or discarded).
+    var closed by remember { mutableStateOf(false) }
+    val leave = {
+        if (!closed) {
+            closed = true
+            onClose()
+        }
+    }
+    LaunchedEffect(state.saved) { if (state.saved) leave() }
 
     var confirmDiscard by rememberSaveable { mutableStateOf(false) }
-    val close = { if (state.changed && !state.saved) confirmDiscard = true else onClose() }
-    BackHandler(enabled = state.changed && !state.saved) { confirmDiscard = true }
+    val close = {
+        when {
+            // A save in progress must finish (the server may already have applied it).
+            state.saving || state.saved -> Unit
+            state.changed -> confirmDiscard = true
+            else -> leave()
+        }
+    }
+    BackHandler(enabled = state.saving || state.changed) { close() }
     if (confirmDiscard) {
-        AlertDialog(
-            onDismissRequest = { confirmDiscard = false },
-            title = { Text(stringResource(R.string.edit_discard_title)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDiscard = false
-                    onClose()
-                }) { Text(stringResource(R.string.edit_discard)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDiscard = false }) { Text(stringResource(R.string.edit_keep_editing)) }
-            },
-        )
+        DiscardDialog(onDiscard = {
+            confirmDiscard = false
+            leave()
+        }, onKeep = { confirmDiscard = false })
     }
 
     Scaffold(
@@ -102,9 +115,9 @@ fun DocumentEditScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.edit_title)) },
                 navigationIcon = {
-                    IconButton(
-                        onClick = close,
-                    ) { Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.edit_close)) }
+                    IconButton(onClick = close, enabled = !state.saving) {
+                        Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.edit_close))
+                    }
                 },
                 actions = {
                     if (state.saving) {
@@ -120,11 +133,18 @@ fun DocumentEditScreen(
         },
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize().imePadding()) {
+            val loadError = state.loadError
             when {
                 state.original != null -> EditForm(state, options, viewModel)
-                state.loadFailed ->
+                loadError != null ->
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(stringResource(R.string.viewer_failed), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val message =
+                            when (loadError) {
+                                EditLoadError.NOT_FOUND -> R.string.edit_load_not_found
+                                EditLoadError.FORBIDDEN -> R.string.edit_error_forbidden
+                                EditLoadError.CONNECTION, EditLoadError.OTHER -> R.string.viewer_failed
+                            }
+                        Text(stringResource(message), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextButton(onClick = viewModel::retryLoad) { Text(stringResource(R.string.documents_retry)) }
                     }
                 else -> CircularProgressIndicator(Modifier.align(Alignment.Center))
@@ -133,7 +153,19 @@ fun DocumentEditScreen(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DiscardDialog(
+    onDiscard: () -> Unit,
+    onKeep: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onKeep,
+        title = { Text(stringResource(R.string.edit_discard_title)) },
+        confirmButton = { TextButton(onClick = onDiscard) { Text(stringResource(R.string.edit_discard)) } },
+        dismissButton = { TextButton(onClick = onKeep) { Text(stringResource(R.string.edit_keep_editing)) } },
+    )
+}
+
 @Composable
 private fun EditForm(
     state: EditState,
@@ -141,24 +173,26 @@ private fun EditForm(
     viewModel: DocumentEditViewModel,
 ) {
     val form = state.form
+    val errors = form.fieldErrors
     val enabled = !state.saving
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        state.error?.let { ErrorMessage(it, form.fieldErrors["non_field_errors"]) }
+        state.error?.let { ErrorMessage(it, errors) }
         OutlinedTextField(
             value = form.title,
             onValueChange = viewModel::setTitle,
             label = { Text(stringResource(R.string.edit_field_title)) },
-            isError = form.title.isBlank() || form.fieldErrors.containsKey("title"),
-            supportingText = form.fieldErrors["title"]?.let { { Text(it.joinToString(" ")) } },
+            isError = form.title.isBlank() || errors.containsKey("title"),
+            supportingText = errors["title"]?.let { { Text(it.joinToString(" ")) } },
             enabled = enabled,
             modifier = Modifier.fillMaxWidth(),
         )
-        DateField(form.created, form.fieldErrors["created"], enabled, viewModel::setCreated)
+        DateField(form.created, errors["created"], enabled, viewModel::setCreated)
         SelectField(
             label = stringResource(R.string.info_correspondent),
+            errors = errors["correspondent"],
             options = options.correspondents,
             selectedId = form.correspondentId,
             enabled = enabled,
@@ -166,6 +200,7 @@ private fun EditForm(
         )
         SelectField(
             label = stringResource(R.string.info_document_type),
+            errors = errors["document_type"],
             options = options.documentTypes,
             selectedId = form.documentTypeId,
             enabled = enabled,
@@ -173,18 +208,19 @@ private fun EditForm(
         )
         SelectField(
             label = stringResource(R.string.info_storage_path),
+            errors = errors["storage_path"],
             options = options.storagePaths,
             selectedId = form.storagePathId,
             enabled = enabled,
             onSelect = viewModel::setStoragePath,
         )
-        TagsField(form.tagIds, options.tags, enabled, viewModel::setTags)
+        TagsField(form.tagIds, options.tags, errors["tags"], enabled, viewModel::setTags)
         OutlinedTextField(
             value = form.archiveSerialNumber,
             onValueChange = viewModel::setArchiveSerialNumber,
             label = { Text(stringResource(R.string.edit_field_archive_serial_number)) },
-            isError = !state.archiveSerialNumberValid || form.fieldErrors.containsKey("archive_serial_number"),
-            supportingText = form.fieldErrors["archive_serial_number"]?.let { { Text(it.joinToString(" ")) } },
+            isError = !state.archiveSerialNumberValid || errors.containsKey("archive_serial_number"),
+            supportingText = errors["archive_serial_number"]?.let { { Text(it.joinToString(" ")) } },
             singleLine = true,
             enabled = enabled,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -193,23 +229,32 @@ private fun EditForm(
     }
 }
 
+/** Fields whose server messages are shown at the field; the others (e.g. `non_field_errors`) at the top. */
+private val FIELDS_WITH_OWN_ERRORS =
+    setOf("title", "created", "correspondent", "document_type", "storage_path", "tags", "archive_serial_number")
+
 @Composable
 private fun ErrorMessage(
     error: EditError,
-    serverMessages: List<String>?,
+    fieldErrors: Map<String, List<String>>,
 ) {
     val text =
         when (error) {
             EditError.INVALID -> stringResource(R.string.edit_error_invalid)
             EditError.FORBIDDEN -> stringResource(R.string.edit_error_forbidden)
+            EditError.SIGN_IN_REQUIRED -> stringResource(R.string.edit_error_sign_in)
+            EditError.CONFLICT -> stringResource(R.string.edit_error_conflict)
             EditError.CONNECTION -> stringResource(R.string.edit_error_connection)
+            EditError.SERVER -> stringResource(R.string.edit_error_server)
             EditError.OTHER -> stringResource(R.string.edit_error_other)
         }
     Column {
         Text(text, color = MaterialTheme.colorScheme.error)
-        serverMessages?.forEach {
-            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-        }
+        fieldErrors
+            .filterKeys { it !in FIELDS_WITH_OWN_ERRORS }
+            .values
+            .flatten()
+            .forEach { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
     }
 }
 
@@ -233,7 +278,15 @@ private fun PickerField(
             enabled = enabled,
             modifier = Modifier.fillMaxWidth(),
         )
-        Box(Modifier.matchParentSize().clickable(enabled = enabled, onClick = onClick))
+        // One button for accessibility services (the read-only field itself does nothing when activated).
+        Box(
+            Modifier
+                .matchParentSize()
+                .clearAndSetSemantics {
+                    role = Role.Button
+                    contentDescription = "$label: $value"
+                }.clickable(enabled = enabled, onClick = onClick),
+        )
     }
 }
 
@@ -255,10 +308,8 @@ private fun DateField(
     )
     if (open) {
         // The picker works in UTC milliseconds.
-        val picker =
-            rememberDatePickerState(
-                initialSelectedDateMillis = value?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli(),
-            )
+        val initial = value?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli()
+        val picker = rememberDatePickerState(initialSelectedDateMillis = initial)
         DatePickerDialog(
             onDismissRequest = { open = false },
             confirmButton = {
@@ -286,6 +337,7 @@ private fun DateField(
 @Composable
 private fun SelectField(
     label: String,
+    errors: List<String>?,
     options: List<LabelOption>,
     selectedId: Long?,
     enabled: Boolean,
@@ -297,6 +349,7 @@ private fun SelectField(
         label = label,
         value = selectedId?.let { id -> options.firstOrNull { it.id == id }?.name ?: "#$id" } ?: none,
         enabled = enabled,
+        errors = errors,
         onClick = { open = true },
     )
     if (open) {
@@ -332,11 +385,12 @@ private fun ChoiceRow(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TagsField(
     tagIds: List<Long>,
     options: List<TagOption>,
+    errors: List<String>?,
     enabled: Boolean,
     onChange: (List<Long>) -> Unit,
 ) {
@@ -344,6 +398,13 @@ private fun TagsField(
     val byId = options.associateBy { it.id }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(stringResource(R.string.edit_field_tags), style = MaterialTheme.typography.labelLarge)
+        errors?.let {
+            Text(
+                it.joinToString(" "),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             tagIds.forEach { id ->
                 val name = byId[id]?.label?.name ?: "#$id"
@@ -371,8 +432,11 @@ private fun TagsField(
         }
     }
     if (open) {
-        // Changes apply when confirmed.
-        val selected = remember { mutableStateListOf<Long>().apply { addAll(tagIds) } }
+        // The picks apply when confirmed, and survive rotation meanwhile.
+        val selected =
+            rememberSaveable(saver = listSaver(save = { it.toList() }, restore = { it.toMutableStateList() })) {
+                tagIds.toMutableStateList()
+            }
         SearchDialog(
             title = stringResource(R.string.edit_field_tags),
             onDismiss = { open = false },
@@ -402,7 +466,7 @@ private fun SearchDialog(
     title: String,
     onDismiss: () -> Unit,
     onConfirm: (() -> Unit)? = null,
-    content: androidx.compose.foundation.lazy.LazyListScope.(query: String) -> Unit,
+    content: LazyListScope.(query: String) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     AlertDialog(

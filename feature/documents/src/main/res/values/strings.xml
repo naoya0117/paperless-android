@@ -40,4 +40,8 @@
     <string name="edit_error_forbidden">You may not change this document.</string>
     <string name="edit_error_connection">Could not reach the server. Your changes are kept; try again.</string>
     <string name="edit_error_other">Saving failed.</string>
+    <string name="edit_load_not_found">This document no longer exists.</string>
+    <string name="edit_error_sign_in">Sign in again to save.</string>
+    <string name="edit_error_conflict">The document was changed on the server meanwhile. Nothing was saved; check your changes and save again.</string>
+    <string name="edit_error_server">The server reported an error. Your changes are kept; try again later.</string>
 </resources>
