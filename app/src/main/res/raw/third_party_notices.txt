@@ -1,0 +1,22 @@
+Notices for third-party content in this app: the attribution notices from the
+NOTICE files of the libraries (Apache License, Version 2.0, section 4 (d)), and
+content under other licenses.
+
+Eclipse Jakarta Dependency Injection
+(jakarta.inject:jakarta.inject-api, Apache License 2.0)
+This content is produced and maintained by the Eclipse Jakarta Dependency
+Injection project.
+Jakarta Dependency Injection is a trademark of the Eclipse Foundation.
+All content is the property of the respective authors or their employers.
+Source code: https://github.com/eclipse-ee4j/injection-api
+
+kotlinx.coroutines library
+(org.jetbrains.kotlinx:kotlinx-coroutines-core, Apache License 2.0)
+Copyright 2016-2024 JetBrains s.r.o and contributors
+
+Public Suffix List
+(assets/PublicSuffixDatabase.list, included by com.squareup.okhttp3:okhttp-android)
+This Source Code Form is subject to the terms of the Mozilla Public License,
+v. 2.0. If a copy of the MPL was not distributed with this file, You can
+obtain one at https://mozilla.org/MPL/2.0/.
+Source: https://publicsuffix.org/
