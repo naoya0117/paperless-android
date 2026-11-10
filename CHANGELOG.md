@@ -64,3 +64,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Label management (from the menu): tags, correspondents, document types and storage paths; search, create,
   edit (name, automatic matching, tag color, inbox tag and parent, storage path template) and delete
 - Saved views in the menu: each opens its documents with the view's filter and sort order
+- Several accounts: add one from the menu (a login that can be cancelled) and switch between them; an account
+  that must sign in again can be left for another one

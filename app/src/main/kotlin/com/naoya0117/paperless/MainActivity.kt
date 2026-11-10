@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -14,6 +15,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -107,6 +109,7 @@ private fun App(
     viewModel: AppViewModel = hiltViewModel(),
 ) {
     val screen by viewModel.screen.collectAsStateWithLifecycle()
+    val accounts by viewModel.accountList.collectAsStateWithLifecycle()
     // Without an account the files cannot be uploaded; say so rather than dropping them silently.
     val context = LocalContext.current
     if (screen is AppScreen.Login && sharedFiles.isNotEmpty()) {
@@ -126,6 +129,9 @@ private fun App(
                 reSignInAccountId = current.reSignInAccountId,
                 onSignedIn = {},
                 onRemoveAccount = viewModel::signOut,
+                onCancel = current.otherAccountId?.let { other -> { viewModel.switchTo(other) } },
+                // Per account: a form left for another account does not come back for this one.
+                viewModel = hiltViewModel(key = "login-${current.reSignInAccountId}"),
             )
         is AppScreen.Home ->
             // A fresh shell per account; its view models live in a store the app view model clears.
@@ -136,12 +142,39 @@ private fun App(
                 CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
                     MainShell(
                         account = current.account,
-                        sharedFiles = sharedFiles,
+                        // Held while adding an account: handled once the screens are visible again.
+                        sharedFiles = if (current.addingAccount == null) sharedFiles else emptyList(),
                         onSharedFilesHandled = onSharedFilesHandled,
+                        accounts = accounts,
+                        onSwitchAccount = viewModel::switchTo,
+                        onAddAccount = viewModel::addAccount,
                         onSignOut = { viewModel.signOut(current.account.id) },
                     )
                 }
             }
+    }
+    val adding = (screen as? AppScreen.Home)?.addingAccount
+    if (adding != null) {
+        // Over the signed-in screens, which keep their state; a form of its own, cleared when done.
+        key(adding) {
+            val activity = checkNotNull(LocalActivity.current as? ComponentActivity) { "Not in an activity" }
+            val store = remember { viewModel.addAccountViewModelStore() }
+            val owner = remember(store, activity) { ShellViewModelStoreOwner(store, activity) }
+            // Cleared once the form is gone (not while it may still create view models in it).
+            DisposableEffect(store) { onDispose { store.clear() } }
+            // Back never reaches the screens underneath; the form's own handlers (registered later) come first.
+            BackHandler {}
+            Surface(Modifier.fillMaxSize()) {
+                CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
+                    LoginScreen(
+                        reSignInAccountId = null,
+                        onSignedIn = viewModel::accountAdded,
+                        onRemoveAccount = {},
+                        onCancel = viewModel::addAccountDone,
+                    )
+                }
+            }
+        }
     }
 }
 

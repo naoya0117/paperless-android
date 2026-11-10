@@ -8,8 +8,11 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -17,13 +20,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.AlertDialog
@@ -58,6 +65,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -66,6 +74,8 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -142,6 +152,9 @@ fun MainShell(
     account: Account,
     sharedFiles: List<Uri>,
     onSharedFilesHandled: () -> Unit,
+    accounts: List<Account>,
+    onSwitchAccount: (String) -> Unit,
+    onAddAccount: () -> Unit,
     onSignOut: () -> Unit,
     inbox: InboxViewModel = hiltViewModel(),
     uploads: UploadsViewModel = hiltViewModel(),
@@ -230,6 +243,15 @@ fun MainShell(
         drawerContent = {
             Drawer(
                 account = account,
+                otherAccounts = accounts.filter { it.id != account.id },
+                onSwitchAccount = { id ->
+                    scope.launch { drawerState.close() }
+                    onSwitchAccount(id)
+                },
+                onAddAccount = {
+                    scope.launch { drawerState.close() }
+                    onAddAccount()
+                },
                 onUploads = {
                     scope.launch { drawerState.close() }
                     if (navController.currentDestination?.route in TAB_ROUTES) navController.navigate(UPLOADS_ROUTE)
@@ -472,6 +494,9 @@ private const val MAX_BADGE = 99
 @Composable
 private fun Drawer(
     account: Account,
+    otherAccounts: List<Account>,
+    onSwitchAccount: (String) -> Unit,
+    onAddAccount: () -> Unit,
     onUploads: () -> Unit,
     savedViews: List<SavedView>,
     onSavedView: (SavedView) -> Unit,
@@ -481,25 +506,80 @@ private fun Drawer(
     ModalDrawerSheet {
         // Scrolls on small screens (e.g. in landscape).
         Column(Modifier.verticalScroll(rememberScrollState())) {
-            Column(modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp)) {
-                Text(
-                    stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(account.displayName ?: account.username, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    account.serverUrl,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                account.serverVersion?.let {
+            var accountsOpen by rememberSaveable { mutableStateOf(false) }
+            val accountsState =
+                stringResource(if (accountsOpen) R.string.drawer_accounts_shown else R.string.drawer_accounts_hidden)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .semantics { stateDescription = accountsState }
+                        .clickable(onClickLabel = stringResource(R.string.drawer_accounts)) {
+                            accountsOpen =
+                                !accountsOpen
+                        }.padding(start = 28.dp, end = 16.dp, top = 24.dp, bottom = 24.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
                     Text(
-                        stringResource(R.string.drawer_server_version, it),
+                        stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(account.displayName ?: account.username, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        account.serverUrl,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    account.serverVersion?.let {
+                        Text(
+                            stringResource(R.string.drawer_server_version, it),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
+                Icon(
+                    if (accountsOpen) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    contentDescription = null,
+                )
+            }
+            if (accountsOpen) {
+                otherAccounts.forEach { other ->
+                    NavigationDrawerItem(
+                        label = {
+                            Column {
+                                Text(
+                                    other.displayName ?: other.username,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    if (other.needsSignIn) {
+                                        stringResource(R.string.drawer_account_sign_in, other.serverUrl)
+                                    } else {
+                                        other.serverUrl
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        },
+                        icon = { Icon(Icons.Outlined.AccountCircle, contentDescription = null) },
+                        selected = false,
+                        onClick = { onSwitchAccount(other.id) },
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                }
+                NavigationDrawerItem(
+                    label = { Text(stringResource(R.string.drawer_add_account)) },
+                    icon = { Icon(Icons.Outlined.PersonAdd, contentDescription = null) },
+                    selected = false,
+                    onClick = onAddAccount,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                )
             }
             HorizontalDivider()
             NavigationDrawerItem(
