@@ -32,6 +32,12 @@ class CachedDocuments internal constructor(
         listKey: String,
     ): PagingSource<Int, Document> = MappedPagingSource(dao.list(accountId, listKey), DocumentListRow::toModel)
 
+    /** How many documents of the list are cached (as far as it was loaded). */
+    suspend fun itemCount(
+        accountId: String,
+        listKey: String,
+    ): Int = dao.itemCount(accountId, listKey)
+
     /** `null` if the list was never loaded. */
     suspend fun listState(
         accountId: String,

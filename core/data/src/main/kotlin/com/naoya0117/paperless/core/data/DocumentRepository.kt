@@ -21,6 +21,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -115,6 +116,25 @@ class DocumentRepository internal constructor(
                 if (session == null) emit(null) else emitAll(cache.observe(session.account.id, id))
             }
         }
+
+    /**
+     * How many documents are in the inbox (have an inbox tag): 0 also when no inbox tag is set up.
+     *
+     * @throws NotSignedInException
+     * @throws PaperlessException e.g. when offline
+     */
+    suspend fun inboxCount(): Int {
+        val session = accounts.currentSession() ?: throw NotSignedInException()
+        return session.client.documents
+            .list(DocumentQuery(inInbox = true, pageSize = 1, truncateContent = true))
+            .count
+    }
+
+    /** The inbox documents cached for the active account (e.g. to offer the inbox while offline); 0 if none. */
+    suspend fun cachedInboxCount(): Int {
+        val account = accounts.state.first().activeAccount ?: return 0
+        return cache.itemCount(account.id, listKey(DocumentQuery(inInbox = true)))
+    }
 
     /**
      * The document from the server (with its full content and notes); also refreshes the cached copy.
@@ -279,7 +299,7 @@ class DocumentRepository internal constructor(
          *
          * @throws IllegalArgumentException if the query cannot be sent
          */
-        internal fun listKey(query: DocumentQuery): String {
+        fun listKey(query: DocumentQuery): String {
             val canonical =
                 query
                     .toQueryParameters()

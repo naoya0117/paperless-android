@@ -53,17 +53,21 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 /**
- * A list of documents with large thumbnails, so that their content can be recognised at a glance.
+ * A list of documents with large thumbnails, so that their content can be recognised at a glance. The search
+ * list has a search field on top.
  *
  * @param onOpenDocument the user tapped a document
+ * @param onRefresh the user pulled to refresh (e.g. to update the inbox count too)
  */
 @Composable
 fun DocumentListScreen(
     onOpenDocument: (Document) -> Unit,
     modifier: Modifier = Modifier,
+    onRefresh: () -> Unit = {},
     viewModel: DocumentListViewModel = hiltViewModel(),
 ) {
     val pages = viewModel.documentPages.collectAsLazyPagingItems()
+    val activeSearch by viewModel.activeSearch.collectAsStateWithLifecycle()
     val labels by viewModel.labelNames.collectAsStateWithLifecycle()
     val searchText by viewModel.searchText.collectAsStateWithLifecycle()
     val accountId by viewModel.accountId.collectAsStateWithLifecycle()
@@ -83,11 +87,13 @@ fun DocumentListScreen(
             pages = pages,
             labels = labels,
             mode = viewModel.mode,
-            searchText = searchText,
+            typedSearch = searchText,
+            activeSearch = activeSearch,
             accountId = accountId,
             onRefresh = {
                 viewModel.refreshLabels()
                 pages.refresh()
+                onRefresh()
             },
             onRetry = {
                 viewModel.refreshLabels()
@@ -104,16 +110,22 @@ private fun DocumentList(
     pages: LazyPagingItems<Document>,
     labels: LabelNames,
     mode: DocumentListMode,
-    searchText: String,
+    typedSearch: String,
+    activeSearch: String,
     accountId: String?,
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onOpenDocument: (Document) -> Unit,
 ) {
     val refresh = pages.loadState.refresh
+    // Text typed but not searched yet (typing pauses first): show progress, not the prompt.
+    val searchPending =
+        mode == DocumentListMode.SEARCH && typedSearch.isNotBlank() && typedSearch.trim() != activeSearch
+    // Nothing to refresh on the search tab before a search.
+    val canRefresh = mode != DocumentListMode.SEARCH || activeSearch.isNotEmpty()
     PullToRefreshBox(
         isRefreshing = refresh is LoadState.Loading && pages.itemCount > 0,
-        onRefresh = onRefresh,
+        onRefresh = { if (canRefresh) onRefresh() },
         modifier = Modifier.fillMaxSize(),
     ) {
         when {
@@ -132,10 +144,10 @@ private fun DocumentList(
                         else -> Unit
                     }
                 }
-            refresh is LoadState.Loading -> Centered { CircularProgressIndicator() }
+            refresh is LoadState.Loading || searchPending -> Centered { CircularProgressIndicator() }
             // Scrollable like the empty states, so that pull to refresh works too.
             refresh is LoadState.Error -> Scrollable { ErrorBanner(onRetry = onRetry) }
-            mode == DocumentListMode.SEARCH && searchText.isBlank() ->
+            mode == DocumentListMode.SEARCH && typedSearch.isBlank() ->
                 EmptyState(Icons.Outlined.Search, stringResource(R.string.documents_search_prompt))
             mode == DocumentListMode.SEARCH ->
                 EmptyState(

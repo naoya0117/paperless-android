@@ -2,6 +2,7 @@ package com.naoya0117.paperless
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -17,8 +18,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.DEFAULT_ARGS_KEY
+import androidx.lifecycle.HasDefaultViewModelProviderFactory
+import androidx.lifecycle.VIEW_MODEL_STORE_OWNER_KEY
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.lifecycle.viewmodel.MutableCreationExtras
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.naoya0117.paperless.feature.login.LoginScreen
 import com.naoya0117.paperless.ui.PaperlessTheme
@@ -58,15 +66,34 @@ private fun App(viewModel: AppViewModel = hiltViewModel()) {
             // A fresh shell per account; its view models live in a store the app view model clears.
             key(current.account.id) {
                 val store = viewModel.shellViewModelStore(current.account.id)
-                val owner =
-                    remember(store) {
-                        object : ViewModelStoreOwner {
-                            override val viewModelStore = store
-                        }
-                    }
+                val activity = checkNotNull(LocalActivity.current as? ComponentActivity) { "Not in an activity" }
+                val owner = remember(store, activity) { ShellViewModelStoreOwner(store, activity) }
                 CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
                     MainShell(current.account, onSignOut = { viewModel.signOut(current.account.id) })
                 }
             }
     }
+}
+
+/**
+ * Holds the view models of the signed-in screens in [store], but creates them like the activity does: Hilt
+ * view models need the activity's factory and creation extras (e.g. for their SavedStateHandle). A bare
+ * [ViewModelStoreOwner] has neither, and creating a Hilt view model with it crashes. Their saved state handles
+ * live in [store] too (cleared with it, so nothing carries over to another account), and they get no
+ * arguments from the activity's intent.
+ */
+private class ShellViewModelStoreOwner(
+    override val viewModelStore: ViewModelStore,
+    private val activity: ComponentActivity,
+) : ViewModelStoreOwner,
+    HasDefaultViewModelProviderFactory {
+    override val defaultViewModelProviderFactory: ViewModelProvider.Factory
+        get() = activity.defaultViewModelProviderFactory
+
+    override val defaultViewModelCreationExtras: CreationExtras
+        get() =
+            MutableCreationExtras(activity.defaultViewModelCreationExtras).apply {
+                set(VIEW_MODEL_STORE_OWNER_KEY, this@ShellViewModelStoreOwner)
+                set(DEFAULT_ARGS_KEY, Bundle())
+            }
 }

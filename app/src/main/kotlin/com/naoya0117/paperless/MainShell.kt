@@ -5,12 +5,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -36,8 +40,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -54,32 +64,40 @@ import com.naoya0117.paperless.feature.documents.DocumentListScreen
 import com.naoya0117.paperless.feature.documents.DocumentListViewModel
 import com.naoya0117.paperless.feature.documents.DocumentViewerScreen
 import com.naoya0117.paperless.feature.documents.DocumentViewerViewModel
+import com.naoya0117.paperless.feature.documents.InboxViewModel
 import kotlinx.coroutines.launch
+
+private const val DOCUMENTS_ROUTE = "documents"
+private const val SEARCH_ROUTE = "search"
+private const val INBOX_ROUTE = "inbox"
 
 /** The bottom tabs: only what is used most; everything else is in the drawer (hamburger menu). */
 private enum class Tab(
+    val route: String,
     val mode: DocumentListMode,
     val icon: ImageVector,
     val label: Int,
 ) {
-    DOCUMENTS(DocumentListMode.ALL, Icons.Outlined.Description, R.string.tab_documents),
-    INBOX(DocumentListMode.INBOX, Icons.Outlined.Inbox, R.string.tab_inbox),
-    SEARCH(DocumentListMode.SEARCH, Icons.Outlined.Search, R.string.tab_search),
-    ;
-
-    /** One destination per tab, so that each keeps its own back stack entry, view model and saved state. */
-    val route: String get() = "documents/${mode.name.lowercase()}"
+    DOCUMENTS(DOCUMENTS_ROUTE, DocumentListMode.ALL, Icons.Outlined.Description, R.string.title_documents),
+    SEARCH(SEARCH_ROUTE, DocumentListMode.SEARCH, Icons.Outlined.Search, R.string.title_search),
 }
+
+/** The document lists: one per tab, and the inbox (opened from the documents tab). */
+private val LIST_ROUTES = Tab.entries.map { it.route to it.mode } + (INBOX_ROUTE to DocumentListMode.INBOX)
 
 private const val DOCUMENT_ROUTE = "document/{${DocumentViewerViewModel.DOCUMENT_ID_ARGUMENT}}"
 private const val EDIT_ROUTE = "document/{${DocumentEditViewModel.DOCUMENT_ID_ARGUMENT}}/edit"
 
-/** The signed-in app: top bar with the drawer, bottom tabs, and the screens in between. */
+/**
+ * The signed-in app: bottom tabs (documents, search) under a top bar with the drawer (hamburger menu) and, on
+ * the documents tab, the inbox button; and the screens opened from them.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainShell(
     account: Account,
     onSignOut: () -> Unit,
+    inbox: InboxViewModel = hiltViewModel(),
 ) {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
@@ -87,6 +105,14 @@ fun MainShell(
     val tab = Tab.entries.firstOrNull { it.route == route }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val inboxCount by inbox.count.collectAsStateWithLifecycle()
+    // The count may have changed (e.g. documents checked in the inbox) whenever the list shows again.
+    LaunchedEffect(route) { if (route == DOCUMENTS_ROUTE) inbox.refresh() }
+    // Also when coming back to the app (e.g. documents were checked in the web interface meanwhile).
+    LifecycleResumeEffect(route) {
+        if (route == DOCUMENTS_ROUTE) inbox.refresh()
+        onPauseOrDispose {}
+    }
     // Back closes the drawer rather than the app.
     BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
 
@@ -104,7 +130,7 @@ fun MainShell(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
-        // Only from the tabs; elsewhere the edge swipe is the system's back gesture.
+        // Only from the list; elsewhere the edge swipe is the system's back gesture.
         gesturesEnabled = tab != null,
         drawerContent = {
             Drawer(
@@ -116,41 +142,71 @@ fun MainShell(
             )
         },
     ) {
+        val listScreen = tab != null || route == INBOX_ROUTE
         Scaffold(
-            // The tabs share this bar; other screens (e.g. the viewer) bring their own.
+            // The lists share this bar; other screens (e.g. the viewer) bring their own.
             topBar = {
-                if (tab != null) {
-                    CenterAlignedTopAppBar(
-                        title = { Text(stringResource(tab.label)) },
-                        navigationIcon = {
-                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                Icon(Icons.Outlined.Menu, contentDescription = stringResource(R.string.menu_open))
-                            }
-                        },
-                    )
+                when (route) {
+                    DOCUMENTS_ROUTE, SEARCH_ROUTE ->
+                        CenterAlignedTopAppBar(
+                            title = { Text(stringResource(checkNotNull(tab).label)) },
+                            navigationIcon = {
+                                IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                    Icon(Icons.Outlined.Menu, contentDescription = stringResource(R.string.menu_open))
+                                }
+                            },
+                            actions = {
+                                // The inbox belongs to the documents tab.
+                                if (route == DOCUMENTS_ROUTE && inboxCount > 0) {
+                                    InboxButton(inboxCount) {
+                                        navController.navigate(INBOX_ROUTE) {
+                                            launchSingleTop =
+                                                true
+                                        }
+                                    }
+                                }
+                            },
+                        )
+                    INBOX_ROUTE ->
+                        CenterAlignedTopAppBar(
+                            title = { Text(stringResource(R.string.title_inbox)) },
+                            navigationIcon = {
+                                // navigateUp never leaves the start destination (e.g. on a double tap).
+                                IconButton(onClick = { navController.navigateUp() }) {
+                                    Icon(
+                                        Icons.AutoMirrored.Outlined.ArrowBack,
+                                        contentDescription = stringResource(R.string.back),
+                                    )
+                                }
+                            },
+                        )
                 }
             },
             bottomBar = { if (tab != null) TabBar(tab, navController) },
             // Other screens (e.g. the viewer) are a Scaffold of their own and handle the system bars themselves.
-            contentWindowInsets = if (tab != null) ScaffoldDefaults.contentWindowInsets else WindowInsets(0),
+            contentWindowInsets = if (listScreen) ScaffoldDefaults.contentWindowInsets else WindowInsets(0),
         ) { padding ->
             NavHost(
                 navController = navController,
-                startDestination = Tab.DOCUMENTS.route,
+                startDestination = DOCUMENTS_ROUTE,
                 modifier = Modifier.padding(padding),
             ) {
-                Tab.entries.forEach { item ->
+                LIST_ROUTES.forEach { (path, mode) ->
                     composable(
-                        route = item.route,
+                        route = path,
                         arguments =
                             listOf(
                                 navArgument(DocumentListViewModel.MODE_ARGUMENT) {
                                     type = NavType.StringType
-                                    defaultValue = item.mode.name
+                                    defaultValue = mode.name
                                 },
                             ),
                     ) {
-                        DocumentListScreen(onOpenDocument = { navController.navigate("document/${it.id}") })
+                        DocumentListScreen(
+                            onOpenDocument = { navController.navigate("document/${it.id}") },
+                            // The inbox count is shown on the documents tab only.
+                            onRefresh = { if (path == DOCUMENTS_ROUTE) inbox.refresh(force = true) },
+                        )
                     }
                 }
                 composable(
@@ -205,6 +261,26 @@ private fun TabBar(
         }
     }
 }
+
+/** Shown only when documents wait in the inbox, with their number. */
+@Composable
+private fun InboxButton(
+    count: Int,
+    onClick: () -> Unit,
+) {
+    val description = pluralStringResource(R.plurals.inbox_button, count, count)
+    IconButton(onClick = onClick) {
+        // One announcement with the number in words, not also the badge digits (the button keeps its click).
+        BadgedBox(
+            badge = { Badge { Text(if (count > MAX_BADGE) "$MAX_BADGE+" else count.toString()) } },
+            modifier = Modifier.clearAndSetSemantics { contentDescription = description },
+        ) {
+            Icon(Icons.Outlined.Inbox, contentDescription = null)
+        }
+    }
+}
+
+private const val MAX_BADGE = 99
 
 @Composable
 private fun Drawer(
