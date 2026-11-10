@@ -53,14 +53,17 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 /**
- * A list of documents with large thumbnails, so that their content can be recognised at a glance.
+ * A list of documents with large thumbnails, so that their content can be recognised at a glance. All
+ * documents have a search field on top.
  *
  * @param onOpenDocument the user tapped a document
+ * @param onRefresh the user pulled to refresh (e.g. to update the inbox count too)
  */
 @Composable
 fun DocumentListScreen(
     onOpenDocument: (Document) -> Unit,
     modifier: Modifier = Modifier,
+    onRefresh: () -> Unit = {},
     viewModel: DocumentListViewModel = hiltViewModel(),
 ) {
     val pages = viewModel.documentPages.collectAsLazyPagingItems()
@@ -68,7 +71,7 @@ fun DocumentListScreen(
     val searchText by viewModel.searchText.collectAsStateWithLifecycle()
     val accountId by viewModel.accountId.collectAsStateWithLifecycle()
     Column(modifier.fillMaxSize()) {
-        if (viewModel.mode == DocumentListMode.SEARCH) {
+        if (viewModel.mode == DocumentListMode.ALL) {
             OutlinedTextField(
                 value = searchText,
                 onValueChange = viewModel::setSearchText,
@@ -88,6 +91,7 @@ fun DocumentListScreen(
             onRefresh = {
                 viewModel.refreshLabels()
                 pages.refresh()
+                onRefresh()
             },
             onRetry = {
                 viewModel.refreshLabels()
@@ -135,9 +139,7 @@ private fun DocumentList(
             refresh is LoadState.Loading -> Centered { CircularProgressIndicator() }
             // Scrollable like the empty states, so that pull to refresh works too.
             refresh is LoadState.Error -> Scrollable { ErrorBanner(onRetry = onRetry) }
-            mode == DocumentListMode.SEARCH && searchText.isBlank() ->
-                EmptyState(Icons.Outlined.Search, stringResource(R.string.documents_search_prompt))
-            mode == DocumentListMode.SEARCH ->
+            mode == DocumentListMode.ALL && searchText.isNotBlank() ->
                 EmptyState(
                     Icons.Outlined.SearchOff,
                     stringResource(R.string.documents_no_results),

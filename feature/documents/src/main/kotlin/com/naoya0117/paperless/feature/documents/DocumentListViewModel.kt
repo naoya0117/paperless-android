@@ -23,7 +23,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -31,13 +30,11 @@ import javax.inject.Inject
 
 /** Which documents a list shows. */
 enum class DocumentListMode {
+    /** All documents, or full-text search results while search text is entered. */
     ALL,
 
-    /** Documents with an inbox tag (still to be processed). */
+    /** Documents with an inbox tag (new, still to be checked). */
     INBOX,
-
-    /** Full-text search results for the typed text. */
-    SEARCH,
 }
 
 @HiltViewModel
@@ -57,27 +54,23 @@ class DocumentListViewModel
 
         private val searchInput = MutableStateFlow(savedState.get<String>(SEARCH_KEY).orEmpty())
 
-        /** The search text as typed (for [DocumentListMode.SEARCH]). */
+        /** The search text as typed (for [DocumentListMode.ALL]). */
         val searchText: StateFlow<String> = searchInput.asStateFlow()
 
-        /** Empty for a search without text. */
+        /** All documents (or the inbox); search results while search text is entered (all documents only). */
         @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
         val documentPages: Flow<PagingData<Document>> =
             when (mode) {
-                DocumentListMode.ALL -> documents.documents(DocumentQuery())
                 DocumentListMode.INBOX -> documents.documents(DocumentQuery(inInbox = true))
-                DocumentListMode.SEARCH ->
+                DocumentListMode.ALL ->
                     searchInput
                         .map { it.trim() }
                         .distinctUntilChanged()
-                        // Not a request per keystroke.
-                        .debounce(SEARCH_DEBOUNCE_MILLIS)
+                        // Not a request per keystroke; clearing the search shows all documents at once.
+                        .debounce { if (it.isEmpty()) 0L else SEARCH_DEBOUNCE_MILLIS }
                         .flatMapLatest { text ->
-                            if (text.isEmpty()) {
-                                flowOf(PagingData.empty())
-                            } else {
-                                documents.documents(DocumentQuery(search = DocumentSearch.Text(text)))
-                            }
+                            val search = if (text.isEmpty()) null else DocumentSearch.Text(text)
+                            documents.documents(DocumentQuery(search = search))
                         }
             }.cachedIn(viewModelScope)
 

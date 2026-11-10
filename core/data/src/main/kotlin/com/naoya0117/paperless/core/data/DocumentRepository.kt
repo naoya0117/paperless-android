@@ -117,6 +117,19 @@ class DocumentRepository internal constructor(
         }
 
     /**
+     * How many documents are in the inbox (have an inbox tag): 0 also when no inbox tag is set up.
+     *
+     * @throws NotSignedInException
+     * @throws PaperlessException e.g. when offline
+     */
+    suspend fun inboxCount(): Int {
+        val session = accounts.currentSession() ?: throw NotSignedInException()
+        return session.client.documents
+            .list(DocumentQuery(inInbox = true, pageSize = 1, truncateContent = true))
+            .count
+    }
+
+    /**
      * The document from the server (with its full content and notes); also refreshes the cached copy.
      *
      * @throws NotSignedInException

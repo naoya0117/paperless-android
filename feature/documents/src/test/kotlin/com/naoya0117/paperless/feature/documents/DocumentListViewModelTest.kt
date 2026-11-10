@@ -78,12 +78,12 @@ class DocumentListViewModelTest {
                             )
                         "/api/correspondents/" -> page("""{"id": 2, "name": "ACME"}""")
                         "/api/document_types/" -> page("""{"id": 3, "name": "Invoice"}""")
-                        "/api/documents/1/thumb/" ->
-                            MockResponse
-                                .Builder()
-                                .code(503)
-                                .body("{}")
-                                .build()
+                        "/api/documents/" ->
+                            if (request.url.queryParameter("is_in_inbox") == "true") {
+                                json("""{"count": 3, "next": "http://x/?page=2", "results": []}""")
+                            } else {
+                                page()
+                            }
                         else -> page()
                     }
             }
@@ -140,7 +140,7 @@ class DocumentListViewModelTest {
 
     @Test
     fun `the search text is kept across process death`() {
-        val savedState = SavedStateHandle(mapOf(DocumentListViewModel.MODE_ARGUMENT to DocumentListMode.SEARCH.name))
+        val savedState = SavedStateHandle(mapOf(DocumentListViewModel.MODE_ARGUMENT to DocumentListMode.ALL.name))
         viewModel(savedState).setSearchText("invoice")
 
         assertEquals("invoice", viewModel(savedState).searchText.value)
@@ -159,4 +159,22 @@ class DocumentListViewModelTest {
 
             assertEquals(account.id, accountId)
         }
+
+    @Test
+    fun `the inbox count comes from the server`() =
+        runTest {
+            accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls())
+            // The count is set from the network thread: the view model must run on a real dispatcher here.
+            Dispatchers.setMain(Dispatchers.Unconfined)
+
+            val inbox = InboxViewModel(DocumentRepository(accounts, cache))
+
+            val count = withContext(Dispatchers.Default) { withTimeout(10_000) { inbox.count.first { it > 0 } } }
+            assertEquals(3, count)
+        }
+
+    @Test
+    fun `without an account the inbox count stays 0`() {
+        assertEquals(0, InboxViewModel(DocumentRepository(accounts, cache)).count.value)
+    }
 }

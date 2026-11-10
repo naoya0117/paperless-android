@@ -3,10 +3,13 @@
     <string name="home_sign_out">サインアウト</string>
     <string name="tab_documents">文書</string>
     <string name="tab_inbox">受信箱</string>
-    <string name="tab_search">検索</string>
     <string name="menu_open">メニューを開く</string>
     <string name="drawer_server_version">Paperless-ngx %1$s</string>
     <string name="sign_out_title">サインアウトしますか？</string>
     <string name="sign_out_message">%2$s の %1$s を、キャッシュした文書と一緒にこの端末から削除します。サーバー上の文書はそのままです。</string>
     <string name="cancel">キャンセル</string>
+    <string name="back">戻る</string>
+    <plurals name="inbox_button">
+        <item quantity="other">受信箱：未確認の文書 %1$d 件</item>
+    </plurals>
 </resources>

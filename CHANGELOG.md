@@ -50,8 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Login screen with advanced settings for custom
   headers, a client certificate from the KeyChain and trusted certificate files; English and Japanese
 - The app shows the login screen without an account (or when the active account must sign in again)
-- Main screen with bottom tabs (documents, inbox, search) and a menu (account, sign-out); document lists with
-  large thumbnails, tags, pull to refresh, infinite scrolling and offline use
+- Main screen: the document list with a search field, an inbox button at the top right (with the number of
+  documents to check; hidden when the inbox is empty) and a menu (account, sign-out); large thumbnails, tags,
+  pull to refresh, infinite scrolling and offline use
 - In-app viewer: PDF pages scrolled vertically (images too); tapping shows the document's details with an edit
   button
 - Editing a document: title, date, correspondent, document type, storage path, tags and archive serial number,
