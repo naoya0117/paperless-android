@@ -1,0 +1,36 @@
+<p>paperless-android is a client for <a href="https://docs.paperless-ngx.com/">Paperless-ngx</a>, the self-hosted document management system. It works with your own server: nothing is sent anywhere else.</p>
+
+<p><b>Documents</b></p>
+<ul>
+<li>Home screen with the saved views of your dashboard</li>
+<li>Document lists with large thumbnails, also offline</li>
+<li>Full-text search with order and filters (tags, correspondent, document type, storage path, created date)</li>
+<li>Viewer for PDFs and images: full screen, pinch to zoom, search within the document</li>
+<li>Details with notes and custom fields; editing title, date, labels and archive serial number</li>
+<li>Share, open in another app, download, delete; trash with restore</li>
+<li>Inbox for new documents</li>
+</ul>
+
+<p><b>Adding documents</b></p>
+<ul>
+<li>Scan paper with the camera: several pages, trimmed by their corners and enhanced, uploaded as one PDF</li>
+<li>Upload files, or share them from other apps; several images can become one document</li>
+<li>Uploads are queued and sent in the background when a network is available</li>
+</ul>
+
+<p><b>Organizing</b></p>
+<ul>
+<li>Manage tags, correspondents, document types and storage paths</li>
+<li>Saved views from the menu</li>
+</ul>
+
+<p><b>Connections</b></p>
+<ul>
+<li>Several accounts and servers</li>
+<li>Sign in with a password (including two-factor authentication) or an API token</li>
+<li>Custom request headers (e.g. for an access gateway), client certificates (mTLS) and private CA certificates</li>
+</ul>
+
+<p>Requires Paperless-ngx 3.0.0 or later (REST API version 10) and Android 10 or later.</p>
+
+<p>This is an independent project, inspired by the community app paperless-mobile. It is not affiliated with the Paperless-ngx or paperless-mobile projects.</p>

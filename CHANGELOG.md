@@ -92,3 +92,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - App icon: a sheet of paper with lines of text on the Paperless green (with a themed monochrome version);
   store icon for F-Droid in `fastlane/metadata/android/en-US/images/icon.png`
+- README: the GitHub repository is a mirror (development on the author's Gitea); the goals became a list of
+  features. F-Droid store texts (English, Japanese) in `fastlane/metadata/android/`

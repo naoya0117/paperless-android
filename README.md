@@ -4,6 +4,11 @@ English | [日本語](README.ja.md)
 
 An Android client for [Paperless-ngx](https://github.com/paperless-ngx/paperless-ngx), written in Kotlin.
 
+> **About this repository:** the repository on GitHub
+> ([naoya0117/paperless-android](https://github.com/naoya0117/paperless-android)) is a **mirror**.
+> Development (issues, reviews and CI) takes place on the author's own Gitea server, and the changes are pushed to
+> GitHub from there.
+
 ## Requirements
 
 - **Android 10 (API level 29) or later**
@@ -12,15 +17,20 @@ An Android client for [Paperless-ngx](https://github.com/paperless-ngx/paperless
 - To connect over HTTPS, the server certificate must be trusted by Android.
   To use a certificate issued by a private CA, install the CA certificate on the device.
 
-## Goals
+## Features
 
-- Support the **latest Paperless-ngx REST API** (API version 10)
-- Implement the core features first: authentication, documents, tags / correspondents / document types / storage paths / custom fields, saved views, upload, and tasks
-- Planned extensions:
-  - Local caching for offline use
-  - Custom request headers (e.g. for reverse proxies or access gateways)
-  - Client certificate authentication (mTLS)
-  - Multiple accounts
+- **Documents**: home screen with the saved views of the dashboard; document lists with large thumbnails, also
+  offline; full-text search with order and filters (tags, correspondent, document type, storage path, created date)
+- **Viewer**: PDFs and images, full screen, pinch to zoom, search within the document; details with notes and
+  custom fields; editing; share, open in another app, download, delete; trash with restore; inbox
+- **Adding documents**: scanning with the camera (several pages, trimmed by their corners and enhanced, as one PDF);
+  uploading files or sharing them from other apps, several images as one document; uploads queued and sent in the
+  background
+- **Organizing**: tags, correspondents, document types and storage paths; saved views
+- **Connections**: several accounts; password (with two-factor authentication) or API token; custom request
+  headers, client certificates (mTLS) and private CA certificates
+
+The app supports the current Paperless-ngx REST API (version 10) and talks only to your server.
 
 ## Building
 
