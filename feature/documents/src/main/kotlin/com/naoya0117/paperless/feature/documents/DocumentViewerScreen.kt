@@ -1,5 +1,9 @@
 package com.naoya0117.paperless.feature.documents
 
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -25,35 +29,58 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import coil3.compose.AsyncImage
 import com.naoya0117.paperless.core.model.Document
 import kotlinx.coroutines.CancellationException
@@ -76,8 +103,35 @@ fun DocumentViewerScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val infoVisible by viewModel.infoVisible.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val resources = LocalResources.current
+    val currentOnBack by rememberUpdatedState(onBack)
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(viewModel, lifecycle) {
+        // Only while visible: another app cannot be started from the background (the event waits).
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.events.collect { event ->
+                when (event) {
+                    is ViewerEvent.SendFile ->
+                        if (!context.sendFile(event)) {
+                            snackbar.showSnackbar(resources.getString(R.string.viewer_no_app))
+                        }
+                    is ViewerEvent.Saved ->
+                        snackbar.showSnackbar(
+                            resources.getString(R.string.viewer_saved, event.fileName),
+                        )
+                    ViewerEvent.Deleted -> currentOnBack()
+                    is ViewerEvent.Failed -> snackbar.showSnackbar(resources.getString(event.message()))
+                }
+            }
+        }
+    }
+    var menuOpen by rememberSaveable { mutableStateOf(false) }
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
     Scaffold(
         modifier = modifier,
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Text(state.document?.title.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -92,6 +146,25 @@ fun DocumentViewerScreen(
                 actions = {
                     IconButton(onClick = viewModel::toggleInfo, enabled = state.document != null) {
                         Icon(Icons.Outlined.Info, contentDescription = stringResource(R.string.viewer_info))
+                    }
+                    if (state.busy) {
+                        Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                        }
+                    } else {
+                        Box {
+                            IconButton(onClick = { menuOpen = true }, enabled = state.document != null) {
+                                Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.viewer_more))
+                            }
+                            ViewerMenu(
+                                expanded = menuOpen,
+                                onDismiss = { menuOpen = false },
+                                onShare = viewModel::share,
+                                onOpen = viewModel::openExternally,
+                                onDownload = viewModel::download,
+                                onDelete = { confirmDelete = true },
+                            )
+                        }
                     }
                 },
             )
@@ -120,6 +193,24 @@ fun DocumentViewerScreen(
         }
     }
     val document = state.document
+    if (confirmDelete && document != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(stringResource(R.string.viewer_delete_title)) },
+            text = { Text(stringResource(R.string.viewer_delete_message, document.title)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDelete = false
+                        viewModel.delete()
+                    },
+                ) { Text(stringResource(R.string.viewer_delete), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.viewer_cancel)) }
+            },
+        )
+    }
     if (infoVisible && document != null) {
         ModalBottomSheet(onDismissRequest = viewModel::hideInfo) {
             DocumentInfo(
@@ -131,6 +222,70 @@ fun DocumentViewerScreen(
                 },
             )
         }
+    }
+}
+
+@Composable
+private fun ViewerMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onShare: () -> Unit,
+    onOpen: () -> Unit,
+    onDownload: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        @Composable
+        fun item(
+            text: Int,
+            icon: ImageVector,
+            onClick: () -> Unit,
+        ) = DropdownMenuItem(
+            text = { Text(stringResource(text)) },
+            leadingIcon = { Icon(icon, contentDescription = null) },
+            onClick = {
+                onDismiss()
+                onClick()
+            },
+        )
+        item(R.string.viewer_share, Icons.Outlined.Share, onShare)
+        item(R.string.viewer_open_with, Icons.AutoMirrored.Outlined.OpenInNew, onOpen)
+        item(R.string.viewer_download, Icons.Outlined.Download, onDownload)
+        HorizontalDivider()
+        item(R.string.viewer_delete, Icons.Outlined.Delete, onDelete)
+    }
+}
+
+private fun ViewerEvent.Failed.message(): Int =
+    when (action) {
+        FileAction.SHARE, FileAction.OPEN ->
+            if (reason == FailureReason.STORAGE) R.string.viewer_file_storage_failed else R.string.viewer_file_failed
+        FileAction.DOWNLOAD ->
+            if (reason == FailureReason.STORAGE) R.string.viewer_save_failed else R.string.viewer_file_failed
+        FileAction.DELETE -> R.string.viewer_delete_failed
+    }
+
+/** Starts an app for the file (a chooser to share it); `false` if there is none. */
+private fun Context.sendFile(event: ViewerEvent.SendFile): Boolean {
+    val intent =
+        if (event.open) {
+            Intent(Intent.ACTION_VIEW).setDataAndType(event.uri, event.mimeType)
+        } else {
+            val send =
+                Intent(Intent.ACTION_SEND)
+                    .setType(event.mimeType)
+                    .putExtra(Intent.EXTRA_STREAM, event.uri)
+                    // Set before the chooser is made: it passes the grant on only if the shared intent has it.
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            send.clipData = ClipData.newRawUri(null, event.uri)
+            Intent.createChooser(send, null)
+        }
+    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    return try {
+        startActivity(intent)
+        true
+    } catch (_: ActivityNotFoundException) {
+        false
     }
 }
 
