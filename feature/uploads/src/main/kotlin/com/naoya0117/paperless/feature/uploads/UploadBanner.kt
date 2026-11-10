@@ -21,6 +21,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -100,7 +103,9 @@ fun UploadBanner(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
-                val sent = progress.sent
+                // Not backwards while the uploads go on (e.g. when one is done and leaves the totals).
+                var highest by remember { mutableFloatStateOf(0f) }
+                val sent = progress.sent?.let { maxOf(it, highest) }?.also { highest = it }
                 if (sent != null && sent > 0f) {
                     LinearProgressIndicator(progress = { sent }, modifier = Modifier.fillMaxWidth())
                 } else {

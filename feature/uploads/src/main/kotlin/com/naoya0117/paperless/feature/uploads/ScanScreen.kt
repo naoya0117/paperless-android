@@ -659,14 +659,14 @@ private fun CropEditor(
                 },
             )
         },
+        // Always there (hidden while valid), so that the image does not move while dragging.
         bottomBar = {
-            if (!valid) {
-                Text(
-                    stringResource(R.string.scan_crop_invalid),
-                    color = Color.White,
-                    modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp),
-                )
-            }
+            Text(
+                stringResource(R.string.scan_crop_invalid),
+                color = if (valid) Color.Transparent else Color.White,
+                minLines = 2,
+                modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp),
+            )
         },
     ) { padding ->
         when (val current = image) {
@@ -750,7 +750,7 @@ private fun CornerEditor(
         fun point(i: Int) =
             Offset(origin.x + current[2 * i] * shown.width, origin.y + current[2 * i + 1] * shown.height)
         Canvas(
-            Modifier.fillMaxSize().pointerInput(image) {
+            Modifier.fillMaxSize().pointerInput(image, shown, origin) {
                 detectDragGestures(
                     onDragStart = { start ->
                         dragged =

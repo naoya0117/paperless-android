@@ -331,23 +331,24 @@ class ScanViewModel
         ): Bitmap {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(page.file.path, bounds)
-            // A trimmed page needs more of the image's pixels: decoded so that its part still has maxSide.
-            val kept =
-                page.corners?.let { c ->
+            // A trimmed page needs more of the image's pixels: decoded so that its part still has maxSide
+            // (its long side; a slanted side may be longer than its spread, up to √2).
+            val corners = page.corners
+            val keptSide =
+                if (corners == null) {
+                    maxOf(bounds.outWidth, bounds.outHeight).toFloat()
+                } else {
+                    val turnedSides = (page.rotation + exifRotation(page.file)) % FULL % (2 * QUARTER) != 0
+                    val w = (if (turnedSides) bounds.outHeight else bounds.outWidth).toFloat()
+                    val h = (if (turnedSides) bounds.outWidth else bounds.outHeight).toFloat()
                     maxOf(
-                        c.filterIndexed { i, _ -> i % 2 == 0 }.spread(),
-                        c
-                            .filterIndexed { i, _ ->
-                                i %
-                                    2 ==
-                                    1
-                            }.spread(),
-                    )
+                        corners.filterIndexed { i, _ -> i % 2 == 0 }.spread() * w,
+                        corners.filterIndexed { i, _ -> i % 2 == 1 }.spread() * h,
+                    ) *
+                        SQRT2
                 }
-                    ?: 1f
-            val needed = maxSide / kept.coerceAtLeast(MIN_KEPT)
             var sample = 1
-            while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= needed) sample *= 2
+            while (keptSide / (sample * 2) >= maxSide) sample *= 2
             // Opaque: half the memory of ARGB.
             val decoded =
                 BitmapFactory.decodeFile(
@@ -434,9 +435,7 @@ class ScanViewModel
             }
 
             private const val MAX_PAGE_POINTS = 14_400f
-
-            /** Trimmed to less than this of a side: decoded as if it were this much (memory). */
-            private const val MIN_KEPT = 0.25f
+            private const val SQRT2 = 1.4142135f
 
             /** The smallest part kept, of the page's area. */
             private const val MIN_AREA = 0.01f
