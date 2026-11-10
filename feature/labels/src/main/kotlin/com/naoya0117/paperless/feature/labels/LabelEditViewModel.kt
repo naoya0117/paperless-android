@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -107,12 +108,14 @@ class LabelEditViewModel
         init {
             if (labelId != null) {
                 // The cache may be older than the server (changes are sent against the original), so it is
-                // refreshed; the form follows as long as the user did not change it.
+                // refreshed; the user's edits are kept on top of the newest version.
+                val refreshed = MutableStateFlow(false)
                 viewModelScope.launch {
-                    store.items.collect { items ->
-                        val label = items.firstOrNull { it.id == labelId }
-                        mutableState.update { it.following(label) }
-                    }
+                    combine(store.items, refreshed) { items, done -> items.firstOrNull { it.id == labelId } to done }
+                        .collect { (label, done) ->
+                            // Not "missing" before the refresh (e.g. the cache was never filled yet).
+                            if (label != null || done) mutableState.update { it.following(label) }
+                        }
                 }
                 viewModelScope.launch {
                     try {
@@ -123,6 +126,8 @@ class LabelEditViewModel
                         @Suppress("TooGenericExceptionCaught") _: Exception,
                     ) {
                         // Offline: the cached label is edited.
+                    } finally {
+                        refreshed.value = true
                     }
                 }
             }
@@ -131,17 +136,30 @@ class LabelEditViewModel
         private fun LabelEditState.following(label: MatchingLabel?): LabelEditState =
             when {
                 // Saved or deleted here: the cache follows, the screen closes.
-                done || saving -> this
+                done -> this
                 label == null -> copy(loaded = true, missing = true)
-                !loaded || !changed ->
-                    copy(
-                        loaded = true,
-                        missing = false,
-                        original = label,
-                        form = LabelForm.of(label),
-                    )
-                else -> copy(missing = false, original = label)
+                else -> {
+                    val fresh = LabelForm.of(label)
+                    // Only what the user changed is kept; other values follow the server (so that saving
+                    // does not send back old values of fields edited elsewhere).
+                    val base = original?.let(LabelForm::of)
+                    val form = if (!loaded || base == null) fresh else form.rebasedOn(base, fresh)
+                    copy(loaded = true, missing = false, original = label, form = form)
+                }
             }
+
+        /** This form's changes from [base], applied to [fresh]. */
+        private fun LabelForm.rebasedOn(
+            base: LabelForm,
+            fresh: LabelForm,
+        ) = LabelForm(
+            name = if (name != base.name) name else fresh.name,
+            matching = if (matching != base.matching) matching else fresh.matching,
+            color = if (color != base.color) color else fresh.color,
+            isInboxTag = if (isInboxTag != base.isInboxTag) isInboxTag else fresh.isInboxTag,
+            parentId = if (parentId != base.parentId) parentId else fresh.parentId,
+            path = if (path != base.path) path else fresh.path,
+        )
 
         fun setName(name: String) = edit("name") { it.copy(name = name) }
 

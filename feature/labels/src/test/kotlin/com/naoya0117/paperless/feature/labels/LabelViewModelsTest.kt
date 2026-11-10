@@ -211,6 +211,24 @@ class LabelViewModelsTest {
         }
 
     @Test
+    fun `edits are kept on top of a newer version from the server`() =
+        runTest {
+            signIn()
+            repository.tags.refresh()
+            // Changed elsewhere: the editor's refresh brings the new color.
+            tags = listOf(tags[0].replace("#ff0000", "#0000ff"), tags[1], tags[2])
+            val viewModel = editViewModel(1)
+            viewModel.state.await { it.loaded }
+            viewModel.setName("Taxes")
+
+            val state = viewModel.state.await { it.form.color == "#0000ff" }
+            assertEquals("Taxes", state.form.name)
+            viewModel.save()
+            viewModel.state.await { it.done }
+            assertEquals("PATCH /api/tags/1/ {\"name\":\"Taxes\"}", writes.single())
+        }
+
+    @Test
     fun `server errors are shown at the field and cleared by editing it`() =
         runTest {
             signIn()
