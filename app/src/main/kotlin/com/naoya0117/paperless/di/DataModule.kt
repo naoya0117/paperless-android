@@ -3,6 +3,7 @@ package com.naoya0117.paperless.di
 import android.content.Context
 import androidx.work.WorkManager
 import com.naoya0117.paperless.core.data.AccountDataCleaner
+import com.naoya0117.paperless.core.data.ApplicationScope
 import com.naoya0117.paperless.core.data.ClientCertificateSource
 import com.naoya0117.paperless.core.data.DocumentFileRepository
 import com.naoya0117.paperless.core.data.DocumentFileStorage
@@ -23,6 +24,10 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import java.io.File
 import javax.inject.Provider
 import javax.inject.Singleton
@@ -30,6 +35,13 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object DataModule {
+    /** Failures there are not fatal: each job handles its own errors, the rest is housekeeping repeated later. */
+    @Provides
+    @Singleton
+    @ApplicationScope
+    fun applicationScope(): CoroutineScope =
+        CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, _ -> })
+
     @Provides
     @Singleton
     fun accountStore(

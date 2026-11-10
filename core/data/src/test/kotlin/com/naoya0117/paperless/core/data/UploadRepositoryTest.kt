@@ -191,6 +191,19 @@ class UploadRepositoryTest {
         }
 
     @Test
+    fun `files go to the given account, which must exist`() =
+        runTest {
+            val accountId = signIn()
+            val source = UploadSource("scan.pdf", "application/pdf") { "x".byteInputStream() }
+
+            assertEquals(accountId, uploads.enqueue(source, accountId = accountId).accountId)
+            assertTrue(
+                runCatching { uploads.enqueue(source, accountId = "gone") }.exceptionOrNull() is NotSignedInException,
+            )
+            assertEquals(accountId, uploads.activeAccountId())
+        }
+
+    @Test
     fun `an upload is sent and followed until the document exists`() =
         runTest {
             signIn()

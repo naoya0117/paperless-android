@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="uploads_empty">アップロードはありません。他のアプリから共有するか、文書の画面から追加してください。</string>
+    <string name="uploads_retry">%1$s を再試行</string>
+    <string name="uploads_remove">%1$s を削除</string>
+    <string name="uploads_state_queued">接続を待っています</string>
+    <string name="uploads_state_uploading">送信中</string>
+    <string name="uploads_state_processing">サーバーで処理中</string>
+    <string name="uploads_state_done">文書として追加されました</string>
+    <string name="uploads_state_done_no_document">処理済み（バーコードでの分割などで、文書は作られませんでした）</string>
+    <string name="uploads_error_sign_in">失敗：もう一度サインインしてください</string>
+    <string name="uploads_error_rejected">失敗：サーバーがファイルを受け付けませんでした</string>
+    <string name="uploads_error_processing">失敗：サーバーでファイルを処理できませんでした</string>
+    <string name="uploads_error_duplicate">追加されませんでした：サーバーに同じファイルがあります</string>
+    <string name="uploads_error_not_reported">不明：サーバーが結果を返しませんでした。文書が後で現れることがあります</string>
+    <string name="uploads_error_other">失敗しました</string>
+</resources>

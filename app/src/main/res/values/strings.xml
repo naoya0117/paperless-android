@@ -16,4 +16,18 @@
         <item quantity="one">Inbox: %1$d document to check</item>
         <item quantity="other">Inbox: %1$d documents to check</item>
     </plurals>
+    <string name="share_sign_in_first">Sign in to upload the shared files</string>
+    <string name="drawer_uploads">Uploads</string>
+    <string name="upload_files">Upload files</string>
+    <string name="uploads_view_action">View</string>
+    <string name="uploads_partly_failed_message">Some files could not be read (queued: %1$d, failed: %2$d)</string>
+    <plurals name="uploads_queued_message">
+        <item quantity="one">%1$d file queued for upload</item>
+        <item quantity="other">%1$d files queued for upload</item>
+    </plurals>
+    <plurals name="uploads_failed_message">
+        <item quantity="one">The file could not be read</item>
+        <item quantity="other">%1$d files could not be read</item>
+    </plurals>
+    <string name="share_no_files">No files to upload were shared</string>
 </resources>

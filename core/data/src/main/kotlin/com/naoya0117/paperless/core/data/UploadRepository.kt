@@ -84,14 +84,20 @@ class UploadRepository internal constructor(
     /**
      * Copies the file into app storage and queues it for the active account.
      *
-     * @throws NotSignedInException if there is no active account
+     * @param accountId the account to upload to (e.g. the one active when several files were chosen, so that a
+     *   switch meanwhile does not send the rest elsewhere); by default the active account
+     * @throws NotSignedInException if there is no such account (or no active account)
      * @throws java.io.IOException if the file cannot be read or stored
      */
     suspend fun enqueue(
         source: UploadSource,
         metadata: DocumentUpload = DocumentUpload(),
+        accountId: String? = null,
     ): Upload {
-        val account = accounts.state.first().activeAccount ?: throw NotSignedInException()
+        val state = accounts.state.first()
+        val account =
+            (if (accountId == null) state.activeAccount else state.accounts.find { it.id == accountId })
+                ?: throw NotSignedInException()
         val id = UUID.randomUUID().toString()
         val file = File(storage.directory, id)
         val size =
@@ -145,6 +151,9 @@ class UploadRepository internal constructor(
         scheduler.schedule(id)
         return upload
     }
+
+    /** The account [enqueue] uploads to by default; `null` if signed out. */
+    suspend fun activeAccountId(): String? = accounts.state.first().activeAccountId
 
     /**
      * Tries a failed upload again: if the server already has the file (the failure came after sending, e.g. a
