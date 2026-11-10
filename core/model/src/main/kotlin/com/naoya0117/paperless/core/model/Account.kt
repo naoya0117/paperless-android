@@ -7,6 +7,7 @@ package com.naoya0117.paperless.core.model
  * @property id local identifier, stable across sign-ins of the same user on the same server
  * @property customHeaderNames names of the extra headers sent to this server (values are secret)
  * @property needsSignIn the stored secrets can no longer be read (e.g. the device key was reset)
+ * @property tls client certificate and additionally trusted certificates for this server
  */
 data class Account(
     val id: String,
@@ -18,4 +19,5 @@ data class Account(
     val serverVersion: String?,
     val customHeaderNames: List<String>,
     val needsSignIn: Boolean,
+    val tls: AccountTls = AccountTls(),
 )

@@ -26,6 +26,9 @@ internal data class StoredAccount(
     val serverVersion: String? = null,
     val encryptedToken: String,
     val customHeaders: List<StoredHeader> = emptyList(),
+    val clientCertificateAlias: String? = null,
+    /** Base64 of DER; not secret. */
+    val trustedCertificates: List<String> = emptyList(),
 )
 
 @Serializable

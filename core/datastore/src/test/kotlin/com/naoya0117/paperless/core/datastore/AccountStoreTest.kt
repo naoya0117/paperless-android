@@ -1,8 +1,10 @@
 package com.naoya0117.paperless.core.datastore
 
 import com.naoya0117.paperless.core.model.Account
+import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.ApiVersion
 import com.naoya0117.paperless.core.model.AuthToken
+import com.naoya0117.paperless.core.model.TrustedCertificate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -182,5 +184,79 @@ class AccountStoreTest {
             val store = store(file, XorCipher())
 
             assertEquals(emptyList<Account>(), store.state.first().accounts)
+        }
+
+    private val tls =
+        AccountTls(
+            clientCertificateAlias = "my-client-cert",
+            trustedCertificates = listOf(TrustedCertificate(byteArrayOf(0x30, 0x03, 0x01, 0x02, 0x03))),
+        )
+
+    @Test
+    fun `tls settings are saved with the account`() =
+        runTest {
+            val file = folder.root.resolve("accounts.json")
+            val store = store(file, XorCipher())
+
+            store.save(account("a").copy(tls = tls), credentials)
+
+            assertEquals(
+                tls,
+                store.state
+                    .first()
+                    .activeAccount
+                    ?.tls,
+            )
+            val onDisk =
+                file
+                    .inputStream()
+                    .use { StoredAccountsSerializer.readFrom(it) }
+                    .accounts
+                    .single()
+            assertEquals("my-client-cert", onDisk.clientCertificateAlias)
+            assertEquals(listOf("MAMBAgM="), onDisk.trustedCertificates)
+        }
+
+    @Test
+    fun `tls settings can be changed without signing in again`() =
+        runTest {
+            val store = store(folder.root.resolve("accounts.json"), XorCipher())
+            store.save(account("a"), credentials)
+
+            store.setTls("a", tls)
+
+            assertEquals(
+                tls,
+                store.state
+                    .first()
+                    .activeAccount
+                    ?.tls,
+            )
+            assertEquals(credentials, store.credentials("a"))
+            assertTrue(runCatching { store.setTls("nope", tls) }.exceptionOrNull() is IllegalArgumentException)
+        }
+
+    @Test
+    fun `files written before tls settings existed are still readable`() =
+        runTest {
+            val file = folder.root.resolve("accounts.json")
+            val token =
+                java.util.Base64
+                    .getEncoder()
+                    .encodeToString(XorCipher().encrypt("t".encodeToByteArray()))
+            file.writeText(
+                """{"activeId":"a","accounts":[{"id":"a","serverUrl":"https://p.example.com/","userId":1,""" +
+                    """"username":"alice","apiVersion":10,"encryptedToken":"$token"}]}""",
+            )
+
+            val account =
+                store(file, XorCipher())
+                    .state
+                    .first()
+                    .accounts
+                    .single()
+
+            assertEquals(AccountTls(), account.tls)
+            assertFalse(account.needsSignIn)
         }
 }

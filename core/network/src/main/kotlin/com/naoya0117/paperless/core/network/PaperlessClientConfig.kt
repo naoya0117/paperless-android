@@ -2,7 +2,9 @@ package com.naoya0117.paperless.core.network
 
 import com.naoya0117.paperless.core.model.ApiVersion
 import com.naoya0117.paperless.core.model.AuthToken
+import com.naoya0117.paperless.core.network.internal.http.AdditionalTrustManager
 import java.security.KeyStore
+import java.security.cert.X509Certificate
 import javax.net.ssl.KeyManager
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocketFactory
@@ -28,16 +30,27 @@ public data class PaperlessClientConfig(
  *
  * @property keyManagers client certificate for mutual TLS.
  * @property trustManager trust anchors; `null` uses the platform default trust manager.
+ * @property additionalTrustedCertificates trusted in addition to [trustManager] (e.g. a private CA or a
+ *   self-signed server certificate) for every connection made with this config. The host name is still
+ *   verified.
  */
 public class TlsConfig(
     public val keyManagers: List<KeyManager> = emptyList(),
     public val trustManager: X509TrustManager? = null,
+    public val additionalTrustedCertificates: List<X509Certificate> = emptyList(),
 ) {
     /**
      * Built once and shared by every client using this config: OkHttp only reuses pooled connections
      * for the same socket factory instance.
      */
-    internal val resolvedTrustManager: X509TrustManager by lazy { trustManager ?: platformTrustManager() }
+    internal val resolvedTrustManager: X509TrustManager by lazy {
+        val base = trustManager ?: trustManagerFor(null)
+        if (additionalTrustedCertificates.isEmpty()) {
+            base
+        } else {
+            AdditionalTrustManager(base, trustManagerFor(keyStoreOf(additionalTrustedCertificates)))
+        }
+    }
 
     internal val socketFactory: SSLSocketFactory by lazy {
         SSLContext
@@ -46,10 +59,19 @@ public class TlsConfig(
             .socketFactory
     }
 
-    private fun platformTrustManager(): X509TrustManager {
-        val factory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-        factory.init(null as KeyStore?)
-        return factory.trustManagers.filterIsInstance<X509TrustManager>().single()
+    private companion object {
+        /** `null` gives the platform default trust anchors. */
+        fun trustManagerFor(keyStore: KeyStore?): X509TrustManager {
+            val factory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+            factory.init(keyStore)
+            return factory.trustManagers.filterIsInstance<X509TrustManager>().single()
+        }
+
+        fun keyStoreOf(certificates: List<X509Certificate>): KeyStore =
+            KeyStore.getInstance(KeyStore.getDefaultType()).apply {
+                load(null, null)
+                certificates.forEachIndexed { index, certificate -> setCertificateEntry("trusted-$index", certificate) }
+            }
     }
 }
 

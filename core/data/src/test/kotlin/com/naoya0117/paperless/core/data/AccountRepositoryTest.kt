@@ -2,6 +2,7 @@ package com.naoya0117.paperless.core.data
 
 import com.naoya0117.paperless.core.datastore.AccountStore
 import com.naoya0117.paperless.core.datastore.SecretCipher
+import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.ApiVersion
 import com.naoya0117.paperless.core.model.AuthToken
 import com.naoya0117.paperless.core.network.PaperlessException
@@ -39,7 +40,11 @@ class AccountRepositoryTest {
         server.start()
         val store = AccountStore.create(folder.root.resolve("accounts.json"), XorCipher)
         repository =
-            AccountRepository(store, PaperlessClientFactory(OkHttpClient.Builder().proxy(Proxy.NO_PROXY).build()))
+            AccountRepository(
+                store,
+                PaperlessClientFactory(OkHttpClient.Builder().proxy(Proxy.NO_PROXY).build()),
+                { error("no client certificates in this test") },
+            )
     }
 
     @After
@@ -73,7 +78,14 @@ class AccountRepositoryTest {
             server.enqueue(uiSettings())
             server.enqueue(uiSettings())
 
-            val account = repository.signIn(serverUrl(), "alice", "pw", customHeaders = listOf("X-Proxy" to "secret"))
+            val account =
+                repository.signIn(
+                    serverUrl(),
+                    "alice",
+                    "pw",
+                    customHeaders = listOf("X-Proxy" to "secret"),
+                    tls = AccountTls(),
+                )
 
             assertEquals("alice", account.username)
             assertEquals("Alice", account.displayName)
@@ -99,10 +111,10 @@ class AccountRepositoryTest {
             server.enqueue(uiSettings())
             server.enqueue(uiSettings(lastName = "Smith"))
 
-            val first = repository.signIn(serverUrl(), "alice", "pw")
+            val first = repository.signIn(serverUrl(), "alice", "pw", tls = AccountTls())
             val firstClient = repository.activeClient.first()!!
             assertTrue("clients are shared, not rebuilt per call", firstClient === repository.activeClient.first())
-            val second = repository.signInWithToken(serverUrl(), AuthToken("second"))
+            val second = repository.signInWithToken(serverUrl(), AuthToken("second"), tls = AccountTls())
 
             assertEquals(first.id, second.id)
             assertEquals("Alice", first.displayName)
@@ -129,8 +141,8 @@ class AccountRepositoryTest {
             server.enqueue(tokenResponse("b"))
             server.enqueue(uiSettings(userId = 4))
 
-            val alice = repository.signIn(serverUrl(), "alice", "pw")
-            val other = repository.signIn(serverUrl(), "bob", "pw")
+            val alice = repository.signIn(serverUrl(), "alice", "pw", tls = AccountTls())
+            val other = repository.signIn(serverUrl(), "bob", "pw", tls = AccountTls())
             assertNotEquals(alice.id, other.id)
             assertEquals(other.id, repository.state.first().activeAccountId)
 
@@ -163,7 +175,7 @@ class AccountRepositoryTest {
                     .build(),
             )
 
-            val result = runCatching { repository.signIn(serverUrl(), "alice", "wrong") }
+            val result = runCatching { repository.signIn(serverUrl(), "alice", "wrong", tls = AccountTls()) }
 
             assertTrue(result.exceptionOrNull() is PaperlessException.Auth.InvalidCredentials)
             assertTrue(
@@ -178,11 +190,20 @@ class AccountRepositoryTest {
     fun `invalid input is rejected before any request`() =
         runTest {
             assertTrue(
-                runCatching { repository.signIn("ftp://x", "a", "b") }.exceptionOrNull() is IllegalArgumentException,
+                runCatching {
+                    repository.signIn("ftp://x", "a", "b", tls = AccountTls())
+                }.exceptionOrNull() is IllegalArgumentException,
             )
             assertTrue(
-                runCatching { repository.signIn(serverUrl(), "a", "b", customHeaders = listOf("Authorization" to "x")) }
-                    .exceptionOrNull() is IllegalArgumentException,
+                runCatching {
+                    repository.signIn(
+                        serverUrl(),
+                        "a",
+                        "b",
+                        customHeaders = listOf("Authorization" to "x"),
+                        tls = AccountTls(),
+                    )
+                }.exceptionOrNull() is IllegalArgumentException,
             )
             assertEquals(0, server.requestCount)
         }

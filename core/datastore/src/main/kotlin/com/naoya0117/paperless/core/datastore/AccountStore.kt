@@ -4,8 +4,10 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import com.naoya0117.paperless.core.model.Account
+import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.ApiVersion
 import com.naoya0117.paperless.core.model.AuthToken
+import com.naoya0117.paperless.core.model.TrustedCertificate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -73,6 +75,26 @@ class AccountStore internal constructor(
         }
     }
 
+    /**
+     * Replaces the account's TLS settings, keeping its secrets.
+     *
+     * @throws IllegalArgumentException if there is no such account
+     */
+    suspend fun setTls(
+        accountId: String,
+        tls: AccountTls,
+    ) {
+        dataStore.updateData { current ->
+            require(current.accounts.any { it.id == accountId }) { "Unknown account $accountId" }
+            current.copy(
+                accounts =
+                    current.accounts.map {
+                        if (it.id == accountId) it.withTls(tls) else it
+                    },
+            )
+        }
+    }
+
     /** @throws IllegalArgumentException if there is no such account */
     suspend fun setActive(accountId: String) {
         dataStore.updateData { current ->
@@ -119,6 +141,21 @@ class AccountStore internal constructor(
             serverVersion = serverVersion,
             customHeaderNames = customHeaders.map { it.name },
             needsSignIn = decryptCredentials() == null,
+            tls =
+                AccountTls(
+                    clientCertificateAlias = clientCertificateAlias,
+                    // Written by this class, so never invalid unless the file was edited; skip such entries.
+                    trustedCertificates =
+                        trustedCertificates.mapNotNull { encoded ->
+                            runCatching { TrustedCertificate(BASE64_DECODER.decode(encoded)) }.getOrNull()
+                        },
+                ),
+        )
+
+    private fun StoredAccount.withTls(tls: AccountTls) =
+        copy(
+            clientCertificateAlias = tls.clientCertificateAlias,
+            trustedCertificates = tls.trustedCertificates.map { BASE64_ENCODER.encodeToString(it.der) },
         )
 
     private fun Account.toStored(credentials: AccountCredentials) =
@@ -132,7 +169,7 @@ class AccountStore internal constructor(
             serverVersion = serverVersion,
             encryptedToken = encrypt(credentials.token.value),
             customHeaders = credentials.customHeaders.map { (name, value) -> StoredHeader(name, encrypt(value)) },
-        )
+        ).withTls(tls)
 
     private fun encrypt(value: String): String =
         BASE64_ENCODER.encodeToString(cipher.encrypt(value.encodeToByteArray()))
