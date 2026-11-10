@@ -208,8 +208,9 @@ debug 版（`com.naoya0117.paperless.debug`）とは別のアプリとして入�
 
 ## 5. スクリーンショット
 
-F-Droid とリポジトリで使うスクリーンショットです。個人の文書が写らないよう、
-[`tools/paperless-dev`](../tools/paperless-dev/README.md) のテスト用サーバーにサンプルの文書を入れて撮影します。
+F-Droid とリポジトリで使うスクリーンショットです。個人の文書が写らないよう、サーバーなしで動くデモ版
+（`./gradlew :app:assembleDemo`、README の「デモ版」）で撮影します。サンプルの文書・ラベル・保存済みビューが入っています。
+スキャンの画面など、デモ版にない操作は [`tools/paperless-dev`](../tools/paperless-dev/README.md) のテスト用サーバーを使います。
 
 保存先：`fastlane/metadata/android/en-US/images/phoneScreenshots/1.png`、`2.png` …（番号順に表示されます。
 日本語の画面は `ja-JP/images/phoneScreenshots/` に置きます。置かなければ英語のものが使われます）。

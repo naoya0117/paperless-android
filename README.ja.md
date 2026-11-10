@@ -34,10 +34,27 @@ Kotlin で実装した [Paperless-ngx](https://github.com/paperless-ngx/paperles
 
 JDK 17 以降と Android SDK（`ANDROID_HOME` または `local.properties` で指定）が必要です。
 
+1 行目はデバッグ APK（アプリケーション ID の末尾に `.debug` が付きます）を、2 行目はコンパイル、
+ユニットテスト、Android Lint、ktlint を実行します。
+
 ```bash
-./gradlew assembleDebug   # デバッグ APK（アプリケーション ID の末尾に .debug が付きます）
-./gradlew build           # コンパイル、ユニットテスト、Android Lint、ktlint
+./gradlew assembleDebug
+./gradlew build
 ```
+
+### デモ版
+
+サーバーなしで動くデモ版です。アプリに内蔵したサーバーに自動でログインし、サンプルの文書・ラベル・保存済みビューが
+表示されます。編集・メモ・ごみ箱の操作はメモリ上だけで反映され、アプリを再起動するとサンプルのデータは元に戻ります
+（アプリのキャッシュには、更新されるまで以前の変更が残ることがあります）。アップロードは使えません。
+お試しやスクリーンショット用に手元でだけビルドするもので、リリースには含めません。通常のアプリと並べて
+インストールできます（アプリケーション ID の末尾に `.demo` が付きます）。
+
+```bash
+./gradlew :app:assembleDemo
+```
+
+APK は `app/build/outputs/apk/demo/app-demo.apk` に出力されます。
 
 リリース APK は、次の Gradle プロパティがすべて設定されている場合のみ署名されます
 （例：`~/.gradle/gradle.properties` に記述）。
