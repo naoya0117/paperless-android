@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Demo build without a server, built locally only and not released (`./gradlew :app:assembleDemo`): a server
+  built into the app with sample documents, labels and saved views; changes are kept in memory
+
 ## [0.1.0] - 2026-11-10
 
 ### Added

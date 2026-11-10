@@ -1,0 +1,1291 @@
+{
+ "documents": [
+  {
+   "id": 1,
+   "correspondent": 1,
+   "document_type": 1,
+   "storage_path": 2,
+   "title": "Electricity bill October 2026",
+   "content": "City Power & Light\nInvoice 2026-10-4471\nBilling period: October 2026\nConsumption: 312 kWh\nTotal due: 86.40 EUR\nDue date: 2026-11-20",
+   "tags": [
+    1,
+    2
+   ],
+   "created": "2026-11-03",
+   "created_date": "2026-11-03",
+   "modified": "2026-11-04T08:12:31Z",
+   "added": "2026-11-04T08:12:31Z",
+   "deleted_at": null,
+   "archive_serial_number": null,
+   "original_file_name": "electricity-bill-october-2026.pdf",
+   "archived_file_name": "electricity-bill-october-2026.pdf",
+   "duplicate_documents": [],
+   "owner": 1,
+   "user_can_change": true,
+   "is_shared_by_requester": false,
+   "notes": [],
+   "custom_fields": [
+    {
+     "field": 1,
+     "value": "EUR86.40"
+    },
+    {
+     "field": 2,
+     "value": "2026-11-20"
+    },
+    {
+     "field": 3,
+     "value": false
+    }
+   ],
+   "page_count": 1,
+   "mime_type": "application/pdf",
+   "root_document": null,
+   "versions": [
+    {
+     "id": 1,
+     "added": "2026-11-04T08:12:31Z",
+     "version_label": null,
+     "checksum": "baf780997ef1938c83b14eec24ed86cb71b6e7877a1785a31da2341defd0890e",
+     "is_root": true
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "correspondent": 7,
+   "document_type": 3,
+   "storage_path": 2,
+   "title": "Rental agreement Greenfield Apartments",
+   "content": "Greenfield Apartments\nResidential lease agreement\nUnit 4B, 12 Elm Street\nMonthly rent: 980.00 EUR\nTerm: from 2024-03-01, indefinite\nNotice period: three months",
+   "tags": [
+    4,
+    7
+   ],
+   "created": "2024-03-01",
+   "created_date": "2024-03-01",
+   "modified": "2026-06-12T10:02:11Z",
+   "added": "2026-06-12T10:02:11Z",
+   "deleted_at": null,
+   "archive_serial_number": 1,
+   "original_file_name": "rental-agreement-greenfield-apartments.pdf",
+   "archived_file_name": "rental-agreement-greenfield-apartments.pdf",
+   "duplicate_documents": [],
+   "owner": 1,
+   "user_can_change": true,
+   "is_shared_by_requester": false,
+   "notes": [
+    {
+     "id": 1,
+     "note": "Rent increases are possible once a year.",
+     "created": "2026-06-12T10:05:00Z",
+     "user": {
+      "id": 1,
+      "username": "demo",
+      "first_name": "Demo",
+      "last_name": "User"
+     }
+    }
+   ],
+   "custom_fields": [],
+   "page_count": 3,
+   "mime_type": "application/pdf",
+   "root_document": null,
+   "versions": [
+    {
+     "id": 2,
+     "added": "2026-06-12T10:02:11Z",
+     "version_label": null,
+     "checksum": "13adbd0308e8638bdf8d94afb390cdac1ae973b76c20d3c8f72ffc616ed7a95b",
+     "is_root": true
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "correspondent": 2,
+   "document_type": 5,
+   "storage_path": 1,
+   "title": "Bank statement September 2026",
+   "content": "Northwind Bank\nAccount statement 09/2026\nOpening balance: 2,431.18 EUR\nClosing balance: 2,815.62 EUR",
+   "tags": [
+    2
+   ],
+   "created": "2026-10-01",
+   "created_date": "2026-10-01",
+   "modified": "2026-10-02T07:45:00Z",
+   "added": "2026-10-02T07:45:00Z",
+   "deleted_at": null,
+   "archive_serial_number": null,
+   "original_file_name": "bank-statement-september-2026.pdf",
+   "archived_file_name": "bank-statement-september-2026.pdf",
+   "duplicate_documents": [],
+   "owner": 1,
+   "user_can_change": true,
+   "is_shared_by_requester": false,
+   "notes": [],
+   "custom_fields": [],
+   "page_count": 2,
+   "mime_type": "application/pdf",
+   "root_document": null,
+   "versions": [
+    {
+     "id": 3,
+     "added": "2026-10-02T07:45:00Z",
+     "version_label": null,
+     "checksum": "afa01f4e8d235af3080a6f06fa168d57bdaa377879b48fe482c4419890b29488",
+     "is_root": true
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "correspondent": 6,
+   "document_type": 2,
+   "storage_path": 2,
+   "title": "Laptop receipt",
+   "content": "Fabrikam Electronics\nReceipt #F-88213\nUltrabook 14\" 16 GB / 512 GB\nTotal: 1,199.00 EUR\nWarranty: 24 months",
+   "tags": [
+    4,
+    8
+   ],
+   "created": "2025-12-14",
+   "created_date": "2025-12-14",
+   "modified": "2025-12-15T19:20:44Z",
+   "added": "2025-12-15T19:20:44Z",
+   "deleted_at": null,
+   "archive_serial_number": 2,
+   "original_file_name": "laptop-receipt.pdf",
+   "archived_file_name": "laptop-receipt.pdf",
+   "duplicate_documents": [],
+   "owner": 1,
+   "user_can_change": true,
+   "is_shared_by_requester": false,
+   "notes": [],
+   "custom_fields": [
+    {
+     "field": 1,
+     "value": "EUR1199.00"
+    },
+    {
+     "field": 3,
+     "value": true
+    }
+   ],
+   "page_count": 1,
+   "mime_type": "application/pdf",
+   "root_document": null,
+   "versions": [
+    {
+     "id": 4,
+     "added": "2025-12-15T19:20:44Z",
+     "version_label": null,
+     "checksum": "95d9177cd9a001597d2cb28caa919751df584cc6793c233120a2206021ae882a",
+     "is_root": true
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "correspondent": 4,
+   "document_type": 3,
+   "storage_path": 1,
+   "title": "Car insurance policy 2027",
+   "content": "Contoso Insurance\nMotor insurance policy\nPolicy number: CI-2027-55120\nAnnual premium: 642.00 EUR\nCoverage: 2027-01-01 to 2027-12-31",
+   "tags": [
+    6,
+    2
+   ],
+   "created": "2026-10-28",
+   "created_date": "2026-10-28",
+   "modified": "2026-10-29T12:00:00Z",
+   "added": "2026-10-29T12:00:00Z",
+   "deleted_at": null,
+   "archive_serial_number": 3,
+   "original_file_name": "car-insurance-policy-2027.pdf",
+   "archived_file_name": "car-insurance-policy-2027.pdf",
+   "duplicate_documents": [],
+   "owner": 1,
+   "user_can_change": true,
+   "is_shared_by_requester": false,
+   "notes": [],
+   "custom_fields": [
+    {
+     "field": 1,
+     "value": "EUR642.00"
+    },
+    {
+     "field": 2,
+     "value": "2026-12-15"
+    },
+    {
+     "field": 4,
+     "value": "CI-2027-55120"
+    }
+   ],
+   "page_count": 4,
+   "mime_type": "application/pdf",
+   "root_document": null,
+   "versions": [
+    {
+     "id": 5,
+     "added": "2026-10-29T12:00:00Z",
+     "version_label": null,
+     "checksum": "3213575c4f96aab5ffd05e8b1f2a3382d69862c5624bfdda9f1ec68e8c3971bd",
+     "is_root": true
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "correspondent": 5,
+   "document_type": 4,
+   "storage_path": 1,
+   "title": "Tax assessment 2025",
+   "content": "Tax Office\nNotice of assessment for 2025\nRefund: 412.50 EUR\nPlease check the details within one month.",
+   "tags": [
+    2,
+    3,
+    7
+   ],
+   "created": "2026-09-18",
+   "created_date": "2026-09-18",
+   "modified": "2026-09-20T09:30:00Z",
+   "added": "2026-09-20T09:30:00Z",
+   "deleted_at": null,
+   "archive_serial_number": 4,
+   "original_file_name": "tax-assessment-2025.pdf",
+   "archived_file_name": "tax-assessment-2025.pdf",
+   "duplicate_documents": [],
+   "owner": 1,
+   "user_can_change": true,
+   "is_shared_by_requester": false,
+   "notes": [
+    {
+     "id": 2,
+     "note": "Refund received on 2026-10-02.",
+     "created": "2026-10-03T18:00:00Z",
+     "user": {
+      "id": 1,
+      "username": "demo",
+      "first_name": "Demo",
+      "last_name": "User"
+     }
+    }
+   ],
+   "custom_fields": [],
+   "page_count": 2,
+   "mime_type": "application/pdf",
+   "root_document": null,
+   "versions": [
+    {
+     "id": 6,
+     "added": "2026-09-20T09:30:00Z",
+     "version_label": null,
+     "checksum": "45c61bfac518488c1fd273957694378533120922822515844775928a71c6e61b",
+     "is_root": true
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "correspondent": 3,
+   "document_type": 4,
+   "storage_path": null,
+   "title": "Blood test results",
+   "content": "Riverside Clinic\nLaboratory report\nAll values within the reference range.\nNext check-up recommended in 12 months.",
+   "tags": [
+    5
+   ],
+   "created": "2026-08-07",
+   "created_date": "2026-08-07",
+   "modified": "2026-08-08T16:10:00Z",
+   "added": "2026-08-08T16:10:00Z",
+   "deleted_at": null,
+   "archive_serial_number": null,
+   "original_file_name": "blood-test-results.pdf",
+   "archived_file_name": "blood-test-results.pdf",
+   "duplicate_documents": [],
+   "owner": 1,
+   "user_can_change": true,
+   "is_shared_by_requester": false,
+   "notes": [],
+   "custom_fields": [],
+   "page_count": 1,
+   "mime_type": "application/pdf",
+   "root_document": null,
+   "versions": [
+    {
+     "id": 7,
+     "added": "2026-08-08T16:10:00Z",
+     "version_label": null,
+     "checksum": "fcba05075c224c247cdf2d9639fd75545e7776011b0f0287455b5e1d7ffcfc6b",
+     "is_root": true
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "correspondent": 8,
+   "document_type": 1,
+   "storage_path": 1,
+   "title": "Car service invoice",
+   "content": "Speedy Auto Service\nInvoice A-20931\nAnnual inspection, oil change, wiper blades\nTotal: 289.90 EUR",
+   "tags": [
+    6,
+    1
+   ],
+   "created": "2026-11-06",
+   "created_date": "2026-11-06",
+   "modified": "2026-11-07T11:25:00Z",
+   "added": "2026-11-07T11:25:00Z",
+   "deleted_at": null,
+   "archive_serial_number": null,
+   "original_file_name": "car-service-invoice.pdf",
+   "archived_file_name": "car-service-invoice.pdf",
+   "duplicate_documents": [],
+   "owner": 1,
+   "user_can_change": true,
+   "is_shared_by_requester": false,
+   "notes": [],
+   "custom_fields": [
+    {
+     "field": 1,
+     "value": "EUR289.90"
+    },
+    {
+     "field": 3,
+     "value": false
+    }
+   ],
+   "page_count": 1,
+   "mime_type": "application/pdf",
+   "root_document": null,
+   "versions": [
+    {
+     "id": 8,
+     "added": "2026-11-07T11:25:00Z",
+     "version_label": null,
+     "checksum": "e26a0a8ae3cf8995b8f6c6ba75be5a4d82d58f0b132be4a2ea36a5ce2ed1e7aa",
+     "is_root": true
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "correspondent": null,
+   "document_type": 6,
+   "storage_path": 2,
+   "title": "Washing machine manual",
+   "content": "Operating instructions\nWashing machine WM-7\nInstallation, programs, cleaning the filter, troubleshooting",
+   "tags": [
+    4,
+    8
+   ],
+   "created": "2023-05-20",
+   "created_date": "2023-05-20",
+   "modified": "2026-02-01T14:00:00Z",
+   "added": "2026-02-01T14:00:00Z",
+   "deleted_at": null,
+   "archive_serial_number": null,
+   "original_file_name": "washing-machine-manual.pdf",
+   "archived_file_name": "washing-machine-manual.pdf",
+   "duplicate_documents": [],
+   "owner": 1,
+   "user_can_change": true,
+   "is_shared_by_requester": false,
+   "notes": [],
+   "custom_fields": [],
+   "page_count": 6,
+   "mime_type": "application/pdf",
+   "root_document": null,
+   "versions": [
+    {
+     "id": 9,
+     "added": "2026-02-01T14:00:00Z",
+     "version_label": null,
+     "checksum": "26db32012d3ecdb580452f5f57a2968429ca974467f4378b9c0647f75332b2bc",
+     "is_root": true
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "correspondent": 3,
+   "document_type": 2,
+   "storage_path": null,
+   "title": "Pharmacy receipt",
+   "content": "Riverside Clinic Pharmacy\nReceipt 55-1032\nTotal: 18.75 EUR",
+   "tags": [
+    5,
+    1
+   ],
+   "created": "2026-11-08",
+   "created_date": "2026-11-08",
+   "modified": "2026-11-08T17:40:00Z",
+   "added": "2026-11-08T17:40:00Z",
+   "deleted_at": null,
+   "archive_serial_number": null,
+   "original_file_name": "pharmacy-receipt.jpg",
+   "archived_file_name": null,
+   "duplicate_documents": [],
+   "owner": 1,
+   "user_can_change": true,
+   "is_shared_by_requester": false,
+   "notes": [],
+   "custom_fields": [
+    {
+     "field": 1,
+     "value": "EUR18.75"
+    }
+   ],
+   "page_count": 1,
+   "mime_type": "image/jpeg",
+   "root_document": null,
+   "versions": [
+    {
+     "id": 10,
+     "added": "2026-11-08T17:40:00Z",
+     "version_label": null,
+     "checksum": "089d692fa5f8abfb1c70448031b2b4297354bb7abf693a4ab3aee2987ea93d91",
+     "is_root": true
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "correspondent": 1,
+   "document_type": 3,
+   "storage_path": 2,
+   "title": "Internet contract",
+   "content": "City Power & Light Fiber\nFiber 250 contract\nMonthly fee: 39.99 EUR\nMinimum term: 24 months",
+   "tags": [
+    4
+   ],
+   "created": "2025-04-01",
+   "created_date": "2025-04-01",
+   "modified": "2026-01-10T09:00:00Z",
+   "added": "2026-01-10T09:00:00Z",
+   "deleted_at": null,
+   "archive_serial_number": null,
+   "original_file_name": "internet-contract.pdf",
+   "archived_file_name": "internet-contract.pdf",
+   "duplicate_documents": [],
+   "owner": 1,
+   "user_can_change": true,
+   "is_shared_by_requester": false,
+   "notes": [],
+   "custom_fields": [],
+   "page_count": 2,
+   "mime_type": "application/pdf",
+   "root_document": null,
+   "versions": [
+    {
+     "id": 11,
+     "added": "2026-01-10T09:00:00Z",
+     "version_label": null,
+     "checksum": "33a3e41f37159c1d59cb76192d59ef0961ad0402e74ff1f6366d9e7fd8730af3",
+     "is_root": true
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "correspondent": null,
+   "document_type": 2,
+   "storage_path": 1,
+   "title": "Donation receipt",
+   "content": "Charity foundation\nDonation receipt for tax purposes\nAmount: 100.00 EUR",
+   "tags": [
+    2,
+    3
+   ],
+   "created": "2025-12-20",
+   "created_date": "2025-12-20",
+   "modified": "2026-01-05T13:00:00Z",
+   "added": "2026-01-05T13:00:00Z",
+   "deleted_at": null,
+   "archive_serial_number": null,
+   "original_file_name": "donation-receipt.pdf",
+   "archived_file_name": "donation-receipt.pdf",
+   "duplicate_documents": [],
+   "owner": 1,
+   "user_can_change": true,
+   "is_shared_by_requester": false,
+   "notes": [],
+   "custom_fields": [
+    {
+     "field": 1,
+     "value": "EUR100.00"
+    }
+   ],
+   "page_count": 1,
+   "mime_type": "application/pdf",
+   "root_document": null,
+   "versions": [
+    {
+     "id": 12,
+     "added": "2026-01-05T13:00:00Z",
+     "version_label": null,
+     "checksum": "ef2fbde47d882da0af7bbb738ad7e988720f5508a36165b2bb753f735888c7c2",
+     "is_root": true
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "correspondent": 1,
+   "document_type": 1,
+   "storage_path": 2,
+   "title": "Electricity bill September 2026",
+   "content": "City Power & Light\nInvoice 2026-09-4470\nBilling period: September 2026\nConsumption: 287 kWh\nTotal due: 79.50 EUR",
+   "tags": [
+    2
+   ],
+   "created": "2026-10-02",
+   "created_date": "2026-10-02",
+   "modified": "2026-10-03T08:00:00Z",
+   "added": "2026-10-03T08:00:00Z",
+   "deleted_at": null,
+   "archive_serial_number": null,
+   "original_file_name": "electricity-bill-september-2026.pdf",
+   "archived_file_name": "electricity-bill-september-2026.pdf",
+   "duplicate_documents": [],
+   "owner": 1,
+   "user_can_change": true,
+   "is_shared_by_requester": false,
+   "notes": [],
+   "custom_fields": [
+    {
+     "field": 1,
+     "value": "EUR79.50"
+    },
+    {
+     "field": 2,
+     "value": "2026-10-20"
+    },
+    {
+     "field": 3,
+     "value": true
+    }
+   ],
+   "page_count": 1,
+   "mime_type": "application/pdf",
+   "root_document": null,
+   "versions": [
+    {
+     "id": 13,
+     "added": "2026-10-03T08:00:00Z",
+     "version_label": null,
+     "checksum": "e3aeb51fe7c3f440e6f31756675144d3eabb3ad889d0b563088630bd0aeb4011",
+     "is_root": true
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "correspondent": 2,
+   "document_type": 4,
+   "storage_path": null,
+   "title": "Welcome letter Northwind Bank",
+   "content": "Northwind Bank\nWelcome to Northwind Bank\nYour new checking account is ready.",
+   "tags": [
+    2
+   ],
+   "created": "2024-02-10",
+   "created_date": "2024-02-10",
+   "modified": "2026-03-01T10:00:00Z",
+   "added": "2026-03-01T10:00:00Z",
+   "deleted_at": null,
+   "archive_serial_number": null,
+   "original_file_name": "welcome-letter-northwind-bank.pdf",
+   "archived_file_name": "welcome-letter-northwind-bank.pdf",
+   "duplicate_documents": [],
+   "owner": 1,
+   "user_can_change": true,
+   "is_shared_by_requester": false,
+   "notes": [],
+   "custom_fields": [],
+   "page_count": 1,
+   "mime_type": "application/pdf",
+   "root_document": null,
+   "versions": [
+    {
+     "id": 14,
+     "added": "2026-03-01T10:00:00Z",
+     "version_label": null,
+     "checksum": "7f7f8d56f4bb372e5a877d508b7426c9895a4c05d5e6f43adf39e36ab986b8c8",
+     "is_root": true
+    }
+   ]
+  }
+ ],
+ "trash": [
+  {
+   "id": 15,
+   "correspondent": null,
+   "document_type": 3,
+   "storage_path": null,
+   "title": "Old gym membership",
+   "content": "Fitness club membership contract (cancelled)",
+   "tags": [],
+   "created": "2022-01-05",
+   "created_date": "2022-01-05",
+   "modified": "2026-05-01T10:00:00Z",
+   "added": "2026-05-01T10:00:00Z",
+   "deleted_at": "2026-11-01T09:00:00Z",
+   "archive_serial_number": null,
+   "original_file_name": "old-gym-membership.pdf",
+   "archived_file_name": "old-gym-membership.pdf",
+   "duplicate_documents": [],
+   "owner": 1,
+   "user_can_change": true,
+   "is_shared_by_requester": false,
+   "notes": [],
+   "custom_fields": [],
+   "page_count": 1,
+   "mime_type": "application/pdf",
+   "root_document": null,
+   "versions": [
+    {
+     "id": 15,
+     "added": "2026-05-01T10:00:00Z",
+     "version_label": null,
+     "checksum": "c5e1e696f26751608019cdba0bf6dd9e0768d4018c3bb7ffa00513b289eac284",
+     "is_root": true
+    }
+   ]
+  }
+ ],
+ "tags": [
+  {
+   "id": 1,
+   "slug": "inbox",
+   "name": "Inbox",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "color": "#1f78b4",
+   "text_color": "#ffffff",
+   "is_inbox_tag": true,
+   "parent": null,
+   "children": []
+  },
+  {
+   "id": 2,
+   "slug": "finance",
+   "name": "Finance",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "color": "#33a02c",
+   "text_color": "#ffffff",
+   "is_inbox_tag": false,
+   "parent": null,
+   "children": []
+  },
+  {
+   "id": 3,
+   "slug": "tax",
+   "name": "Tax",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "color": "#b2df8a",
+   "text_color": "#000000",
+   "is_inbox_tag": false,
+   "parent": 2,
+   "children": []
+  },
+  {
+   "id": 4,
+   "slug": "home",
+   "name": "Home",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "color": "#fb9a99",
+   "text_color": "#000000",
+   "is_inbox_tag": false,
+   "parent": null,
+   "children": []
+  },
+  {
+   "id": 5,
+   "slug": "health",
+   "name": "Health",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "color": "#e31a1c",
+   "text_color": "#ffffff",
+   "is_inbox_tag": false,
+   "parent": null,
+   "children": []
+  },
+  {
+   "id": 6,
+   "slug": "car",
+   "name": "Car",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "color": "#fdbf6f",
+   "text_color": "#000000",
+   "is_inbox_tag": false,
+   "parent": null,
+   "children": []
+  },
+  {
+   "id": 7,
+   "slug": "important",
+   "name": "Important",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "color": "#ff7f00",
+   "text_color": "#000000",
+   "is_inbox_tag": false,
+   "parent": null,
+   "children": []
+  },
+  {
+   "id": 8,
+   "slug": "warranty",
+   "name": "Warranty",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "color": "#cab2d6",
+   "text_color": "#000000",
+   "is_inbox_tag": false,
+   "parent": 4,
+   "children": []
+  }
+ ],
+ "correspondents": [
+  {
+   "id": 1,
+   "slug": "city-power-&-light",
+   "name": "City Power & Light",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "last_correspondence": null
+  },
+  {
+   "id": 2,
+   "slug": "northwind-bank",
+   "name": "Northwind Bank",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "last_correspondence": null
+  },
+  {
+   "id": 3,
+   "slug": "riverside-clinic",
+   "name": "Riverside Clinic",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "last_correspondence": null
+  },
+  {
+   "id": 4,
+   "slug": "contoso-insurance",
+   "name": "Contoso Insurance",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "last_correspondence": null
+  },
+  {
+   "id": 5,
+   "slug": "tax-office",
+   "name": "Tax Office",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "last_correspondence": null
+  },
+  {
+   "id": 6,
+   "slug": "fabrikam-electronics",
+   "name": "Fabrikam Electronics",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "last_correspondence": null
+  },
+  {
+   "id": 7,
+   "slug": "greenfield-apartments",
+   "name": "Greenfield Apartments",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "last_correspondence": null
+  },
+  {
+   "id": 8,
+   "slug": "speedy-auto-service",
+   "name": "Speedy Auto Service",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "last_correspondence": null
+  }
+ ],
+ "document_types": [
+  {
+   "id": 1,
+   "slug": "invoice",
+   "name": "Invoice",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true
+  },
+  {
+   "id": 2,
+   "slug": "receipt",
+   "name": "Receipt",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true
+  },
+  {
+   "id": 3,
+   "slug": "contract",
+   "name": "Contract",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true
+  },
+  {
+   "id": 4,
+   "slug": "letter",
+   "name": "Letter",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true
+  },
+  {
+   "id": 5,
+   "slug": "statement",
+   "name": "Statement",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true
+  },
+  {
+   "id": 6,
+   "slug": "manual",
+   "name": "Manual",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true
+  }
+ ],
+ "storage_paths": [
+  {
+   "id": 1,
+   "slug": "by-year",
+   "name": "By year",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "path": "{{ created_year }}/{{ title }}"
+  },
+  {
+   "id": 2,
+   "slug": "household",
+   "name": "Household",
+   "match": "",
+   "matching_algorithm": 6,
+   "is_insensitive": true,
+   "document_count": 0,
+   "owner": 1,
+   "user_can_change": true,
+   "path": "household/{{ correspondent }}/{{ title }}"
+  }
+ ],
+ "custom_fields": [
+  {
+   "id": 1,
+   "name": "Amount",
+   "data_type": "monetary",
+   "extra_data": {
+    "default_currency": "EUR"
+   },
+   "document_count": 0
+  },
+  {
+   "id": 2,
+   "name": "Due date",
+   "data_type": "date",
+   "extra_data": null,
+   "document_count": 0
+  },
+  {
+   "id": 3,
+   "name": "Paid",
+   "data_type": "boolean",
+   "extra_data": null,
+   "document_count": 0
+  },
+  {
+   "id": 4,
+   "name": "Policy number",
+   "data_type": "string",
+   "extra_data": null,
+   "document_count": 0
+  }
+ ],
+ "saved_views": [
+  {
+   "id": 1,
+   "name": "Inbox",
+   "icon": "inbox",
+   "sort_field": "added",
+   "sort_reverse": true,
+   "filter_rules": [
+    {
+     "rule_type": 6,
+     "value": "1"
+    }
+   ],
+   "page_size": 25,
+   "display_mode": "smallCards",
+   "display_fields": [
+    "title",
+    "created",
+    "tag"
+   ],
+   "owner": 1,
+   "user_can_change": true
+  },
+  {
+   "id": 2,
+   "name": "Invoices",
+   "icon": "funnel",
+   "sort_field": "created",
+   "sort_reverse": true,
+   "filter_rules": [
+    {
+     "rule_type": 4,
+     "value": "1"
+    }
+   ],
+   "page_size": 25,
+   "display_mode": "table",
+   "display_fields": [
+    "title",
+    "created",
+    "correspondent"
+   ],
+   "owner": 1,
+   "user_can_change": true
+  },
+  {
+   "id": 3,
+   "name": "Important",
+   "icon": "star",
+   "sort_field": "created",
+   "sort_reverse": true,
+   "filter_rules": [
+    {
+     "rule_type": 6,
+     "value": "7"
+    }
+   ],
+   "page_size": 25,
+   "display_mode": "smallCards",
+   "display_fields": [
+    "title",
+    "created",
+    "tag"
+   ],
+   "owner": 1,
+   "user_can_change": true
+  }
+ ],
+ "ui_settings": {
+  "user": {
+   "id": 1,
+   "username": "demo",
+   "is_staff": false,
+   "is_superuser": false,
+   "groups": []
+  },
+  "settings": {
+   "saved_views": {
+    "sidebar_views_visible_ids": [
+     1,
+     2,
+     3
+    ],
+    "dashboard_views_visible_ids": [
+     1,
+     2,
+     3
+    ]
+   },
+   "update_checking": {
+    "backend_setting": "default"
+   },
+   "trash_delay": 30,
+   "version": "3.4.2",
+   "app_title": null,
+   "app_logo": null,
+   "auditlog_enabled": true,
+   "remote_ocr": {
+    "configured": false,
+    "mode": "always"
+   },
+   "email_enabled": false,
+   "ai_enabled": false
+  },
+  "permissions": [
+   "delete_workflowactionemail",
+   "add_sharelink",
+   "view_document",
+   "view_global_statistics",
+   "delete_workflowaction",
+   "delete_documentbarcode",
+   "view_permission",
+   "view_system_monitoring",
+   "view_customfield",
+   "change_note",
+   "view_sharelinkbundle",
+   "view_processedmail",
+   "delete_savedview",
+   "change_sharelinkbundle",
+   "view_workflowactionemail",
+   "change_workflow",
+   "add_paperlesstask",
+   "add_logentry",
+   "view_customfieldinstance",
+   "view_authenticator",
+   "change_savedviewfilterrule",
+   "add_workflowactionemail",
+   "add_note",
+   "view_documenttype",
+   "change_session",
+   "delete_groupobjectpermission",
+   "change_userobjectpermission",
+   "add_permission",
+   "change_contenttype",
+   "delete_mailaccount",
+   "change_socialapp",
+   "change_workflowrun",
+   "change_socialaccount",
+   "view_socialaccount",
+   "view_userobjectpermission",
+   "delete_uisettings",
+   "change_uisettings",
+   "delete_sharelink",
+   "delete_sharelinkbundle",
+   "add_sharelinkbundle",
+   "add_workflowactionwebhook",
+   "delete_emailconfirmation",
+   "delete_workflowrun",
+   "add_processedmail",
+   "delete_mailrule",
+   "delete_paperlesstask",
+   "view_socialtoken",
+   "view_uisettings",
+   "view_contenttype",
+   "delete_session",
+   "change_workflowaction",
+   "view_applicationconfiguration",
+   "change_workflowactionwebhook",
+   "change_documentbarcode",
+   "change_group",
+   "add_storagepath",
+   "view_documentbarcode",
+   "delete_authenticator",
+   "delete_socialapp",
+   "add_workflowtrigger",
+   "change_emailconfirmation",
+   "delete_storagepath",
+   "delete_userobjectpermission",
+   "view_user",
+   "add_userobjectpermission",
+   "delete_contenttype",
+   "view_workflowtrigger",
+   "view_token",
+   "add_mailaccount",
+   "change_user",
+   "add_groupobjectpermission",
+   "change_paperlesstask",
+   "add_documentbarcode",
+   "add_socialapp",
+   "change_tag",
+   "change_mailrule",
+   "delete_socialtoken",
+   "delete_logentry",
+   "add_document",
+   "delete_applicationconfiguration",
+   "change_customfield",
+   "change_permission",
+   "add_group",
+   "change_processedmail",
+   "add_customfield",
+   "add_correspondent",
+   "delete_permission",
+   "add_workflowaction",
+   "delete_tag",
+   "add_savedviewfilterrule",
+   "change_logentry",
+   "view_logentry",
+   "view_group",
+   "change_customfieldinstance",
+   "change_document",
+   "delete_document",
+   "add_socialtoken",
+   "delete_group",
+   "view_emailconfirmation",
+   "view_socialapp",
+   "add_socialaccount",
+   "view_workflowactionwebhook",
+   "delete_token",
+   "view_session",
+   "delete_user",
+   "view_paperlesstask",
+   "delete_workflow",
+   "view_emailaddress",
+   "view_sharelink",
+   "delete_workflowactionwebhook",
+   "view_workflowrun",
+   "add_contenttype",
+   "change_workflowactionemail",
+   "add_token",
+   "add_tokenproxy",
+   "delete_correspondent",
+   "change_authenticator",
+   "view_workflow",
+   "change_sharelink",
+   "add_documenttype",
+   "change_workflowtrigger",
+   "delete_customfieldinstance",
+   "add_emailaddress",
+   "change_groupobjectpermission",
+   "add_session",
+   "delete_socialaccount",
+   "change_storagepath",
+   "add_uisettings",
+   "add_mailrule",
+   "delete_logentry",
+   "view_savedviewfilterrule",
+   "change_savedview",
+   "delete_tokenproxy",
+   "change_tokenproxy",
+   "change_mailaccount",
+   "change_socialtoken",
+   "delete_emailaddress",
+   "add_customfieldinstance",
+   "change_token",
+   "change_documenttype",
+   "delete_processedmail",
+   "delete_workflowtrigger",
+   "view_tag",
+   "view_groupobjectpermission",
+   "add_workflowrun",
+   "change_emailaddress",
+   "add_savedview",
+   "delete_documenttype",
+   "change_logentry",
+   "add_user",
+   "delete_savedviewfilterrule",
+   "view_workflowaction",
+   "add_workflow",
+   "view_note",
+   "add_applicationconfiguration",
+   "add_emailconfirmation",
+   "add_logentry",
+   "delete_customfield",
+   "add_authenticator",
+   "add_tag",
+   "change_correspondent",
+   "view_tokenproxy",
+   "view_savedview",
+   "view_storagepath",
+   "view_logentry",
+   "view_mailrule",
+   "delete_note",
+   "view_correspondent",
+   "view_mailaccount",
+   "change_applicationconfiguration"
+  ]
+ }
+}

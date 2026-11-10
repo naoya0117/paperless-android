@@ -30,10 +30,13 @@ class PaperlessApplication :
     @Inject @ApplicationScope
     lateinit var appScope: CoroutineScope
 
+    @Inject lateinit var startupTasks: Set<@JvmSuppressWildcards AppStartupTask>
+
     override fun onCreate() {
         super.onCreate()
         // After the process was killed: reschedule unfinished uploads and delete leftover files.
         appScope.launch { uploads.get().reconcile() }
+        startupTasks.forEach { task -> appScope.launch { task.run() } }
     }
 
     /** Coil loads document thumbnails through the document file cache. */

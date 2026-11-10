@@ -76,6 +76,14 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }
+        // Demo build without a server (src/demo): built locally only (`./gradlew :app:assembleDemo`), never
+        // released. The library modules have no demo build type and use their debug variants.
+        create("demo") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".demo"
+            versionNameSuffix = "-demo"
+            matchingFallbacks += "debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -84,6 +92,14 @@ android {
             // Reproducible builds: do not embed VCS info (commit hash) into the APK.
             vcsInfo.include = false
         }
+    }
+}
+
+// The demo build's own tests (src/testDemo) check its built-in server; unit tests are created for debug only
+// by default.
+androidComponents {
+    beforeVariants(selector().withBuildType("demo")) { variant ->
+        variant.hostTests[com.android.build.api.variant.HostTestBuilder.UNIT_TEST_TYPE]?.enable = true
     }
 }
 

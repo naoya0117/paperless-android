@@ -36,10 +36,26 @@ The app supports the current Paperless-ngx REST API (version 10) and talks only 
 
 Requires JDK 17 or later and the Android SDK (`ANDROID_HOME` or `local.properties`).
 
+The first command builds the debug APK (application ID suffix `.debug`); the second compiles, runs the unit
+tests, Android Lint and ktlint.
+
 ```bash
-./gradlew assembleDebug   # debug APK (application ID suffix: .debug)
-./gradlew build           # compile, unit tests, Android Lint, ktlint
+./gradlew assembleDebug
+./gradlew build
 ```
+
+### Demo build
+
+A demo of the app that needs no server: it signs in to a server built into the app, with sample documents,
+labels and saved views. Changes (editing, notes, the trash) are kept in memory until the app is closed;
+uploading is not available. It is meant for trying the app and for screenshots, built locally only, and is
+not part of the releases. It can be installed next to the regular app (application ID suffix `.demo`).
+
+```bash
+./gradlew :app:assembleDemo
+```
+
+The APK is written to `app/build/outputs/apk/demo/app-demo.apk`.
 
 The release APK is unsigned unless all of the following Gradle properties are set
 (e.g. in `~/.gradle/gradle.properties`):
