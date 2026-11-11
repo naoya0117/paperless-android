@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Screenshots in the README
+- `docs/index.md` (English) and `docs/index.ja.md` (Japanese): the app and the repository on one page, which can
+  also be published with GitHub Pages (`docs/_config.yml`)
+
 ### Changed
 
-- README: the app on F-Droid will be signed by F-Droid, so it and the APK on GitHub cannot update each other
+- README: the app is not on F-Droid yet and a listing there is planned; an app on F-Droid would be signed by
+  F-Droid, so it and the APK on GitHub could not update each other
+- The release procedure records that the F-Droid listing is on hold
+- The acknowledgement of paperless-mobile no longer compares the two projects, and no longer names
+  document versions, which the app does not implement
 
 ## [0.1.1] - 2026-11-10
 

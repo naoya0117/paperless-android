@@ -8,6 +8,19 @@ An Android client for [Paperless-ngx](https://github.com/paperless-ngx/paperless
 > ([naoya0117/paperless-android](https://github.com/naoya0117/paperless-android)) is a **mirror**.
 > Development (issues, reviews and CI) takes place on the author's own Gitea server, and the changes are pushed to
 > GitHub from there.
+>
+> [`docs/index.md`](docs/index.md) describes the app and the repository on one page (it can also be published
+> with GitHub Pages).
+
+## Screenshots
+
+| Home | Documents | Viewer |
+|:---:|:---:|:---:|
+| <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" width="240" alt="Home screen with the saved views of the dashboard"> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" width="240" alt="Document list with thumbnails, correspondents and tags"> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" width="240" alt="A PDF open in the full-screen viewer"> |
+| **Details** | **Scanning** | **Tags** |
+| <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" width="240" alt="Document details with tags, custom fields and notes"> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.png" width="240" alt="A scanned page being trimmed to its corners"> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.png" width="240" alt="The tag list with colours and document counts"> |
+
+The documents shown are sample data.
 
 ## Requirements
 
@@ -23,9 +36,9 @@ Download the APK (`paperless-android-<version>.apk`) from the
 [releases on GitHub](https://github.com/naoya0117/paperless-android/releases) and install it.
 Each release lists the APK's SHA-256.
 
-> **GitHub and F-Droid:** the app on F-Droid (once it is listed there) is built and signed by F-Droid, so it has a
-> different signature from the APK on GitHub. Neither can update the other: to switch, uninstall the app first
-> (the app's data, including the accounts, is removed with it).
+> **F-Droid:** the app is not on F-Droid yet; a listing there is planned. An app on F-Droid is built and signed
+> by F-Droid, so it would have a different signature from the APK here, and neither could update the other:
+> switching would mean uninstalling the app first (its data, including the accounts, is removed with it).
 
 The APK is signed with the following certificate (SHA-256):
 
@@ -97,8 +110,8 @@ This project is based on and inspired by the community app
 [paperless-mobile](https://github.com/astubenbord/paperless-mobile) by Anton Stubenbord and contributors,
 a Flutter client for Paperless-ngx. Its feature set and API usage are used as a reference for this Kotlin implementation.
 
-Unlike the original, this project targets the current Paperless-ngx API
-(e.g. paginated tasks, tag hierarchy, document versions, trash, and `custom_field_query`).
+This project is written for the current Paperless-ngx REST API (version 10), including paginated tasks,
+tag hierarchy, trash and `custom_field_query`.
 
 This is an independent project and is not affiliated with, or endorsed by, the paperless-mobile or Paperless-ngx projects.
 

@@ -1,0 +1,11 @@
+# GitHub Pages (Settings → Pages → Deploy from a branch → main / docs).
+# index.md becomes the front page; the theme only styles it.
+title: paperless-android
+description: An Android client for Paperless-ngx
+theme: jekyll-theme-primer
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
