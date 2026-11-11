@@ -7,6 +7,18 @@ Kotlin で実装した [Paperless-ngx](https://github.com/paperless-ngx/paperles
 > **このリポジトリについて：** GitHub のリポジトリ
 > （[naoya0117/paperless-android](https://github.com/naoya0117/paperless-android)）は**ミラー**です。
 > 開発（Issue・レビュー・CI）は作者の Gitea サーバーで行い、そこから GitHub へ反映しています。
+>
+> アプリとリポジトリの概要を 1 ページにまとめたものが [`docs/index.ja.md`](docs/index.ja.md) です（GitHub Pages での公開にも使えます）。
+
+## スクリーンショット
+
+| ホーム | 文書の一覧 | ビューワ |
+|:---:|:---:|:---:|
+| <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" width="240" alt="ダッシュボードの保存済みビューを並べたホーム画面"> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" width="240" alt="サムネイル・担当者・タグ付きの文書一覧"> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" width="240" alt="全画面で PDF を表示しているビューワ"> |
+| **詳細** | **スキャン** | **タグ** |
+| <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" width="240" alt="タグ・カスタムフィールド・メモ付きの文書の詳細"> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.png" width="240" alt="スキャンしたページを 4 隅でトリミングする画面"> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.png" width="240" alt="色と文書数が付いたタグの一覧"> |
+
+画面に写っている文書はサンプルのデータです。
 
 ## 動作要件
 
@@ -21,9 +33,10 @@ Kotlin で実装した [Paperless-ngx](https://github.com/paperless-ngx/paperles
 [GitHub のリリース](https://github.com/naoya0117/paperless-android/releases)から APK（`paperless-android-<バージョン>.apk`）を
 ダウンロードしてインストールしてください。各リリースに APK の SHA-256 を記載しています。
 
-> **GitHub 版と F-Droid 版：** F-Droid 版（掲載され次第）は F-Droid がビルドして署名するため、GitHub の APK とは
-> 署名が異なります。互いに上書きして更新することはできません。切り替えるときは、先にアプリをアンインストールしてください
-> （アカウントを含むアプリのデータも削除されます）。
+> **F-Droid について：** まだ F-Droid には掲載されていません（掲載を目指しています）。
+> F-Droid のアプリは F-Droid がビルドして署名するため、掲載された場合、ここの APK とは署名が異なり、
+> 互いに上書きして更新することはできません。
+> 切り替えるときは、先にアプリをアンインストールする必要があります（アカウントを含むアプリのデータも削除されます）。
 
 APK は次の証明書（SHA-256）で署名しています。
 
@@ -94,8 +107,8 @@ paperless.signing.keyPassword=...
 [paperless-mobile](https://github.com/astubenbord/paperless-mobile)（Flutter 製の Paperless-ngx クライアント）を参考にしています。
 機能構成や API の利用方法を、この Kotlin 実装のリファレンスとしています。
 
-オリジナルとは異なり、本プロジェクトは現行の Paperless-ngx API
-（タスクのページング、タグ階層、ドキュメントのバージョン管理、ゴミ箱、`custom_field_query` など）に対応することを目指しています。
+本プロジェクトは、現行の Paperless-ngx REST API（バージョン 10）に合わせて実装しています
+（タスクのページング、タグ階層、ごみ箱、`custom_field_query` など）。
 
 本プロジェクトは独立したプロジェクトであり、paperless-mobile および Paperless-ngx プロジェクトとは提携・公認の関係にありません。
 
