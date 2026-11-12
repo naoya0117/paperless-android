@@ -1003,7 +1003,7 @@ private const val TAB_BAR_KEY = "tabBar"
 private const val SEARCH_BAR_KEY = "searchBar"
 
 /** Between tabs: the screens move at an even pace, easing in and out (not the default spring). */
-private val TAB_SLIDE = tween<IntOffset>(durationMillis = 350, easing = FastOutSlowInEasing)
+private val TAB_SLIDE = tween<IntOffset>(durationMillis = 250, easing = FastOutSlowInEasing)
 
 /**
  * Between tabs, the way the screens slide: towards the start for a tab further along the bar, back towards the
