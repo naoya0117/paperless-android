@@ -13,11 +13,9 @@ import com.naoya0117.paperless.core.data.UploadStorage
 import com.naoya0117.paperless.core.database.UploadQueue
 import com.naoya0117.paperless.core.datastore.AccountStore
 import com.naoya0117.paperless.core.datastore.SecretCipher
-import kotlinx.coroutines.CoroutineScope
+import com.naoya0117.paperless.core.testing.TestViewModels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -41,10 +39,13 @@ import java.time.LocalDateTime
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class ScanViewModelTest {
+    /** Every view model of a test, cleared in tearDown (before Main is reset). */
+    private val viewModels = TestViewModels()
+
     @get:Rule
     val folder = TemporaryFolder()
 
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val applicationScope = viewModels.applicationScope()
     private lateinit var viewModel: ScanViewModel
 
     private object XorCipher : SecretCipher {
@@ -80,13 +81,23 @@ class ScanViewModelTest {
                 UploadStorage(folder.newFolder("uploads")),
             )
         viewModel =
-            ScanViewModel(uploads, ApplicationProvider.getApplicationContext(), applicationScope, SavedStateHandle())
+            viewModels.create {
+                ScanViewModel(
+                    uploads,
+                    ApplicationProvider.getApplicationContext(),
+                    applicationScope,
+                    SavedStateHandle(),
+                )
+            }
     }
 
     @After
     fun tearDown() {
-        applicationScope.cancel()
-        Dispatchers.resetMain()
+        try {
+            viewModels.clear()
+        } finally {
+            Dispatchers.resetMain()
+        }
     }
 
     private fun image(name: String): Uri {

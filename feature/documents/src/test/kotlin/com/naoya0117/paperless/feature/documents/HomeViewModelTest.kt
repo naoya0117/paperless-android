@@ -11,6 +11,7 @@ import com.naoya0117.paperless.core.datastore.AccountStore
 import com.naoya0117.paperless.core.datastore.SecretCipher
 import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.AuthToken
+import com.naoya0117.paperless.core.testing.TestViewModels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -40,6 +41,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class HomeViewModelTest {
+    /** Every view model of a test, cleared in tearDown (before Main is reset). */
+    private val viewModels = TestViewModels()
+
     @get:Rule
     val folder = TemporaryFolder()
 
@@ -107,17 +111,23 @@ class HomeViewModelTest {
 
     @After
     fun tearDown() {
-        Dispatchers.resetMain()
-        server.close()
+        try {
+            viewModels.clear()
+        } finally {
+            Dispatchers.resetMain()
+            server.close()
+        }
     }
 
     private fun viewModel() =
-        HomeViewModel(
-            DocumentRepository(accounts, cache),
-            LabelRepository(accounts, cache),
-            accounts,
-            ApplicationProvider.getApplicationContext(),
-        )
+        viewModels.create {
+            HomeViewModel(
+                DocumentRepository(accounts, cache),
+                LabelRepository(accounts, cache),
+                accounts,
+                ApplicationProvider.getApplicationContext(),
+            )
+        }
 
     private suspend fun <T> Flow<T>.await(predicate: (T) -> Boolean): T =
         withContext(Dispatchers.Default.limitedParallelism(1)) { withTimeout(10_000) { first(predicate) } }

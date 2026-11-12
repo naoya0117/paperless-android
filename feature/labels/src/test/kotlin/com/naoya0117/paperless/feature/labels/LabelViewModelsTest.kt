@@ -14,6 +14,7 @@ import com.naoya0117.paperless.core.model.AuthToken
 import com.naoya0117.paperless.core.model.Matching
 import com.naoya0117.paperless.core.model.MatchingAlgorithm
 import com.naoya0117.paperless.core.model.Tag
+import com.naoya0117.paperless.core.testing.TestViewModels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -45,6 +46,9 @@ import java.util.concurrent.CopyOnWriteArrayList
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class LabelViewModelsTest {
+    /** Every view model of a test, cleared in tearDown (before Main is reset). */
+    private val viewModels = TestViewModels()
+
     @get:Rule
     val folder = TemporaryFolder()
 
@@ -123,8 +127,12 @@ class LabelViewModelsTest {
 
     @After
     fun tearDown() {
-        Dispatchers.resetMain()
-        server.close()
+        try {
+            viewModels.clear()
+        } finally {
+            Dispatchers.resetMain()
+            server.close()
+        }
     }
 
     private suspend fun signIn() =
@@ -134,18 +142,22 @@ class LabelViewModelsTest {
         withContext(Dispatchers.Default.limitedParallelism(1)) { withTimeout(10_000) { first(predicate) } }
 
     private fun listViewModel() =
-        LabelListViewModel(repository, SavedStateHandle(mapOf(LabelListViewModel.KIND_ARGUMENT to "tags")))
+        viewModels.create {
+            LabelListViewModel(repository, SavedStateHandle(mapOf(LabelListViewModel.KIND_ARGUMENT to "tags")))
+        }
 
     private fun editViewModel(id: Long? = null) =
-        LabelEditViewModel(
-            repository,
-            SavedStateHandle(
-                buildMap {
-                    put(LabelListViewModel.KIND_ARGUMENT, "tags")
-                    id?.let { put(LabelEditViewModel.LABEL_ID_ARGUMENT, it) }
-                },
-            ),
-        )
+        viewModels.create {
+            LabelEditViewModel(
+                repository,
+                SavedStateHandle(
+                    buildMap {
+                        put(LabelListViewModel.KIND_ARGUMENT, "tags")
+                        id?.let { put(LabelEditViewModel.LABEL_ID_ARGUMENT, it) }
+                    },
+                ),
+            )
+        }
 
     @Test
     fun `the list is refreshed when opened, sorted by name and searchable`() =

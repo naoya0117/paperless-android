@@ -1,16 +1,13 @@
 package com.naoya0117.paperless
 
 import androidx.lifecycle.SavedStateHandle
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.ViewModelStore
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
 import com.naoya0117.paperless.core.data.AccountRepository
 import com.naoya0117.paperless.core.data.PaperlessClientFactory
 import com.naoya0117.paperless.core.datastore.AccountStore
 import com.naoya0117.paperless.core.datastore.SecretCipher
 import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.AuthToken
+import com.naoya0117.paperless.core.testing.TestViewModels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -82,19 +79,19 @@ class AppViewModelTest {
     }
 
     /** Cleared after each test, so that none keeps collecting into the next one (which sets Main again). */
-    private val store = ViewModelStore()
+    private val viewModels = TestViewModels()
 
     private fun appViewModel(savedState: SavedStateHandle): AppViewModel =
-        ViewModelProvider.create(
-            store,
-            viewModelFactory { initializer { AppViewModel(accounts, savedState) } },
-        )["vm${store.keys().size}", AppViewModel::class]
+        viewModels.create { AppViewModel(accounts, savedState) }
 
     @After
     fun tearDown() {
-        store.clear()
-        Dispatchers.resetMain()
-        server.close()
+        try {
+            viewModels.clear()
+        } finally {
+            Dispatchers.resetMain()
+            server.close()
+        }
     }
 
     private suspend fun signIn(user: String) =

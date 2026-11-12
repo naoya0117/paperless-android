@@ -7,6 +7,7 @@ import com.naoya0117.paperless.core.datastore.AccountStore
 import com.naoya0117.paperless.core.datastore.SecretCipher
 import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.AuthToken
+import com.naoya0117.paperless.core.testing.TestViewModels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -36,6 +37,9 @@ import java.net.Proxy
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LoginViewModelTest {
+    /** Every view model of a test, cleared in tearDown (before Main is reset). */
+    private val viewModels = TestViewModels()
+
     @get:Rule
     val folder = TemporaryFolder()
 
@@ -81,13 +85,17 @@ class LoginViewModelTest {
                 },
                 {},
             )
-        viewModel = LoginViewModel(accounts, savedState)
+        viewModel = viewModels.create { LoginViewModel(accounts, savedState) }
     }
 
     @After
     fun tearDown() {
-        Dispatchers.resetMain()
-        server.close()
+        try {
+            viewModels.clear()
+        } finally {
+            Dispatchers.resetMain()
+            server.close()
+        }
     }
 
     private fun url() = server.url("/").toString()
@@ -300,7 +308,7 @@ class LoginViewModelTest {
         viewModel.setHeaders(listOf(HeaderInput("X-Proxy", "secret")))
         viewModel.setClientCertificate("my-cert")
 
-        val restored = LoginViewModel(accounts, savedState).state.value
+        val restored = viewModels.create { LoginViewModel(accounts, savedState) }.state.value
 
         assertEquals(url(), restored.serverUrl)
         assertEquals(LoginMethod.TOKEN, restored.method)
@@ -375,7 +383,7 @@ class LoginViewModelTest {
             viewModel.signInAgain(account.id)
             awaitState { it.headers.isNotEmpty() }
 
-            val restored = LoginViewModel(accounts, savedState)
+            val restored = viewModels.create { LoginViewModel(accounts, savedState) }
             assertEquals(listOf(HeaderInput("X-Proxy", "")), restored.state.value.headers)
             restored.signInAgain(account.id)
 
