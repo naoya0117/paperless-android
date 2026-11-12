@@ -84,6 +84,7 @@ import java.time.format.FormatStyle
  * end), with filter chips below it when the filter button is on.
  *
  * @param focusRequests bump to put the cursor into the field (e.g. when coming from the home screen)
+ * @param barModifier for the row of the field (not the filter chips), e.g. to keep it in place between screens
  */
 @Composable
 fun DocumentSearchBar(
@@ -91,6 +92,7 @@ fun DocumentSearchBar(
     navigationIcon: @Composable () -> Unit,
     actions: @Composable RowScope.() -> Unit,
     focusRequests: Int = 0,
+    barModifier: Modifier = Modifier,
 ) {
     val text by viewModel.searchText.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
@@ -107,7 +109,7 @@ fun DocumentSearchBar(
         }
     }
     Column(Modifier.fillMaxWidth().windowInsetsPadding(BAR_INSETS)) {
-        SearchBarRow(navigationIcon, actions) {
+        SearchBarRow(navigationIcon, actions, barModifier) {
             TextField(
                 value = text,
                 onValueChange = viewModel::setSearchText,
@@ -142,15 +144,20 @@ fun DocumentSearchBar(
     }
 }
 
-/** The same field on the home screen: tapping it goes to the documents to search there. */
+/**
+ * The same field on the home screen: tapping it goes to the documents to search there.
+ *
+ * @param barModifier for the row of the field, as in [DocumentSearchBar]
+ */
 @Composable
 fun DocumentSearchButton(
     onClick: () -> Unit,
     navigationIcon: @Composable () -> Unit,
     actions: @Composable RowScope.() -> Unit,
+    barModifier: Modifier = Modifier,
 ) {
     Column(Modifier.fillMaxWidth().windowInsetsPadding(BAR_INSETS)) {
-        SearchBarRow(navigationIcon, actions, onClick = onClick) {
+        SearchBarRow(navigationIcon, actions, barModifier, onClick = onClick) {
             Text(
                 stringResource(R.string.documents_search_hint),
                 style = MaterialTheme.typography.bodyLarge,
@@ -173,12 +180,13 @@ fun DocumentSearchButton(
 private fun SearchBarRow(
     navigationIcon: @Composable () -> Unit,
     actions: @Composable RowScope.() -> Unit,
+    modifier: Modifier,
     onClick: (() -> Unit)? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+        modifier = modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
     ) {
         val shape = CircleShape
         val color = MaterialTheme.colorScheme.surfaceContainerHigh

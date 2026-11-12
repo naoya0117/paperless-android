@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Switching between the tabs, including from the search field on the home screen, slides the screens sideways
-  (they faded); the tab bar stays in place
+  (they faded); the search field and the tab bar stay in place
 - The side menu is narrower (80% of the screen width, at most 300dp), leaving room on the right to tap and close it
 - README: the app is not on F-Droid yet and a listing there is planned; an app on F-Droid would be signed by
   F-Droid, so it and the APK on GitHub could not update each other

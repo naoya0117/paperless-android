@@ -14,6 +14,8 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
@@ -96,6 +98,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
@@ -415,7 +418,8 @@ fun MainShell(
         val openUploads = { navController.navigate(UPLOADS_ROUTE) }
 
         // Each screen has its bars (in a Scaffold of its own), so that they move with it, e.g. while the back
-        // gesture shows the screen underneath. Only the tab bar stays in place between the tabs (a shared element).
+        // gesture shows the screen underneath. Only the search field and the tab bar stay in place between the tabs
+        // (shared elements).
         Box(Modifier.fillMaxSize()) {
             SharedTransitionLayout {
                 NavHost(
@@ -424,12 +428,13 @@ fun MainShell(
                     // One animation for the back button and the back gesture (its own transitions are set to the same):
                     // screens slide in from the right and back out to it. Between tabs they slide side by side.
                     enterTransition = {
-                        slideIntoContainer(tabDirection() ?: SlideDirection.Start)
+                        tabDirection()?.let { slideIntoContainer(it, TAB_SLIDE) }
+                            ?: slideIntoContainer(SlideDirection.Start)
                     },
                     exitTransition = {
                         val direction = tabDirection()
                         if (direction != null) {
-                            slideOutOfContainer(direction)
+                            slideOutOfContainer(direction, TAB_SLIDE)
                         } else {
                             slideOutOfContainer(
                                 SlideDirection.Start,
@@ -464,6 +469,11 @@ fun MainShell(
                                             },
                                         navigationIcon = menuButton,
                                         actions = inboxAction,
+                                        barModifier =
+                                            Modifier.sharedElement(
+                                                rememberSharedContentState(SEARCH_BAR_KEY),
+                                                this@composable,
+                                            ),
                                     )
                                     UploadBanner(
                                         uploads,
@@ -512,6 +522,11 @@ fun MainShell(
                                                     navigationIcon = menuButton,
                                                     actions = inboxAction,
                                                     focusRequests = searchFocusRequests,
+                                                    barModifier =
+                                                        Modifier.sharedElement(
+                                                            rememberSharedContentState(SEARCH_BAR_KEY),
+                                                            this@composable,
+                                                        ),
                                                 )
                                                 UploadBanner(
                                                     uploads,
@@ -984,6 +999,12 @@ private fun ListScaffold(
 /** The tab bar is one element across the tabs: it stays in place while the screens slide under it. */
 private const val TAB_BAR_KEY = "tabBar"
 
+/** The search field of the home and documents tabs, likewise. */
+private const val SEARCH_BAR_KEY = "searchBar"
+
+/** Between tabs: the screens move at an even pace, easing in and out (not the default spring). */
+private val TAB_SLIDE = tween<IntOffset>(durationMillis = 350, easing = FastOutSlowInEasing)
+
 /**
  * Between tabs, the way the screens slide: towards the start for a tab further along the bar, back towards the
  * end for one before it; `null` when either screen is not a tab.
@@ -1000,7 +1021,7 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.tabDirection(): Sl
 
 /** Back to the previous screen: it comes back from the left (between tabs, the screens slide side by side). */
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.popEnter(): EnterTransition =
-    tabDirection()?.let { slideIntoContainer(it) }
+    tabDirection()?.let { slideIntoContainer(it, TAB_SLIDE) }
         ?: (
             slideIntoContainer(
                 SlideDirection.End,
@@ -1010,7 +1031,7 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.popEnter(): EnterT
 
 /** Back to the previous screen: the current one slides out to the right (between tabs, side by side). */
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.popExit(): ExitTransition =
-    slideOutOfContainer(tabDirection() ?: SlideDirection.End)
+    tabDirection()?.let { slideOutOfContainer(it, TAB_SLIDE) } ?: slideOutOfContainer(SlideDirection.End)
 
 /** Adding documents: picking files, or scanning paper with the camera. */
 @OptIn(ExperimentalMaterial3Api::class)
