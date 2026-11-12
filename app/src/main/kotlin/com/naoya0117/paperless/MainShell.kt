@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -774,7 +775,9 @@ private fun Drawer(
     onAbout: () -> Unit,
     onSignOut: () -> Unit,
 ) {
-    ModalDrawerSheet {
+    // Narrower than the Material default (up to 360dp) so a strip of the list stays
+    // visible on the right to tap and close the drawer.
+    ModalDrawerSheet(Modifier.fillMaxWidth(0.8f).widthIn(max = 300.dp)) {
         // Scrolls on small screens (e.g. in landscape).
         Column(Modifier.verticalScroll(rememberScrollState())) {
             var accountsOpen by rememberSaveable { mutableStateOf(false) }
