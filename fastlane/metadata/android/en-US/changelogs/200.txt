@@ -1,0 +1,2 @@
+- Switching between the tabs slides the screens sideways; the search field and the tab bar stay in place
+- The side menu is narrower, leaving room on the right to tap and close it
