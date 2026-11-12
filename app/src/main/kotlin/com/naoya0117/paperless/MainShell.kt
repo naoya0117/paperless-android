@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedContentTransitionScope.SlideDirection
+import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -470,9 +471,10 @@ fun MainShell(
                                         navigationIcon = menuButton,
                                         actions = inboxAction,
                                         barModifier =
-                                            Modifier.sharedElement(
+                                            Modifier.sharedBounds(
                                                 rememberSharedContentState(SEARCH_BAR_KEY),
                                                 this@composable,
+                                                boundsTransform = TAB_BOUNDS,
                                             ),
                                     )
                                     UploadBanner(
@@ -485,7 +487,11 @@ fun MainShell(
                                 TabBar(
                                     Tab.HOME,
                                     navController,
-                                    Modifier.sharedElement(rememberSharedContentState(TAB_BAR_KEY), this@composable),
+                                    Modifier.sharedElement(
+                                        rememberSharedContentState(TAB_BAR_KEY),
+                                        this@composable,
+                                        TAB_BOUNDS,
+                                    ),
                                 )
                             },
                         ) { padding ->
@@ -523,9 +529,10 @@ fun MainShell(
                                                     actions = inboxAction,
                                                     focusRequests = searchFocusRequests,
                                                     barModifier =
-                                                        Modifier.sharedElement(
+                                                        Modifier.sharedBounds(
                                                             rememberSharedContentState(SEARCH_BAR_KEY),
                                                             this@composable,
+                                                            boundsTransform = TAB_BOUNDS,
                                                         ),
                                                 )
                                                 UploadBanner(
@@ -545,6 +552,7 @@ fun MainShell(
                                             Modifier.sharedElement(
                                                 rememberSharedContentState(TAB_BAR_KEY),
                                                 this@composable,
+                                                TAB_BOUNDS,
                                             ),
                                         )
                                     }
@@ -999,11 +1007,19 @@ private fun ListScaffold(
 /** The tab bar is one element across the tabs: it stays in place while the screens slide under it. */
 private const val TAB_BAR_KEY = "tabBar"
 
-/** The search field of the home and documents tabs, likewise. */
+/**
+ * The search field of the home and documents tabs, likewise; the two fields (the button on the home screen, the
+ * text field on the documents tab) fade into each other inside it.
+ */
 private const val SEARCH_BAR_KEY = "searchBar"
 
 /** Between tabs: the screens move at an even pace, easing in and out (not the default spring). */
-private val TAB_SLIDE = tween<IntOffset>(durationMillis = 250, easing = FastOutSlowInEasing)
+private const val TAB_SLIDE_MILLIS = 250
+private val TAB_SLIDE = tween<IntOffset>(TAB_SLIDE_MILLIS, easing = FastOutSlowInEasing)
+
+/** The fixed elements follow the same pace if their size differs (e.g. a taller text field with a large font). */
+@OptIn(ExperimentalSharedTransitionApi::class)
+private val TAB_BOUNDS = BoundsTransform { _, _ -> tween(TAB_SLIDE_MILLIS, easing = FastOutSlowInEasing) }
 
 /**
  * Between tabs, the way the screens slide: towards the start for a tab further along the bar, back towards the
