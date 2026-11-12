@@ -411,8 +411,11 @@ fun MainShell(
         /** Bumped when the home screen's search field is tapped: the documents tab's field takes the cursor. */
         var searchFocusRequests by rememberSaveable { mutableIntStateOf(0) }
 
+        /** The upload banner of the home and documents tabs opens the uploads. */
+        val openUploads = { navController.navigate(UPLOADS_ROUTE) }
+
         // Each screen has its bars (in a Scaffold of its own), so that they move with it, e.g. while the back
-        // gesture shows the screen underneath.
+        // gesture shows the screen underneath. Only the tab bar stays in place between the tabs (a shared element).
         Box(Modifier.fillMaxSize()) {
             SharedTransitionLayout {
                 NavHost(
@@ -442,7 +445,6 @@ fun MainShell(
                     predictivePopExitTransition = { popExit() },
                 ) {
                     composable(HOME_ROUTE) {
-                        val tabBarModifier = Modifier.sharedElement(rememberSharedContentState(TAB_BAR_KEY), this)
                         ListScaffold(
                             topBar = {
                                 // Searching happens on the documents tab.
@@ -465,11 +467,17 @@ fun MainShell(
                                     )
                                     UploadBanner(
                                         uploads,
-                                        onClick = dropUnlessResumed { navController.navigate(UPLOADS_ROUTE) },
+                                        onClick = dropUnlessResumed(block = openUploads),
                                     )
                                 }
                             },
-                            bottomBar = { TabBar(Tab.HOME, navController, tabBarModifier) },
+                            bottomBar = {
+                                TabBar(
+                                    Tab.HOME,
+                                    navController,
+                                    Modifier.sharedElement(rememberSharedContentState(TAB_BAR_KEY), this@composable),
+                                )
+                            },
                         ) { padding ->
                             HomeScreen(
                                 onOpenDocument = { navController.navigate("document/${it.id}") },
@@ -491,7 +499,6 @@ fun MainShell(
                                 ),
                         ) {
                             val shown = Tab.entries.firstOrNull { it.route == path }
-                            val tabBarModifier = Modifier.sharedElement(rememberSharedContentState(TAB_BAR_KEY), this)
                             val listViewModel: DocumentListViewModel = hiltViewModel()
                             // Not from a list that is leaving (e.g. a tap during a transition).
                             val entryLifecycle = LocalLifecycleOwner.current.lifecycle
@@ -508,19 +515,25 @@ fun MainShell(
                                                 )
                                                 UploadBanner(
                                                     uploads,
-                                                    onClick =
-                                                        dropUnlessResumed {
-                                                            navController.navigate(
-                                                                UPLOADS_ROUTE,
-                                                            )
-                                                        },
+                                                    onClick = dropUnlessResumed(block = openUploads),
                                                 )
                                             }
                                         path == INBOX_ROUTE -> backBar(stringResource(R.string.title_inbox))
                                         else -> error("No bar for $path")
                                     }
                                 },
-                                bottomBar = { if (shown != null) TabBar(shown, navController, tabBarModifier) },
+                                bottomBar = {
+                                    if (shown != null) {
+                                        TabBar(
+                                            shown,
+                                            navController,
+                                            Modifier.sharedElement(
+                                                rememberSharedContentState(TAB_BAR_KEY),
+                                                this@composable,
+                                            ),
+                                        )
+                                    }
+                                },
                                 floatingActionButton = {
                                     if (shown == Tab.DOCUMENTS) {
                                         FloatingActionButton(
