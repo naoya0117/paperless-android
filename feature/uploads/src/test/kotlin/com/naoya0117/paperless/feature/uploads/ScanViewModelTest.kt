@@ -93,8 +93,11 @@ class ScanViewModelTest {
 
     @After
     fun tearDown() {
-        viewModels.clear()
-        Dispatchers.resetMain()
+        try {
+            viewModels.clear()
+        } finally {
+            Dispatchers.resetMain()
+        }
     }
 
     private fun image(name: String): Uri {

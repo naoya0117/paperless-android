@@ -120,9 +120,12 @@ class DocumentEditViewModelTest {
 
     @After
     fun tearDown() {
-        viewModels.clear()
-        Dispatchers.resetMain()
-        server.close()
+        try {
+            viewModels.clear()
+        } finally {
+            Dispatchers.resetMain()
+            server.close()
+        }
     }
 
     private val savedState = SavedStateHandle(mapOf(DocumentEditViewModel.DOCUMENT_ID_ARGUMENT to 1L))

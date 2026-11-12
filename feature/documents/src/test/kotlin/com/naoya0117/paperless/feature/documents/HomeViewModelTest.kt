@@ -111,9 +111,12 @@ class HomeViewModelTest {
 
     @After
     fun tearDown() {
-        viewModels.clear()
-        Dispatchers.resetMain()
-        server.close()
+        try {
+            viewModels.clear()
+        } finally {
+            Dispatchers.resetMain()
+            server.close()
+        }
     }
 
     private fun viewModel() =

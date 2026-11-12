@@ -17,19 +17,23 @@ import kotlinx.coroutines.withTimeout
 
 /**
  * The view models of a test, and the scopes their work outlives them in, to [clear] at the end of the test before
- * `Dispatchers.resetMain()`: a coroutine resuming on another thread while Main is reset (or set by the next test)
+ * `Dispatchers.resetMain()` (in a `finally`, so that Main is reset even if this times out): a coroutine resuming on another thread while Main is reset (or set by the next test)
  * fails with "Dispatchers.Main is used concurrently with setting it".
  */
 class TestViewModels {
     @PublishedApi
     internal val store = ViewModelStore()
 
+    /** The key of the next view model (`ViewModelStore.keys()` is restricted to the lifecycle library). */
+    @PublishedApi
+    internal var count = 0
+
     private val scopes = mutableListOf<CoroutineScope>()
 
     /** Creates a view model that is cleared (`onCleared`, its scope cancelled) and awaited by [clear]. */
     inline fun <reified VM : ViewModel> create(crossinline create: () -> VM): VM =
         ViewModelProvider
-            .create(store, viewModelFactory { initializer { create() } })["vm${store.keys().size}", VM::class]
+            .create(store, viewModelFactory { initializer { create() } })["vm${count++}", VM::class]
             .also { track(it.viewModelScope) }
 
     /** A scope for work that outlives a view model (like the app's application scope), cancelled by [clear]. */

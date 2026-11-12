@@ -127,9 +127,12 @@ class LabelViewModelsTest {
 
     @After
     fun tearDown() {
-        viewModels.clear()
-        Dispatchers.resetMain()
-        server.close()
+        try {
+            viewModels.clear()
+        } finally {
+            Dispatchers.resetMain()
+            server.close()
+        }
     }
 
     private suspend fun signIn() =

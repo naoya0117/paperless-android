@@ -140,9 +140,12 @@ class DocumentListViewModelTest {
 
     @After
     fun tearDown() {
-        viewModels.clear()
-        Dispatchers.resetMain()
-        server.close()
+        try {
+            viewModels.clear()
+        } finally {
+            Dispatchers.resetMain()
+            server.close()
+        }
     }
 
     /** Every view model of a test, cleared in [tearDown]. */

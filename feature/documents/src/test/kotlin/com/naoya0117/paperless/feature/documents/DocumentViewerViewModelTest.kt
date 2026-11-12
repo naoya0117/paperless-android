@@ -134,9 +134,12 @@ class DocumentViewerViewModelTest {
 
     @After
     fun tearDown() {
-        viewModels.clear()
-        Dispatchers.resetMain()
-        server.close()
+        try {
+            viewModels.clear()
+        } finally {
+            Dispatchers.resetMain()
+            server.close()
+        }
     }
 
     private val filesDir by lazy { folder.newFolder() }

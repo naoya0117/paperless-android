@@ -127,9 +127,12 @@ class TrashViewModelTest {
 
     @After
     fun tearDown() {
-        viewModels.clear()
-        Dispatchers.resetMain()
-        server.close()
+        try {
+            viewModels.clear()
+        } finally {
+            Dispatchers.resetMain()
+            server.close()
+        }
     }
 
     private suspend fun <T> Flow<T>.await(predicate: (T) -> Boolean): T =
