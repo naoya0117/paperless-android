@@ -15,11 +15,9 @@ import com.naoya0117.paperless.core.datastore.SecretCipher
 import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.AuthToken
 import com.naoya0117.paperless.core.model.Document
-import kotlinx.coroutines.CoroutineScope
+import com.naoya0117.paperless.core.testing.TestViewModels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -50,6 +48,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class DocumentViewerViewModelTest {
+    /** Every view model of a test, cleared in tearDown (before Main is reset). */
+    private val viewModels = TestViewModels()
+
     @get:Rule
     val folder = TemporaryFolder()
 
@@ -58,7 +59,7 @@ class DocumentViewerViewModelTest {
     private lateinit var accounts: AccountRepository
     private val offline = AtomicBoolean(false)
     private val deleted = AtomicBoolean(false)
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val applicationScope = viewModels.applicationScope()
 
     @Volatile private var previewType = "image/png"
 
@@ -133,7 +134,7 @@ class DocumentViewerViewModelTest {
 
     @After
     fun tearDown() {
-        applicationScope.cancel()
+        viewModels.clear()
         Dispatchers.resetMain()
         server.close()
     }
@@ -141,18 +142,20 @@ class DocumentViewerViewModelTest {
     private val filesDir by lazy { folder.newFolder() }
 
     private fun viewModel() =
-        DocumentViewerViewModel(
-            DocumentRepository(accounts, cache),
-            fileRepository,
-            LabelRepository(accounts, cache),
-            SavedStateHandle(mapOf(DocumentViewerViewModel.DOCUMENT_ID_ARGUMENT to 1L)),
-            DocumentActions(
-                fileRepository,
+        viewModels.create {
+            DocumentViewerViewModel(
                 DocumentRepository(accounts, cache),
-                ApplicationProvider.getApplicationContext(),
-            ),
-            applicationScope,
-        )
+                fileRepository,
+                LabelRepository(accounts, cache),
+                SavedStateHandle(mapOf(DocumentViewerViewModel.DOCUMENT_ID_ARGUMENT to 1L)),
+                DocumentActions(
+                    fileRepository,
+                    DocumentRepository(accounts, cache),
+                    ApplicationProvider.getApplicationContext(),
+                ),
+                applicationScope,
+            )
+        }
 
     private val fileRepository by lazy { DocumentFileRepository(accounts, DocumentFileStorage(filesDir)) }
 

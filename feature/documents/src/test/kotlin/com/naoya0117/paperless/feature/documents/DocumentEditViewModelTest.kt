@@ -12,6 +12,7 @@ import com.naoya0117.paperless.core.datastore.AccountStore
 import com.naoya0117.paperless.core.datastore.SecretCipher
 import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.AuthToken
+import com.naoya0117.paperless.core.testing.TestViewModels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -45,6 +46,9 @@ import java.util.concurrent.atomic.AtomicReference
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class DocumentEditViewModelTest {
+    /** Every view model of a test, cleared in tearDown (before Main is reset). */
+    private val viewModels = TestViewModels()
+
     @get:Rule
     val folder = TemporaryFolder()
 
@@ -116,6 +120,7 @@ class DocumentEditViewModelTest {
 
     @After
     fun tearDown() {
+        viewModels.clear()
         Dispatchers.resetMain()
         server.close()
     }
@@ -123,7 +128,9 @@ class DocumentEditViewModelTest {
     private val savedState = SavedStateHandle(mapOf(DocumentEditViewModel.DOCUMENT_ID_ARGUMENT to 1L))
 
     private fun viewModel() =
-        DocumentEditViewModel(DocumentRepository(accounts, cache), LabelRepository(accounts, cache), savedState)
+        viewModels.create {
+            DocumentEditViewModel(DocumentRepository(accounts, cache), LabelRepository(accounts, cache), savedState)
+        }
 
     private suspend fun signIn() =
         accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls())

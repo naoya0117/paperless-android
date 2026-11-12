@@ -14,11 +14,9 @@ import com.naoya0117.paperless.core.datastore.SecretCipher
 import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.AuthToken
 import com.naoya0117.paperless.core.model.Upload
-import kotlinx.coroutines.CoroutineScope
+import com.naoya0117.paperless.core.testing.TestViewModels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -46,6 +44,9 @@ import java.util.concurrent.CopyOnWriteArrayList
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class UploadsViewModelTest {
+    /** Every view model of a test, cleared in tearDown (before Main is reset). */
+    private val viewModels = TestViewModels()
+
     @get:Rule
     val folder = TemporaryFolder()
 
@@ -54,7 +55,7 @@ class UploadsViewModelTest {
     private val scheduled = CopyOnWriteArrayList<String>()
     private lateinit var accounts: AccountRepository
     private lateinit var viewModel: UploadsViewModel
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val applicationScope = viewModels.applicationScope()
 
     private object XorCipher : SecretCipher {
         override fun encrypt(plain: ByteArray) = plain.map { (it.toInt() xor 0x33).toByte() }.toByteArray()
@@ -95,12 +96,19 @@ class UploadsViewModelTest {
                 override fun cancel(uploadId: String) = Unit
             }
         val repository = UploadRepository(accounts, queue, scheduler, UploadStorage(folder.newFolder("uploads")))
-        viewModel = UploadsViewModel(repository, ApplicationProvider.getApplicationContext(), applicationScope)
+        viewModel =
+            viewModels.create {
+                UploadsViewModel(
+                    repository,
+                    ApplicationProvider.getApplicationContext(),
+                    applicationScope,
+                )
+            }
     }
 
     @After
     fun tearDown() {
-        applicationScope.cancel()
+        viewModels.clear()
         Dispatchers.resetMain()
         server.close()
     }

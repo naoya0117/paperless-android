@@ -9,6 +9,7 @@ import com.naoya0117.paperless.core.datastore.AccountStore
 import com.naoya0117.paperless.core.datastore.SecretCipher
 import com.naoya0117.paperless.core.model.AccountTls
 import com.naoya0117.paperless.core.model.AuthToken
+import com.naoya0117.paperless.core.testing.TestViewModels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -39,6 +40,9 @@ import java.util.concurrent.CopyOnWriteArrayList
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class TrashViewModelTest {
+    /** Every view model of a test, cleared in tearDown (before Main is reset). */
+    private val viewModels = TestViewModels()
+
     @get:Rule
     val folder = TemporaryFolder()
 
@@ -123,6 +127,7 @@ class TrashViewModelTest {
 
     @After
     fun tearDown() {
+        viewModels.clear()
         Dispatchers.resetMain()
         server.close()
     }
@@ -132,7 +137,7 @@ class TrashViewModelTest {
 
     private suspend fun viewModel(): TrashViewModel {
         accounts.signInWithToken(server.url("/").toString(), AuthToken("abc"), tls = AccountTls())
-        return TrashViewModel(TrashRepository(accounts))
+        return viewModels.create { TrashViewModel(TrashRepository(accounts)) }
     }
 
     @Test
