@@ -9,8 +9,14 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.AnimatedContentTransitionScope.SlideDirection
+import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
@@ -93,6 +99,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
@@ -177,7 +184,7 @@ private const val EDIT_ROUTE = "document/{${DocumentEditViewModel.DOCUMENT_ID_AR
  * The signed-in app: bottom tabs (home, documents) under a top bar with the drawer (hamburger menu) and, on
  * the documents tab, the inbox button; and the screens opened from them.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun MainShell(
     account: Account,
@@ -408,126 +415,201 @@ fun MainShell(
         /** Bumped when the home screen's search field is tapped: the documents tab's field takes the cursor. */
         var searchFocusRequests by rememberSaveable { mutableIntStateOf(0) }
 
+        /** The upload banner of the home and documents tabs opens the uploads. */
+        val openUploads = { navController.navigate(UPLOADS_ROUTE) }
+
         // Each screen has its bars (in a Scaffold of its own), so that they move with it, e.g. while the back
-        // gesture shows the screen underneath.
+        // gesture shows the screen underneath. Only the search field and the tab bar stay in place between the tabs
+        // (shared elements).
         Box(Modifier.fillMaxSize()) {
-            NavHost(
-                navController = navController,
-                startDestination = HOME_ROUTE,
-                // One animation for the back button and the back gesture (its own transitions are set to the same):
-                // screens slide in from the right and back out to it. Between tabs they fade.
-                enterTransition = {
-                    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
-                        fadeIn()
-                    } else {
-                        slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start)
-                    }
-                },
-                exitTransition = {
-                    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
-                        fadeOut()
-                    } else {
-                        slideOutOfContainer(
-                            AnimatedContentTransitionScope.SlideDirection.Start,
-                            targetOffset = { it / 4 },
-                        ) +
-                            fadeOut()
-                    }
-                },
-                popEnterTransition = { popEnter() },
-                popExitTransition = { popExit() },
-                // The back gesture: the same as the back button (by default it shrinks the screen instead).
-                predictivePopEnterTransition = { popEnter() },
-                predictivePopExitTransition = { popExit() },
-            ) {
-                composable(HOME_ROUTE) {
-                    ListScaffold(
-                        topBar = {
-                            // Searching happens on the documents tab.
-                            Column {
-                                DocumentSearchButton(
-                                    onClick =
-                                        dropUnlessResumed {
-                                            searchFocusRequests++
-                                            navController.navigate(DOCUMENTS_ROUTE) {
-                                                popUpTo(navController.graph.findStartDestination().id) {
-                                                    saveState =
-                                                        true
+            SharedTransitionLayout {
+                NavHost(
+                    navController = navController,
+                    startDestination = HOME_ROUTE,
+                    // One animation for the back button and the back gesture (its own transitions are set to the same):
+                    // screens slide in from the right and back out to it. Between tabs they slide side by side.
+                    enterTransition = {
+                        tabDirection()?.let { slideIntoContainer(it, TAB_SLIDE) }
+                            ?: slideIntoContainer(SlideDirection.Start)
+                    },
+                    exitTransition = {
+                        val direction = tabDirection()
+                        if (direction != null) {
+                            slideOutOfContainer(direction, TAB_SLIDE)
+                        } else {
+                            slideOutOfContainer(
+                                SlideDirection.Start,
+                                targetOffset = { it / 4 },
+                            ) +
+                                fadeOut()
+                        }
+                    },
+                    popEnterTransition = { popEnter() },
+                    popExitTransition = { popExit() },
+                    // The back gesture: the same as the back button (by default it shrinks the screen instead).
+                    predictivePopEnterTransition = { popEnter() },
+                    predictivePopExitTransition = { popExit() },
+                ) {
+                    composable(HOME_ROUTE) {
+                        ListScaffold(
+                            topBar = {
+                                // Searching happens on the documents tab.
+                                Column {
+                                    DocumentSearchButton(
+                                        onClick =
+                                            dropUnlessResumed {
+                                                searchFocusRequests++
+                                                navController.navigate(DOCUMENTS_ROUTE) {
+                                                    popUpTo(navController.graph.findStartDestination().id) {
+                                                        saveState =
+                                                            true
+                                                    }
+                                                    launchSingleTop = true
+                                                    restoreState = true
                                                 }
-                                                launchSingleTop = true
-                                                restoreState = true
-                                            }
-                                        },
-                                    navigationIcon = menuButton,
-                                    actions = inboxAction,
+                                            },
+                                        navigationIcon = menuButton,
+                                        actions = inboxAction,
+                                        barModifier =
+                                            Modifier.sharedBounds(
+                                                rememberSharedContentState(SEARCH_BAR_KEY),
+                                                this@composable,
+                                                boundsTransform = TAB_BOUNDS,
+                                            ),
+                                    )
+                                    UploadBanner(
+                                        uploads,
+                                        onClick = dropUnlessResumed(block = openUploads),
+                                    )
+                                }
+                            },
+                            bottomBar = {
+                                TabBar(
+                                    Tab.HOME,
+                                    navController,
+                                    Modifier.sharedElement(
+                                        rememberSharedContentState(TAB_BAR_KEY),
+                                        this@composable,
+                                        TAB_BOUNDS,
+                                    ),
                                 )
-                                UploadBanner(
-                                    uploads,
-                                    onClick = dropUnlessResumed { navController.navigate(UPLOADS_ROUTE) },
+                            },
+                        ) { padding ->
+                            HomeScreen(
+                                onOpenDocument = { navController.navigate("document/${it.id}") },
+                                onOpenView = { id -> navController.navigate("view/$id") },
+                                modifier = Modifier.padding(padding),
+                                onRefresh = { inbox.refresh(force = true) },
+                            )
+                        }
+                    }
+                    LIST_ROUTES.forEach { (path, mode) ->
+                        composable(
+                            route = path,
+                            arguments =
+                                listOf(
+                                    navArgument(DocumentListViewModel.MODE_ARGUMENT) {
+                                        type = NavType.StringType
+                                        defaultValue = mode.name
+                                    },
+                                ),
+                        ) {
+                            val shown = Tab.entries.firstOrNull { it.route == path }
+                            val listViewModel: DocumentListViewModel = hiltViewModel()
+                            // Not from a list that is leaving (e.g. a tap during a transition).
+                            val entryLifecycle = LocalLifecycleOwner.current.lifecycle
+                            ListScaffold(
+                                topBar = {
+                                    when {
+                                        shown == Tab.DOCUMENTS ->
+                                            Column {
+                                                DocumentSearchBar(
+                                                    viewModel = listViewModel,
+                                                    navigationIcon = menuButton,
+                                                    actions = inboxAction,
+                                                    focusRequests = searchFocusRequests,
+                                                    barModifier =
+                                                        Modifier.sharedBounds(
+                                                            rememberSharedContentState(SEARCH_BAR_KEY),
+                                                            this@composable,
+                                                            boundsTransform = TAB_BOUNDS,
+                                                        ),
+                                                )
+                                                UploadBanner(
+                                                    uploads,
+                                                    onClick = dropUnlessResumed(block = openUploads),
+                                                )
+                                            }
+                                        path == INBOX_ROUTE -> backBar(stringResource(R.string.title_inbox))
+                                        else -> error("No bar for $path")
+                                    }
+                                },
+                                bottomBar = {
+                                    if (shown != null) {
+                                        TabBar(
+                                            shown,
+                                            navController,
+                                            Modifier.sharedElement(
+                                                rememberSharedContentState(TAB_BAR_KEY),
+                                                this@composable,
+                                                TAB_BOUNDS,
+                                            ),
+                                        )
+                                    }
+                                },
+                                floatingActionButton = {
+                                    if (shown == Tab.DOCUMENTS) {
+                                        FloatingActionButton(
+                                            onClick = dropUnlessResumed { addMenu = true },
+                                        ) {
+                                            Icon(
+                                                Icons.Outlined.UploadFile,
+                                                contentDescription = stringResource(R.string.upload_files),
+                                            )
+                                        }
+                                    }
+                                },
+                            ) { padding ->
+                                DocumentListScreen(
+                                    viewModel = listViewModel,
+                                    onOpenDocument = { navController.navigate("document/${it.id}") },
+                                    onEditDocument = { id ->
+                                        if (entryLifecycle.currentState.isAtLeast(
+                                                Lifecycle.State.RESUMED,
+                                            )
+                                        ) {
+                                            navController.navigate("document/$id/edit")
+                                        }
+                                    },
+                                    snackbar = snackbar,
+                                    modifier = Modifier.padding(padding),
+                                    // The inbox count is shown on the home and documents tabs (home refreshes it itself).
+                                    onRefresh = { if (path == DOCUMENTS_ROUTE) inbox.refresh(force = true) },
                                 )
                             }
-                        },
-                        bottomBar = { TabBar(Tab.HOME, navController) },
-                    ) { padding ->
-                        HomeScreen(
-                            onOpenDocument = { navController.navigate("document/${it.id}") },
-                            onOpenView = { id -> navController.navigate("view/$id") },
-                            modifier = Modifier.padding(padding),
-                            onRefresh = { inbox.refresh(force = true) },
-                        )
+                        }
                     }
-                }
-                LIST_ROUTES.forEach { (path, mode) ->
                     composable(
-                        route = path,
+                        VIEW_ROUTE,
                         arguments =
                             listOf(
                                 navArgument(DocumentListViewModel.MODE_ARGUMENT) {
                                     type = NavType.StringType
-                                    defaultValue = mode.name
+                                    defaultValue = DocumentListMode.VIEW.name
                                 },
+                                navArgument(DocumentListViewModel.VIEW_ID_ARGUMENT) { type = NavType.LongType },
                             ),
-                    ) {
-                        val shown = Tab.entries.firstOrNull { it.route == path }
-                        val listViewModel: DocumentListViewModel = hiltViewModel()
+                    ) { entry ->
+                        // A saved view is titled with its name.
+                        val id = entry.arguments?.getLong(DocumentListViewModel.VIEW_ID_ARGUMENT)
+                        val name =
+                            allSavedViews.firstOrNull { it.id == id }?.name ?: stringResource(R.string.drawer_views)
                         // Not from a list that is leaving (e.g. a tap during a transition).
                         val entryLifecycle = LocalLifecycleOwner.current.lifecycle
                         ListScaffold(
-                            topBar = {
-                                when {
-                                    shown == Tab.DOCUMENTS ->
-                                        Column {
-                                            DocumentSearchBar(
-                                                viewModel = listViewModel,
-                                                navigationIcon = menuButton,
-                                                actions = inboxAction,
-                                                focusRequests = searchFocusRequests,
-                                            )
-                                            UploadBanner(
-                                                uploads,
-                                                onClick = dropUnlessResumed { navController.navigate(UPLOADS_ROUTE) },
-                                            )
-                                        }
-                                    path == INBOX_ROUTE -> backBar(stringResource(R.string.title_inbox))
-                                    else -> error("No bar for $path")
-                                }
-                            },
-                            bottomBar = { if (shown != null) TabBar(shown, navController) },
-                            floatingActionButton = {
-                                if (shown == Tab.DOCUMENTS) {
-                                    FloatingActionButton(
-                                        onClick = dropUnlessResumed { addMenu = true },
-                                    ) {
-                                        Icon(
-                                            Icons.Outlined.UploadFile,
-                                            contentDescription = stringResource(R.string.upload_files),
-                                        )
-                                    }
-                                }
-                            },
+                            topBar = { backBar(name) },
                         ) { padding ->
                             DocumentListScreen(
-                                viewModel = listViewModel,
                                 onOpenDocument = { navController.navigate("document/${it.id}") },
                                 onEditDocument = { id ->
                                     if (entryLifecycle.currentState.isAtLeast(
@@ -539,154 +621,118 @@ fun MainShell(
                                 },
                                 snackbar = snackbar,
                                 modifier = Modifier.padding(padding),
-                                // The inbox count is shown on the home and documents tabs (home refreshes it itself).
-                                onRefresh = { if (path == DOCUMENTS_ROUTE) inbox.refresh(force = true) },
                             )
                         }
                     }
-                }
-                composable(
-                    VIEW_ROUTE,
-                    arguments =
-                        listOf(
-                            navArgument(DocumentListViewModel.MODE_ARGUMENT) {
-                                type = NavType.StringType
-                                defaultValue = DocumentListMode.VIEW.name
-                            },
-                            navArgument(DocumentListViewModel.VIEW_ID_ARGUMENT) { type = NavType.LongType },
-                        ),
-                ) { entry ->
-                    // A saved view is titled with its name.
-                    val id = entry.arguments?.getLong(DocumentListViewModel.VIEW_ID_ARGUMENT)
-                    val name = allSavedViews.firstOrNull { it.id == id }?.name ?: stringResource(R.string.drawer_views)
-                    // Not from a list that is leaving (e.g. a tap during a transition).
-                    val entryLifecycle = LocalLifecycleOwner.current.lifecycle
-                    ListScaffold(
-                        topBar = { backBar(name) },
-                    ) { padding ->
-                        DocumentListScreen(
-                            onOpenDocument = { navController.navigate("document/${it.id}") },
-                            onEditDocument = { id ->
-                                if (entryLifecycle.currentState.isAtLeast(
-                                        Lifecycle.State.RESUMED,
-                                    )
-                                ) {
-                                    navController.navigate("document/$id/edit")
+                    composable(
+                        DOCUMENT_ROUTE,
+                        arguments =
+                            listOf(
+                                navArgument(DocumentViewerViewModel.DOCUMENT_ID_ARGUMENT) {
+                                    type =
+                                        NavType.LongType
+                                },
+                            ),
+                    ) {
+                        DocumentViewerScreen(
+                            onBack = { navController.popBackStack() },
+                            onEdit = { id -> navController.navigate("document/$id/edit") },
+                        )
+                    }
+                    composable(
+                        EDIT_ROUTE,
+                        arguments =
+                            listOf(
+                                navArgument(DocumentEditViewModel.DOCUMENT_ID_ARGUMENT) { type = NavType.LongType },
+                            ),
+                    ) {
+                        DocumentEditScreen(onClose = { navController.popBackStack() })
+                    }
+                    composable(
+                        LABELS_ROUTE,
+                        arguments = listOf(navArgument(LabelListViewModel.KIND_ARGUMENT) { type = NavType.StringType }),
+                    ) { entry ->
+                        LabelListScreen(
+                            // Once only (e.g. not again when tapped twice during the exit animation).
+                            onBack = dropUnlessResumed { navController.navigateUp() },
+                            onOpen = { kind, id ->
+                                if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                    navController.navigate("labels/${kind.key}/edit?id=${id ?: NEW_LABEL}")
                                 }
                             },
-                            snackbar = snackbar,
-                            modifier = Modifier.padding(padding),
                         )
                     }
-                }
-                composable(
-                    DOCUMENT_ROUTE,
-                    arguments =
-                        listOf(
-                            navArgument(DocumentViewerViewModel.DOCUMENT_ID_ARGUMENT) {
-                                type =
-                                    NavType.LongType
-                            },
-                        ),
-                ) {
-                    DocumentViewerScreen(
-                        onBack = { navController.popBackStack() },
-                        onEdit = { id -> navController.navigate("document/$id/edit") },
-                    )
-                }
-                composable(
-                    EDIT_ROUTE,
-                    arguments =
-                        listOf(
-                            navArgument(DocumentEditViewModel.DOCUMENT_ID_ARGUMENT) { type = NavType.LongType },
-                        ),
-                ) {
-                    DocumentEditScreen(onClose = { navController.popBackStack() })
-                }
-                composable(
-                    LABELS_ROUTE,
-                    arguments = listOf(navArgument(LabelListViewModel.KIND_ARGUMENT) { type = NavType.StringType }),
-                ) { entry ->
-                    LabelListScreen(
-                        // Once only (e.g. not again when tapped twice during the exit animation).
-                        onBack = dropUnlessResumed { navController.navigateUp() },
-                        onOpen = { kind, id ->
-                            if (entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                                navController.navigate("labels/${kind.key}/edit?id=${id ?: NEW_LABEL}")
-                            }
-                        },
-                    )
-                }
-                composable(
-                    LABEL_EDIT_ROUTE,
-                    arguments =
-                        listOf(
-                            navArgument(LabelListViewModel.KIND_ARGUMENT) { type = NavType.StringType },
-                            navArgument(LabelEditViewModel.LABEL_ID_ARGUMENT) {
-                                type = NavType.LongType
-                                defaultValue = NEW_LABEL
-                            },
-                        ),
-                ) {
-                    LabelEditScreen(onClose = dropUnlessResumed { navController.navigateUp() })
-                }
-                composable(
-                    SCAN_ROUTE,
-                    arguments =
-                        listOf(
-                            navArgument("camera") {
-                                type = NavType.BoolType
-                                defaultValue = true
-                            },
-                        ),
-                ) { entry ->
-                    ScanScreen(
-                        startWithCamera = entry.arguments?.getBoolean("camera") ?: true,
-                        initialImages = imagesToScan,
-                        onImagesTaken = { imagesToScan = emptyList() },
-                        onClose = dropUnlessResumed { navController.navigateUp() },
-                        // Its progress: the uploads, instead of the scan.
-                        onUploaded = {
-                            navController.navigate(UPLOADS_ROUTE) { popUpTo(SCAN_ROUTE) { inclusive = true } }
-                        },
-                    )
-                }
-                composable(TRASH_ROUTE) {
-                    TrashScreen(onBack = dropUnlessResumed { navController.navigateUp() })
-                }
-                composable(ABOUT_ROUTE) {
-                    AboutScreen(
-                        onBack = dropUnlessResumed { navController.navigateUp() },
-                        onOpenText = { text ->
-                            // Once only: a double tap must not open the text twice.
-                            if (navController.currentDestination?.route == ABOUT_ROUTE) {
-                                navController.navigate("about/${text.name}")
-                            }
-                        },
-                    )
-                }
-                composable(
-                    ABOUT_TEXT_ROUTE,
-                    arguments = listOf(navArgument(TEXT_ARGUMENT) { type = NavType.StringType }),
-                ) {
-                    val back = dropUnlessResumed { navController.navigateUp() }
-                    val text = BundledText.of(it.arguments?.getString(TEXT_ARGUMENT))
-                    if (text != null) {
-                        LicenseTextScreen(text, onBack = back)
-                    } else {
-                        // Unknown text (not opened from the about screen): nothing to show.
-                        LaunchedEffect(Unit) { navController.navigateUp() }
+                    composable(
+                        LABEL_EDIT_ROUTE,
+                        arguments =
+                            listOf(
+                                navArgument(LabelListViewModel.KIND_ARGUMENT) { type = NavType.StringType },
+                                navArgument(LabelEditViewModel.LABEL_ID_ARGUMENT) {
+                                    type = NavType.LongType
+                                    defaultValue = NEW_LABEL
+                                },
+                            ),
+                    ) {
+                        LabelEditScreen(onClose = dropUnlessResumed { navController.navigateUp() })
                     }
-                }
-                composable(UPLOADS_ROUTE) {
-                    ListScaffold(
-                        topBar = { backBar(stringResource(R.string.drawer_uploads)) },
-                    ) { padding ->
-                        UploadsScreen(
-                            viewModel = uploads,
-                            onOpenDocument = { id -> navController.navigate("document/$id") },
-                            modifier = Modifier.padding(padding),
+                    composable(
+                        SCAN_ROUTE,
+                        arguments =
+                            listOf(
+                                navArgument("camera") {
+                                    type = NavType.BoolType
+                                    defaultValue = true
+                                },
+                            ),
+                    ) { entry ->
+                        ScanScreen(
+                            startWithCamera = entry.arguments?.getBoolean("camera") ?: true,
+                            initialImages = imagesToScan,
+                            onImagesTaken = { imagesToScan = emptyList() },
+                            onClose = dropUnlessResumed { navController.navigateUp() },
+                            // Its progress: the uploads, instead of the scan.
+                            onUploaded = {
+                                navController.navigate(UPLOADS_ROUTE) { popUpTo(SCAN_ROUTE) { inclusive = true } }
+                            },
                         )
+                    }
+                    composable(TRASH_ROUTE) {
+                        TrashScreen(onBack = dropUnlessResumed { navController.navigateUp() })
+                    }
+                    composable(ABOUT_ROUTE) {
+                        AboutScreen(
+                            onBack = dropUnlessResumed { navController.navigateUp() },
+                            onOpenText = { text ->
+                                // Once only: a double tap must not open the text twice.
+                                if (navController.currentDestination?.route == ABOUT_ROUTE) {
+                                    navController.navigate("about/${text.name}")
+                                }
+                            },
+                        )
+                    }
+                    composable(
+                        ABOUT_TEXT_ROUTE,
+                        arguments = listOf(navArgument(TEXT_ARGUMENT) { type = NavType.StringType }),
+                    ) {
+                        val back = dropUnlessResumed { navController.navigateUp() }
+                        val text = BundledText.of(it.arguments?.getString(TEXT_ARGUMENT))
+                        if (text != null) {
+                            LicenseTextScreen(text, onBack = back)
+                        } else {
+                            // Unknown text (not opened from the about screen): nothing to show.
+                            LaunchedEffect(Unit) { navController.navigateUp() }
+                        }
+                    }
+                    composable(UPLOADS_ROUTE) {
+                        ListScaffold(
+                            topBar = { backBar(stringResource(R.string.drawer_uploads)) },
+                        ) { padding ->
+                            UploadsScreen(
+                                viewModel = uploads,
+                                onOpenDocument = { id -> navController.navigate("document/$id") },
+                                modifier = Modifier.padding(padding),
+                            )
+                        }
                     }
                 }
             }
@@ -719,8 +765,9 @@ fun MainShell(
 private fun TabBar(
     current: Tab,
     navController: NavHostController,
+    modifier: Modifier = Modifier,
 ) {
-    NavigationBar {
+    NavigationBar(modifier) {
         Tab.entries.forEach { item ->
             NavigationBarItem(
                 selected = item == current,
@@ -957,21 +1004,50 @@ private fun ListScaffold(
     content = content,
 )
 
-/** Back to the previous screen: it comes back from the left (between tabs they fade). */
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.popEnter(): EnterTransition =
-    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
-        fadeIn()
-    } else {
-        slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, initialOffset = { it / 4 }) + fadeIn()
-    }
+/** The tab bar is one element across the tabs: it stays in place while the screens slide under it. */
+private const val TAB_BAR_KEY = "tabBar"
 
-/** Back to the previous screen: the current one slides out to the right (between tabs they fade). */
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.popExit(): ExitTransition =
-    if (initialState.destination.route in TAB_ROUTES && targetState.destination.route in TAB_ROUTES) {
-        fadeOut()
-    } else {
-        slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End)
+/**
+ * The search field of the home and documents tabs, likewise; the two fields (the button on the home screen, the
+ * text field on the documents tab) fade into each other inside it.
+ */
+private const val SEARCH_BAR_KEY = "searchBar"
+
+/** Between tabs: the screens move at an even pace, easing in and out (not the default spring). */
+private const val TAB_SLIDE_MILLIS = 250
+private val TAB_SLIDE = tween<IntOffset>(TAB_SLIDE_MILLIS, easing = FastOutSlowInEasing)
+
+/** The fixed elements follow the same pace if their size differs (e.g. a taller text field with a large font). */
+@OptIn(ExperimentalSharedTransitionApi::class)
+private val TAB_BOUNDS = BoundsTransform { _, _ -> tween(TAB_SLIDE_MILLIS, easing = FastOutSlowInEasing) }
+
+/**
+ * Between tabs, the way the screens slide: towards the start for a tab further along the bar, back towards the
+ * end for one before it; `null` when either screen is not a tab.
+ */
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.tabDirection(): SlideDirection? {
+    val from = Tab.entries.indexOfFirst { it.route == initialState.destination.route }
+    val to = Tab.entries.indexOfFirst { it.route == targetState.destination.route }
+    return when {
+        from < 0 || to < 0 -> null
+        to > from -> SlideDirection.Start
+        else -> SlideDirection.End
     }
+}
+
+/** Back to the previous screen: it comes back from the left (between tabs, the screens slide side by side). */
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.popEnter(): EnterTransition =
+    tabDirection()?.let { slideIntoContainer(it, TAB_SLIDE) }
+        ?: (
+            slideIntoContainer(
+                SlideDirection.End,
+                initialOffset = { it / 4 },
+            ) + fadeIn()
+        )
+
+/** Back to the previous screen: the current one slides out to the right (between tabs, side by side). */
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.popExit(): ExitTransition =
+    tabDirection()?.let { slideOutOfContainer(it, TAB_SLIDE) } ?: slideOutOfContainer(SlideDirection.End)
 
 /** Adding documents: picking files, or scanning paper with the camera. */
 @OptIn(ExperimentalMaterial3Api::class)
