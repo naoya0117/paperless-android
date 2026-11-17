@@ -1,0 +1,2 @@
+- Viewer: double-tap to zoom in and out; while zoomed in, move around with one finger
+- A scrollbar to move through a PDF quickly, and the page number ("3 / 12")
