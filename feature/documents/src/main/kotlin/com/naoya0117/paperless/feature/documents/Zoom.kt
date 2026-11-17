@@ -5,6 +5,8 @@ import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.splineBasedDecay
+import androidx.compose.foundation.MutatePriority
+import androidx.compose.foundation.MutatorMutex
 import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -41,6 +43,9 @@ class ZoomState {
 
     /** The size of the view (set by [zoomable] once laid out). */
     internal var size = IntSize.Zero
+
+    /** One zoom animation at a time; a finger on the screen stops it. */
+    private val animation = MutatorMutex()
 
     /** Zooms by [zoom] around [centroid] (it stays where it is) and moves by [pan], within [size]. */
     fun transform(
@@ -83,11 +88,16 @@ class ZoomState {
         target: Float,
         centroid: Offset,
     ) {
-        animate(scale, target, animationSpec = tween(ZOOM_MILLIS)) { value, _ ->
-            transform(value / scale, Offset.Zero, centroid)
+        animation.mutate {
+            animate(scale, target, animationSpec = tween(ZOOM_MILLIS)) { value, _ ->
+                transform(value / scale, Offset.Zero, centroid)
+            }
+            settle()
         }
-        settle()
     }
+
+    /** Stops a zoom animation (a finger on the screen: the gesture takes over from where it is). */
+    suspend fun stopAnimation() = animation.mutate(MutatePriority.UserInput) {}
 
     /** At the end of a gesture: barely zoomed counts as not zoomed (not during it, or slow pinches never start). */
     fun settle() {
@@ -131,8 +141,9 @@ fun Modifier.zoomable(
             coroutineScope {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
-                    // A finger on the screen stops a fling.
+                    // A finger on the screen stops a fling and a double tap's zoom.
                     fling?.cancel()
+                    launch { state.stopAnimation() }
                     val velocity = VelocityTracker()
                     velocity.addPosition(down.uptimeMillis, down.position)
                     var slop = Offset.Zero
@@ -176,10 +187,19 @@ fun Modifier.zoomable(
                         fling =
                             launch {
                                 var last = Offset.Zero
-                                Animatable(Offset.Zero, Offset.VectorConverter).animateDecay(Offset(x, y), decay) {
-                                    val left = state.pan(value - last)
-                                    scrollable?.dispatchRawDelta(-left)
-                                    last = value
+                                val animation = Animatable(Offset.Zero, Offset.VectorConverter)
+                                val flingBy: suspend ((Float) -> Unit) -> Unit = { scrollBy ->
+                                    animation.animateDecay(Offset(x, y), decay) {
+                                        scrollBy(-state.pan(value - last))
+                                        last = value
+                                    }
+                                }
+                                // As a scroll of the content: it counts as scrolling (a tap that stops it is not a
+                                // tap) and another scroll (e.g. to a search match) stops it.
+                                if (scrollable != null) {
+                                    scrollable.scroll { flingBy { scrollBy(it) } }
+                                } else {
+                                    flingBy {}
                                 }
                             }
                     }

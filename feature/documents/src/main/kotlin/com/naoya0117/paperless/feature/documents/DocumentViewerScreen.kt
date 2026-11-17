@@ -516,7 +516,7 @@ private fun PdfPagesView(
                 PdfPage(pages, index, highlights = pageMatches[index].orEmpty(), current = current)
             }
         }
-        PageScrollbar(listState, pages.pageCount, spacing = padding, barsShown = barsShown, space = space)
+        PageScrollbar(listState, pages.pageCount, spacing = padding, barsShown = barsShown, space = space, zoom = zoom)
     }
 }
 

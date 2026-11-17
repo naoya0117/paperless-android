@@ -25,9 +25,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -130,6 +133,7 @@ private const val SHOWN_MILLIS = 1500L
  *
  * @param spacing the space between pages (in pixels)
  * @param space kept free around the pages (behind the bars), which the scrollbar and the page number stay clear of
+ * @param zoom the pages' zoom: the page number is the page in the middle of what is shown
  */
 @Composable
 internal fun BoxScope.PageScrollbar(
@@ -138,21 +142,26 @@ internal fun BoxScope.PageScrollbar(
     spacing: Float,
     barsShown: Boolean,
     space: PaddingValues,
+    zoom: ZoomState,
 ) {
     var active by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
 
+    /** Counts the moves of the pages: each one shows the scrollbar for a while again. */
+    var moves by remember { mutableIntStateOf(0) }
+
     /** While dragging: where the thumb is (it follows the finger, not the estimate). */
-    var dragFraction by remember { mutableStateOf(0f) }
+    var dragFraction by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(listState) {
-        // Not when the viewer opens: only when the pages move.
+        // Not when the viewer opens: only when the pages move (also by a pan while zoomed in, not a scroll).
         snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
             .drop(1)
             .collect {
                 active = true
+                moves++
             }
     }
-    LaunchedEffect(active, dragging, listState.isScrollInProgress) {
+    LaunchedEffect(moves, dragging, listState.isScrollInProgress) {
         if (active && !dragging && !listState.isScrollInProgress) {
             delay(SHOWN_MILLIS)
             active = false
@@ -177,12 +186,15 @@ internal fun BoxScope.PageScrollbar(
             )
         }
     }
-    val page by remember(listState) {
+    val page by remember(listState, zoom) {
         derivedStateOf {
             val info = listState.layoutInfo
+            // The middle of what is shown, zoomed in or not, in the list's pixels.
+            val height = info.viewportEndOffset - info.viewportStartOffset
+            val middle = info.viewportStartOffset + ((height / 2f - zoom.offset.y) / zoom.scale).roundToInt()
             currentPage(
                 pages = info.visibleItemsInfo.map { Triple(it.index, it.offset, it.offset + it.size) },
-                middle = (info.viewportStartOffset + info.viewportEndOffset) / 2,
+                middle = middle,
                 atStart = !listState.canScrollBackward,
                 atEnd = !listState.canScrollForward,
             )
@@ -213,6 +225,10 @@ internal fun BoxScope.PageScrollbar(
                         current.visible * track,
                     ).coerceAtMost(track)
                 val fraction = if (dragging) dragFraction else current.fraction
+                // Read when the finger goes down and moves (they change while the pages move and during a drag).
+                val currentTrack by rememberUpdatedState(track)
+                val currentThumb by rememberUpdatedState(thumb)
+                val currentFraction by rememberUpdatedState(fraction)
                 val thumbWidth by animateDpAsState(if (dragging) 8.dp else 4.dp, label = "thumb")
                 Box(
                     Modifier
@@ -220,11 +236,14 @@ internal fun BoxScope.PageScrollbar(
                         .width(THUMB_TOUCH_WIDTH)
                         // Hidden from TalkBack, which scrolls the list itself; the page number is read instead.
                         .clearAndSetSemantics {}
-                        .pointerInput(listState, count, track, thumb) {
+                        .pointerInput(listState, count) {
                             var grab = 0f
 
                             fun scrollTo(y: Float) {
-                                dragFraction = ((y - grab) / (track - thumb)).coerceIn(0f, 1f)
+                                // The thumb fills the track (a document barely longer than the view): nowhere to move.
+                                val room = currentTrack - currentThumb
+                                if (room <= 0f) return
+                                dragFraction = ((y - grab) / room).coerceIn(0f, 1f)
                                 val info = listState.layoutInfo
                                 val items = info.visibleItemsInfo
                                 val pageSize =
@@ -243,22 +262,28 @@ internal fun BoxScope.PageScrollbar(
                                     )
                                 }
                             }
-                            detectVerticalDragGestures(
-                                onDragStart = { start ->
-                                    dragging = true
-                                    val top = fraction * (track - thumb)
-                                    // On the thumb, it moves with the finger; elsewhere it jumps under the finger.
-                                    grab = if (start.y in top..top + thumb) start.y - top else thumb / 2
-                                    dragFraction = fraction
-                                    scrollTo(start.y)
-                                },
-                                onDragEnd = { dragging = false },
-                                onDragCancel = { dragging = false },
-                                onVerticalDrag = { change, _ ->
-                                    change.consume()
-                                    scrollTo(change.position.y)
-                                },
-                            )
+                            // Not left dragging when this restarts (a cancelled detector does not call onDragCancel).
+                            try {
+                                detectVerticalDragGestures(
+                                    onDragStart = { start ->
+                                        dragging = true
+                                        val thumb = currentThumb
+                                        val top = currentFraction * (currentTrack - thumb)
+                                        // On the thumb, it moves with the finger; elsewhere it jumps under the finger.
+                                        grab = if (start.y in top..top + thumb) start.y - top else thumb / 2
+                                        dragFraction = currentFraction
+                                        scrollTo(start.y)
+                                    },
+                                    onDragEnd = { dragging = false },
+                                    onDragCancel = { dragging = false },
+                                    onVerticalDrag = { change, _ ->
+                                        change.consume()
+                                        scrollTo(change.position.y)
+                                    },
+                                )
+                            } finally {
+                                dragging = false
+                            }
                         },
                 ) {
                     Box(
