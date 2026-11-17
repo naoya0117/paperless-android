@@ -90,6 +90,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -137,6 +138,7 @@ import coil3.compose.AsyncImage
 import com.naoya0117.paperless.core.model.Document
 import com.naoya0117.paperless.core.model.Note
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -228,8 +230,10 @@ fun DocumentViewerScreen(
                     .nestedScroll(hideBarsOnScroll),
             contentAlignment = Alignment.Center,
         ) {
-            // Pinch to zoom; reset for other content.
+            // Pinch or double tap to zoom; reset for other content.
             val zoom = remember(state.content) { ZoomState() }
+            val scope = rememberCoroutineScope()
+            val toggleZoom: (Offset) -> Unit = { point -> scope.launch { zoom.toggle(point) } }
 
             // Landscape: clear of a navigation bar or cutout at the side.
             @OptIn(ExperimentalLayoutApi::class)
@@ -252,12 +256,14 @@ fun DocumentViewerScreen(
                     PdfPagesView(
                         pages = content.pages,
                         onTap = viewModel::toggleFullscreen,
+                        onDoubleTap = toggleZoom,
                         search = search,
                         space = space,
-                        modifier = Modifier.zoomable(zoom),
+                        zoom = zoom,
+                        barsShown = !fullscreen,
                     )
                 is ViewerContent.Image ->
-                    ImageView(content, viewModel::toggleFullscreen, space, Modifier.zoomable(zoom))
+                    ImageView(content, viewModel::toggleFullscreen, toggleZoom, space, zoom)
                 is ViewerContent.Unsupported ->
                     Message(stringResource(R.string.viewer_unsupported, content.fileName.orEmpty()))
                 ViewerContent.Failed ->
@@ -456,15 +462,21 @@ internal fun Context.sendFile(event: ViewerEvent.SendFile): Boolean {
     }
 }
 
-/** Pages one below the other, rendered when they come into view. */
+/**
+ * Pages one below the other, rendered when they come into view; with a scrollbar and the page number over them
+ * ([PageScrollbar]), which stay as they are when the pages are zoomed in.
+ */
 @Composable
 private fun PdfPagesView(
     pages: PdfPages,
     onTap: () -> Unit,
+    /** At the point tapped, in the view's pixels. */
+    onDoubleTap: (Offset) -> Unit,
     search: SearchState,
     /** Kept free above and below (behind the bars). */
     space: PaddingValues,
-    modifier: Modifier = Modifier,
+    zoom: ZoomState,
+    barsShown: Boolean,
 ) {
     val listState = rememberLazyListState()
     val pageMatches =
@@ -480,21 +492,31 @@ private fun PdfPagesView(
         val top = (match.bounds.minOfOrNull { it.top } ?: 0f) * pageWidth * aspect
         listState.animateScrollToItem(match.page, (top - viewport.height / 3).toInt().coerceAtLeast(0))
     }
-    LazyColumn(
-        state = listState,
-        modifier = modifier.fillMaxSize().tapWhenNotScrolling({ listState.isScrollInProgress }, onTap),
-        contentPadding =
-            PaddingValues(
-                start = space.calculateStartPadding(LocalLayoutDirection.current) + PAGE_PADDING,
-                end = space.calculateEndPadding(LocalLayoutDirection.current) + PAGE_PADDING,
-                top = space.calculateTopPadding() + PAGE_PADDING,
-                bottom = space.calculateBottomPadding() + PAGE_PADDING,
-            ),
-        verticalArrangement = Arrangement.spacedBy(PAGE_PADDING),
-    ) {
-        items(count = pages.pageCount, key = { it }) { index ->
-            PdfPage(pages, index, highlights = pageMatches[index].orEmpty(), current = current)
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier =
+                Modifier
+                    .zoomable(zoom, listState)
+                    .fillMaxSize()
+                    .tapWhenNotScrolling(zoom, { listState.isScrollInProgress }, onTap) { point ->
+                        // Inside the zoomed layer: back to the view's pixels.
+                        onDoubleTap(point * zoom.scale + zoom.offset)
+                    },
+            contentPadding =
+                PaddingValues(
+                    start = space.calculateStartPadding(LocalLayoutDirection.current) + PAGE_PADDING,
+                    end = space.calculateEndPadding(LocalLayoutDirection.current) + PAGE_PADDING,
+                    top = space.calculateTopPadding() + PAGE_PADDING,
+                    bottom = space.calculateBottomPadding() + PAGE_PADDING,
+                ),
+            verticalArrangement = Arrangement.spacedBy(PAGE_PADDING),
+        ) {
+            items(count = pages.pageCount, key = { it }) { index ->
+                PdfPage(pages, index, highlights = pageMatches[index].orEmpty(), current = current)
+            }
         }
+        PageScrollbar(listState, pages.pageCount, spacing = padding, barsShown = barsShown, space = space, zoom = zoom)
     }
 }
 
@@ -740,15 +762,20 @@ private suspend fun <T> safely(block: suspend () -> T): T? =
 private fun ImageView(
     content: ViewerContent.Image,
     onTap: () -> Unit,
+    /** At the point tapped, in the view's pixels. */
+    onDoubleTap: (Offset) -> Unit,
     space: PaddingValues,
-    modifier: Modifier = Modifier,
+    zoom: ZoomState,
 ) {
+    val scrollState = rememberScrollState()
     Column(
         modifier =
-            modifier
+            Modifier
+                .zoomable(zoom, scrollState)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .tapWhenNotScrolling({ false }, onTap)
+                // Before the scrolling, so that the point tapped is in the view (not in the scrolled image).
+                .tapWhenNotScrolling(zoom, { false }, onTap) { point -> onDoubleTap(point * zoom.scale + zoom.offset) }
+                .verticalScroll(scrollState)
                 .padding(space)
                 .padding(12.dp),
     ) {
@@ -957,16 +984,21 @@ private fun InfoRow(
 ) = InfoRow(stringResource(label), value)
 
 /**
- * Taps switch to full screen, but not a tap that stops a fling (it was scrolling when the finger went down).
+ * Taps switch to full screen, but not a tap that stops a fling (it was scrolling when the finger went down); a
+ * double tap zooms (so a single tap waits for the double-tap timeout).
  */
 private fun Modifier.tapWhenNotScrolling(
+    /** The zoom the double taps are for (a new one for other content). */
+    zoom: ZoomState,
     scrolling: () -> Boolean,
     onTap: () -> Unit,
+    onDoubleTap: (Offset) -> Unit,
 ): Modifier =
-    pointerInput(Unit) {
+    pointerInput(zoom) {
         var wasScrolling = false
         detectTapGestures(
             onPress = { wasScrolling = scrolling() },
             onTap = { if (!wasScrolling) onTap() },
+            onDoubleTap = { if (!wasScrolling) onDoubleTap(it) },
         )
     }

@@ -11,6 +11,8 @@
     <string name="viewer_info">詳細</string>
     <string name="viewer_edit">編集</string>
     <string name="viewer_page">%2$d ページ中 %1$d ページ目</string>
+    <!-- The page number shown over the pages: page 3 of 12. -->
+    <string name="viewer_page_short">%1$d / %2$d</string>
     <string name="viewer_unsupported">この形式のファイルはここでは表示できません（%1$s）。</string>
     <string name="viewer_failed">文書を読み込めませんでした。</string>
     <string name="info_created">作成日</string>
