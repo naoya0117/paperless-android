@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Viewer: double-tap to zoom in and out; while zoomed in, one finger moves around the page and on through
+  the pages; a scrollbar to drag through a PDF, and the page shown out of how many ("3 / 12")
+
 ## [0.2.0] - 2026-11-12
 
 ### Added
