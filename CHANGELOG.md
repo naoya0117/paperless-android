@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-17
+
 ### Added
 
 - Viewer: double-tap to zoom in and out; while zoomed in, one finger moves around the page and on through
@@ -140,7 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README: the GitHub repository is a mirror (development on the author's Gitea); the goals became a list of
   features. F-Droid store texts (English, Japanese) in `fastlane/metadata/android/`
 
-[Unreleased]: https://github.com/naoya0117/paperless-android/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/naoya0117/paperless-android/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/naoya0117/paperless-android/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/naoya0117/paperless-android/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/naoya0117/paperless-android/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/naoya0117/paperless-android/releases/tag/v0.1.0
