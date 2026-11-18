@@ -1,8 +1,8 @@
 # リリース手順
 
-paperless-android を公開するときの手順です。開発は Gitea で行い、GitHub
-（[naoya0117/paperless-android](https://github.com/naoya0117/paperless-android)）はミラーです。
-F-Droid は GitHub のミラーからソースを取得してビルドします。
+paperless-android を公開するときの手順です。開発もリリースも GitHub
+（[naoya0117/paperless-android](https://github.com/naoya0117/paperless-android)）で行います。
+F-Droid は GitHub からソースを取得してビルドします。
 
 1. [署名鍵](#1-署名鍵)（初回のみ）
 2. [バージョンと変更履歴](#2-バージョンと変更履歴)
@@ -253,21 +253,18 @@ adb shell am broadcast -a com.android.systemui.demo -e command exit
 - [ ] `gradle/gradle-daemon-jvm.properties` がリポジトリにない（ホストの Android Studio が書き込むことがある。
   JDK 25 を要求するため、F-Droid のビルドサーバーで失敗する）
 
-タグはミラーにも公開され、F-Droid の更新のきっかけになるため、
+タグは F-Droid の更新のきっかけになるため、
 **付けたタグは動かしません**（間違えたら次のパッチバージョンを出します）。
 
-タグを付けて Gitea に push し、GitHub のミラーへも main とタグを手動で push します（`github` は GitHub のミラーを指す
-リモートの名前です。違う名前なら置き換えます。`git remote -v` で確認できます）。
+main は PR のマージで GitHub に入っているので、タグを付けて push します。
 
 ```bash
 git switch main && git pull --ff-only
 git tag -a v0.1.0 -m "paperless-android 0.1.0"
 git push origin v0.1.0
-git push github main v0.1.0
 ```
 
-GitHub にタグが届くと、GitHub Actions の Release（`.github/workflows/release.yml`）が次を行います
-（Gitea では動きません）。
+タグが届くと、GitHub Actions の Release（`.github/workflows/release.yml`）が次を行います。
 
 1. タグと `paperless.versionName` が一致すること、`CHANGELOG.md` に `## [x.y.z]` の節があることを確かめる
 2. Secrets の鍵で署名したリリースの APK をビルドし、署名の証明書が `SIGNING_CERT_SHA256` と一致することを確かめる
@@ -310,7 +307,7 @@ F-Droid は自前のサーバーでソースからビルドします。署名は
 - [ ] 依存関係がすべて自由なソフトウェアで、Google Play Services / Firebase などを含まない
 - [ ] `./gradlew :app:assembleRelease` が署名の設定なしで通る
 - [ ] Gradle のファイルのリポジトリが `google()` と `mavenCentral()` だけ（F-Droid の検査は知らないリポジトリを拒否する。
-  CI で使う Maven Central のミラーは `.gitea/workflows/ci.yml` の初期化スクリプトで追加している）
+  CI で使う Maven Central のミラーは `.github/workflows/ci.yml` の初期化スクリプトで追加している）
 - [ ] `fastlane/metadata/android/` のタイトル・説明・アイコン・スクリーンショット・変更履歴が揃っている
 - [ ] 反機能（Anti-Features）：なし。ユーザーが指定したサーバーとだけ通信し、追跡はない
 - [ ] versionCode を `gradle.properties` から読み取れる（下記）

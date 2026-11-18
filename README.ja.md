@@ -4,11 +4,8 @@
 
 Kotlin で実装した [Paperless-ngx](https://github.com/paperless-ngx/paperless-ngx) の Android クライアントです。
 
-> **このリポジトリについて：** GitHub のリポジトリ
-> （[naoya0117/paperless-android](https://github.com/naoya0117/paperless-android)）は**ミラー**です。
-> 開発（Issue・レビュー・CI）は作者の Gitea サーバーで行い、そこから GitHub へ反映しています。
->
-> アプリとリポジトリの概要を 1 ページにまとめたものが [`docs/index.ja.md`](docs/index.ja.md) です（GitHub Pages での公開にも使えます）。
+> **このリポジトリについて：** アプリとリポジトリの概要を 1 ページにまとめたものが
+> [`docs/index.ja.md`](docs/index.ja.md) です（GitHub Pages での公開にも使えます）。
 
 ## スクリーンショット
 

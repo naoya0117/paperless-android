@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Development moved from the author's Gitea server to this repository on GitHub: pull requests, reviews, CI and
+  the releases are all here, and CI runs on GitHub Actions (`.github/workflows/ci.yml`) instead of Gitea Actions
+
 ## [0.3.0] - 2026-11-17
 
 ### Added

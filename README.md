@@ -4,13 +4,8 @@ English | [日本語](README.ja.md)
 
 An Android client for [Paperless-ngx](https://github.com/paperless-ngx/paperless-ngx), written in Kotlin.
 
-> **About this repository:** the repository on GitHub
-> ([naoya0117/paperless-android](https://github.com/naoya0117/paperless-android)) is a **mirror**.
-> Development (issues, reviews and CI) takes place on the author's own Gitea server, and the changes are pushed to
-> GitHub from there.
->
-> [`docs/index.md`](docs/index.md) describes the app and the repository on one page (it can also be published
-> with GitHub Pages).
+> **About this repository:** [`docs/index.md`](docs/index.md) describes the app and the repository on one page
+> (it can also be published with GitHub Pages).
 
 ## Screenshots
 

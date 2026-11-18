@@ -74,8 +74,7 @@ repositories, the release build is unsigned without a key, and the store texts a
 
 ## About the repository
 
-Development (issues, reviews and CI) takes place on the author's own Gitea server; the repository on GitHub is a
-**mirror** that the changes are pushed to, and it is where the releases are published.
+Development — pull requests, reviews, CI and the releases — takes place in the repository on GitHub.
 
 ### Layout
 

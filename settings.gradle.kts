@@ -18,7 +18,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         // Only these two (F-Droid allows no other repositories). CI adds a mirror for Robolectric's large jars in
-        // an init script (.gitea/workflows/ci.yml).
+        // an init script (.github/workflows/ci.yml).
         mavenCentral()
     }
 }

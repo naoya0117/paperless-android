@@ -1,7 +1,6 @@
 # Release (CD) on the GitHub mirror: a pushed tag `vX.Y.Z` builds the release APK signed with the release key and
 # creates a draft GitHub release with it (published by hand after checking that APK on a device).
-# Development CI runs on Gitea (.gitea/workflows/); Gitea ignores this directory while .gitea/workflows exists,
-# and the job is also limited to github.com.
+# Development CI (builds, tests, Lint, ktlint) runs in .github/workflows/ci.yml.
 #
 # Secrets (Settings → Secrets and variables → Actions):
 #   SIGNING_KEYSTORE_BASE64  the keystore file, base64-encoded
@@ -27,7 +26,6 @@ permissions:
 
 jobs:
   release:
-    if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 60
